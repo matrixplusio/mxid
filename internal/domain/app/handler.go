@@ -60,6 +60,12 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 		groups.POST("/:id/apps", authz.Require("app.update", nil), h.AddAppToGroup)
 		groups.DELETE("/:id/apps/:aid", authz.Require("app.update", nil), h.RemoveAppFromGroup)
 	}
+
+	templates := rg.Group("/app-templates")
+	{
+		templates.GET("", authz.Require("app.read", nil), h.ListTemplates)
+		templates.GET("/:key", authz.Require("app.read", nil), h.GetTemplate)
+	}
 }
 
 // ListAppsInGroup handles GET /app-groups/:id/apps — returns the apps
@@ -504,6 +510,21 @@ func (h *Handler) RemoveAppFromGroup(c *gin.Context) {
 	}
 
 	response.OK(c, nil)
+}
+
+// ListTemplates handles GET /app-templates — the built-in onboarding catalog.
+func (h *Handler) ListTemplates(c *gin.Context) {
+	response.OK(c, ToTemplateListItems(Templates()))
+}
+
+// GetTemplate handles GET /app-templates/:key — full template detail.
+func (h *Handler) GetTemplate(c *gin.Context) {
+	tpl, err := GetTemplate(c.Param("key"))
+	if err != nil {
+		response.NotFound(c, 40401, "template not found")
+		return
+	}
+	response.OK(c, tpl)
 }
 
 // handleServiceError maps service errors to HTTP responses.
