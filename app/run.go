@@ -22,6 +22,7 @@ import (
 	"github.com/imkerbos/mxid/internal/domain/dashboard"
 	"github.com/imkerbos/mxid/internal/domain/group"
 	"github.com/imkerbos/mxid/internal/domain/org"
+	"github.com/imkerbos/mxid/internal/domain/offboarding"
 	"github.com/imkerbos/mxid/internal/domain/permission"
 	"github.com/imkerbos/mxid/internal/domain/platformconfig"
 	"github.com/imkerbos/mxid/internal/domain/setting"
@@ -486,6 +487,11 @@ func registerModules(a *bootstrap.App) {
 	}))
 
 	userModule.RegisterRoutes(a)
+
+	// One-click offboarding (L1 access cutoff): disable account + kill all
+	// sessions. Registered after the console middleware chain so it inherits
+	// step-up MFA + authz, same as the user routes it sits beside.
+	offboarding.Register(a, userModule.Service, sessionMgr).RegisterRoutes(a)
 
 	// Settings routes mounted here — AFTER AuthMiddleware + authz + tenant
 	// context are on the console group — so config read/write requires an

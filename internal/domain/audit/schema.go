@@ -84,6 +84,7 @@ var detailSchemas = map[string]detailSchema{
 	event.UserPIIView:         {allow: []string{"user_id", "target_id", "tenant_id", "fields"}},
 	event.UserSuperAdminGrant: {allow: []string{"user_id", "target_id", "tenant_id", "username"}},
 	event.UserSuperAdminRevoke: {allow: []string{"user_id", "target_id", "tenant_id", "username"}},
+	event.UserOffboarded:       {allow: []string{"user_id", "tenant_id", "username", "actor_id", "sessions_killed"}},
 
 	event.AppCreated:  {allow: []string{"app_id", "tenant_id", "name", "code", "protocol", "actor_id"}},
 	event.AppUpdated:  {allow: []string{"app_id", "tenant_id", "fields", "action", "status", "actor_id"}},

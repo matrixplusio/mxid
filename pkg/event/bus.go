@@ -81,6 +81,11 @@ const (
 	UserSuperAdminGrant  = "user.super_admin.grant"
 	UserSuperAdminRevoke = "user.super_admin.revoke"
 
+	// UserOffboarded fires on a one-click offboard: the user is disabled and
+	// all their sessions are killed in one atomic admin action (L1 access
+	// cutoff). Audited as a high-risk security event.
+	UserOffboarded = "user.offboarded"
+
 	LoginSuccess = "login.success"
 	LoginFailed  = "login.failed"
 	Logout       = "logout"

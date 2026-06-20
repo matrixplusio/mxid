@@ -366,6 +366,14 @@ export default {
         button: 'Unlock account',
         confirm: 'Unlock this account?',
       },
+      offboard: {
+        button: 'Offboard',
+        title: 'Offboard user',
+        confirm: 'Offboard "{{username}}"? This disables the account and kills all active sessions immediately — every app they reach through MXID SSO becomes inaccessible at once. Reversible by re-enabling the account.',
+        submit: 'Confirm offboard',
+        success: 'Offboarded: account disabled, sessions cleared',
+        failed: 'Offboard failed',
+      },
       rolesTab: {
         empty: 'This user has no role bindings',
         direct: 'Direct',

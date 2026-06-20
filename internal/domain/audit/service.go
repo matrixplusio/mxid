@@ -99,6 +99,7 @@ func (s *Service) SubscribeEvents() {
 	s.eventBus.Subscribe(event.UserPIIView, s.handleUserEvent(event.UserPIIView, EventStatusSuccess))
 	s.eventBus.Subscribe(event.UserSuperAdminGrant, s.handleUserEvent(event.UserSuperAdminGrant, EventStatusSuccess))
 	s.eventBus.Subscribe(event.UserSuperAdminRevoke, s.handleUserEvent(event.UserSuperAdminRevoke, EventStatusSuccess))
+	s.eventBus.Subscribe(event.UserOffboarded, s.handleUserEvent(event.UserOffboarded, EventStatusSuccess))
 
 	// App events
 	s.eventBus.Subscribe(event.AppCreated, s.handleResourceEvent(event.AppCreated, "app"))

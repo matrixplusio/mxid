@@ -369,6 +369,14 @@ export default {
         button: '解锁账号',
         confirm: '确认解锁该账号？',
       },
+      offboard: {
+        button: '一键离职',
+        title: '一键离职',
+        confirm: '确认对「{{username}}」执行离职？将立即禁用账号并踢出全部登录会话,其通过 MXID 登录的所有应用将即刻无法访问。此操作可在恢复账号后撤销。',
+        submit: '确认离职',
+        success: '已离职:账号已禁用、会话已清空',
+        failed: '离职操作失败',
+      },
       rolesTab: {
         empty: '该用户未绑定任何角色',
         direct: '直接分配',
