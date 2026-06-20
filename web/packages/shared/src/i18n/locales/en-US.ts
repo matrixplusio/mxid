@@ -718,6 +718,13 @@ export default {
       bindFailed: 'Bind failed',
       bind: 'Bind',
     },
+    templates: {
+      pick: 'Start from a template',
+      blank: 'Or start from blank',
+      change: 'Change template',
+      loadFailed: 'Failed to load template',
+      fieldRequired: '{{label}} is required',
+    },
     createModal: {
       title: 'Create application',
       nameLabel: 'App name *',

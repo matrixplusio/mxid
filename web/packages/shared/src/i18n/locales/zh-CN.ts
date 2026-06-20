@@ -721,6 +721,13 @@ export default {
       bindFailed: '绑定失败',
       bind: '绑定',
     },
+    templates: {
+      pick: '从模板开始',
+      blank: '或空白创建',
+      change: '更换模板',
+      loadFailed: '加载模板失败',
+      fieldRequired: '{{label}} 不能为空',
+    },
     createModal: {
       title: '新建应用',
       nameLabel: '应用名称 *',
