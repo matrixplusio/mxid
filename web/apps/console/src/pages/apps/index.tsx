@@ -676,6 +676,9 @@ export default function AppsPage() {
         home_url: homeUrl || null,
         redirect_uris: redirectURIs,
         protocol_config: protocolConfig,
+        ...(activeTemplate?.subject_strategy
+          ? { subject_strategy: activeTemplate.subject_strategy }
+          : {}),
       })
 
       setShowCreate(false)
