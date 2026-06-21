@@ -57,6 +57,10 @@ export const userApi = {
   unlock: (id: UID) =>
     client.post<ApiResponse<null>>(`/users/${id}/unlock`).then(r => r.data),
 
+  // One-click offboard: disable the account + kill every session.
+  offboard: (id: UID) =>
+    client.post<ApiResponse<{ offboarded: boolean }>>(`/users/${id}/offboard`).then(r => r.data),
+
   listSessions: (id: UID) =>
     client.get<ApiResponse<UserSession[]>>(`/users/${id}/sessions`).then(r => r.data.data),
   revokeAllSessions: (id: UID) =>

@@ -295,7 +295,8 @@ func DefaultProtocolDefaults() ProtocolDefaults {
 	}
 }
 
-func DefaultSMS() SMS               { return SMS{Enabled: false} }
+func DefaultSMS() SMS                               { return SMS{Enabled: false} }
+func DefaultOffboardingWebhook() OffboardingWebhook { return OffboardingWebhook{} }
 func DefaultAuditPolicy() AuditPolicy {
 	return AuditPolicy{RetentionDays: 365}
 }
@@ -370,6 +371,17 @@ func (s *Service) ExternalURLs(ctx context.Context, tenantID int64) (ExternalURL
 func (s *Service) AuditPolicy(ctx context.Context, tenantID int64) (AuditPolicy, error) {
 	v := DefaultAuditPolicy()
 	err := s.Get(ctx, KeyAuditPolicy, tenantID, &v)
+	if errors.Is(err, ErrNotFound) {
+		return v, nil
+	}
+	return v, err
+}
+
+// OffboardingWebhook returns the configured offboarding webhook (decrypted
+// secret). Disabled-by-default when unset.
+func (s *Service) OffboardingWebhook(ctx context.Context, tenantID int64) (OffboardingWebhook, error) {
+	v := DefaultOffboardingWebhook()
+	err := s.Get(ctx, KeyOffboardingWebhook, tenantID, &v)
 	if errors.Is(err, ErrNotFound) {
 		return v, nil
 	}

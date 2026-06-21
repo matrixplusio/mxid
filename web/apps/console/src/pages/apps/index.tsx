@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, AppWindow, Loader2, Copy, X, Settings, Eye, EyeOff, LayoutGrid } from 'lucide-react'
 import { appApi, protocolLabel, statusLabel, statusColor, cn, AppIcon, useTranslation } from '@mxid/shared'
-import type { App, PaginatedData } from '@mxid/shared'
+import type { App, PaginatedData, AppTemplate, AppTemplateListItem } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import AppGroupsTab from './AppGroupsTab'
 import { useTabParam } from '../../hooks/useTabParam'
@@ -11,9 +11,10 @@ import { IconPicker } from '../../components/icon-picker/IconPicker'
 import { toast, extractMessage } from '../../components/ui/toast'
 import AccessPolicyTab from './AccessPolicyTab'
 import AppRolesTab from './AppRolesTab'
+import ProvisioningTab from './ProvisioningTab'
 
 const APPS_VIEW_VALUES = ['apps', 'groups'] as const
-const DETAIL_TAB_VALUES = ['basic', 'protocol', 'credentials', 'access', 'roles'] as const
+const DETAIL_TAB_VALUES = ['basic', 'protocol', 'credentials', 'access', 'roles', 'provisioning'] as const
 
 const protocolColors: Record<string, string> = {
   oidc: 'bg-blue-100 text-blue-700',
@@ -310,9 +311,9 @@ function SecretField({ label, value }: { label: string; value: string }) {
 // Detail drawer tabs
 // ---------------------------------------------------------------------------
 
-type DetailTab = 'basic' | 'protocol' | 'credentials' | 'access' | 'roles'
+type DetailTab = 'basic' | 'protocol' | 'credentials' | 'access' | 'roles' | 'provisioning'
 
-const DETAIL_TAB_KEYS: DetailTab[] = ['basic', 'protocol', 'credentials', 'access', 'roles']
+const DETAIL_TAB_KEYS: DetailTab[] = ['basic', 'protocol', 'credentials', 'access', 'roles', 'provisioning']
 
 // ---------------------------------------------------------------------------
 // Input class constant
@@ -346,6 +347,11 @@ export default function AppsPage() {
     redirect_uris: '',
   })
   const [creating, setCreating] = useState(false)
+
+  // Template picker state
+  const [templates, setTemplates] = useState<AppTemplateListItem[]>([])
+  const [activeTemplate, setActiveTemplate] = useState<AppTemplate | null>(null)
+  const [tplFieldValues, setTplFieldValues] = useState<Record<string, string>>({})
 
   // One-time client_secret reveal modal (shown immediately after create / rotate).
   // The backend stores bcrypt hash only; if the user closes this modal they
@@ -393,6 +399,12 @@ export default function AppsPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Load template catalog when create modal opens
+  useEffect(() => {
+    if (!showCreate) return
+    appApi.listTemplates().then(setTemplates).catch(() => setTemplates([]))
+  }, [showCreate])
 
   // -------------------------------------------------------------------------
   // Open detail drawer
@@ -567,6 +579,34 @@ export default function AppsPage() {
   }
 
   // -------------------------------------------------------------------------
+  // Template picker handlers
+  // -------------------------------------------------------------------------
+
+  const handlePickTemplate = useCallback(async (key: string) => {
+    try {
+      const tpl = await appApi.getTemplate(key)
+      setActiveTemplate(tpl)
+      setTplFieldValues({})
+      setCreateForm((f) => ({
+        ...f,
+        protocol: tpl.protocol,
+        client_type: tpl.client_type,
+        // Picking a template sets the app name to the template name so the
+        // name follows the chosen template (incl. when switching templates).
+        // The user can still edit it afterwards.
+        name: tpl.name,
+      }))
+    } catch {
+      toast.error(t('apps.templates.loadFailed'))
+    }
+  }, [t])
+
+  const handleClearTemplate = useCallback(() => {
+    setActiveTemplate(null)
+    setTplFieldValues({})
+  }, [])
+
+  // -------------------------------------------------------------------------
   // Create app
   // -------------------------------------------------------------------------
 
@@ -575,16 +615,35 @@ export default function AppsPage() {
     if (!createForm.name || !createForm.code) return
     setCreating(true)
     try {
-      const redirectURIs = createForm.redirect_uris
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean)
+      // Build protocol_config + top-level fields from the active template (if any).
+      let tplProtocolConfig: Record<string, unknown> = activeTemplate?.defaults ? { ...activeTemplate.defaults } : {}
+      let redirectURIs: string[] = createForm.redirect_uris.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+      let homeUrl = createForm.home_url
 
-      // Default OIDC protocol_config built from the form: keeps the create
-      // flow self-contained so the freshly minted app can immediately serve
-      // /authorize without a follow-up config edit.
-      const protocolConfig =
-        createForm.protocol === 'oidc'
+      if (activeTemplate?.key) {
+        // Validate + fold template field values into their targets
+        for (const fld of activeTemplate.fields ?? []) {
+          const raw = (tplFieldValues[fld.key] ?? '').trim()
+          if (!raw) continue
+          if (fld.target === 'redirect_uris') {
+            redirectURIs = raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+          } else if (fld.target === 'home_url') {
+            homeUrl = raw
+          } else if (fld.target.startsWith('protocol_config.')) {
+            const k = fld.target.slice('protocol_config.'.length)
+            tplProtocolConfig[k] = k.endsWith('_urls')
+              ? raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+              : raw
+          }
+        }
+      }
+
+      // Determine the final protocol_config to send:
+      // - When a template is active: use tplProtocolConfig (seeded from defaults + fields)
+      // - When no template (blank/OIDC form): use the existing OIDC-default builder
+      const protocolConfig: Record<string, unknown> | undefined = activeTemplate?.key
+        ? (Object.keys(tplProtocolConfig).length > 0 ? tplProtocolConfig : undefined)
+        : createForm.protocol === 'oidc'
           ? {
               redirect_uris: redirectURIs,
               scopes: ['openid', 'profile', 'email', 'groups'],
@@ -612,9 +671,12 @@ export default function AppsPage() {
         code: createForm.code,
         protocol: createForm.protocol,
         client_type: createForm.client_type,
-        home_url: createForm.home_url || null,
+        home_url: homeUrl || null,
         redirect_uris: redirectURIs,
         protocol_config: protocolConfig,
+        ...(activeTemplate?.subject_strategy
+          ? { subject_strategy: activeTemplate.subject_strategy }
+          : {}),
       })
 
       setShowCreate(false)
@@ -626,6 +688,8 @@ export default function AppsPage() {
         home_url: '',
         redirect_uris: '',
       })
+      setActiveTemplate(null)
+      setTplFieldValues({})
 
       // Capture the one-time plaintext client_secret. Only confidential clients
       // (web_app / m2m) receive it; SPA / native have no secret to reveal.
@@ -838,10 +902,65 @@ export default function AppsPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
           >
             <h3 className="mb-4 text-lg font-semibold">{t('apps.createModal.title')}</h3>
             <form onSubmit={handleCreate} className="space-y-4">
+              {/* Template picker step */}
+              {!activeTemplate ? (
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-gray-700">{t('apps.templates.pick')}</div>
+                  <div className="grid grid-cols-3 gap-2 max-h-80 overflow-y-auto">
+                    {templates.map((tpl) => (
+                      <button
+                        key={tpl.key}
+                        type="button"
+                        onClick={() => handlePickTemplate(tpl.key)}
+                        className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 text-left hover:border-blue-400 hover:bg-blue-50/30"
+                      >
+                        <AppIcon value={tpl.icon} fallbackName={tpl.name} size={32} />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{tpl.name}</div>
+                          <div className="text-xs text-gray-400">{protocolLabel(tpl.protocol)}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTemplate({ key: '', name: '', category: '', protocol: createForm.protocol, client_type: createForm.client_type } as AppTemplate)}
+                    className="text-sm text-blue-600"
+                  >
+                    {t('apps.templates.blank')}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activeTemplate.key && (
+                    <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2">
+                      <span className="text-sm font-medium text-blue-800">{activeTemplate.name}</span>
+                      <button type="button" onClick={handleClearTemplate} className="text-xs text-blue-600">{t('apps.templates.change')}</button>
+                    </div>
+                  )}
+                  {activeTemplate.doc_md && (
+                    <pre className="whitespace-pre-wrap rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">{activeTemplate.doc_md}</pre>
+                  )}
+                  {(activeTemplate.fields ?? []).map((fld) => (
+                    <div key={fld.key}>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">{fld.label}</label>
+                      {fld.type === 'textarea' ? (
+                        <textarea className={inputCls} placeholder={fld.placeholder} value={tplFieldValues[fld.key] ?? ''}
+                          onChange={(e) => setTplFieldValues((v) => ({ ...v, [fld.key]: e.target.value }))} />
+                      ) : (
+                        <input className={inputCls} placeholder={fld.placeholder} value={tplFieldValues[fld.key] ?? ''}
+                          onChange={(e) => setTplFieldValues((v) => ({ ...v, [fld.key]: e.target.value }))} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Name + Code always visible */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('apps.createModal.nameLabel')}</label>
                 <input
@@ -865,70 +984,76 @@ export default function AppsPage() {
                   {t('apps.createModal.codeHint', { example: `/protocol/saml/${createForm.code || 'jira'}/metadata` })}
                 </p>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('apps.createModal.protocolLabel')}</label>
-                <select
-                  value={createForm.protocol}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, protocol: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="oidc">OIDC</option>
-                  <option value="saml">SAML 2.0</option>
-                  <option value="cas">CAS 3.0</option>
-                </select>
-              </div>
 
-              {createForm.protocol === 'oidc' && (
+              {/* Manual Protocol/ClientType/home_url/redirect_uris — hidden when a real template is active */}
+              {!activeTemplate?.key && (
                 <>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      {t('apps.createModal.clientTypeLabel')}
-                    </label>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{t('apps.createModal.protocolLabel')}</label>
                     <select
-                      value={createForm.client_type}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, client_type: e.target.value }))}
+                      value={createForm.protocol}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, protocol: e.target.value }))}
                       className={inputCls}
                     >
-                      <option value="web_app">{t('apps.createModal.clientTypes.webApp')}</option>
-                      <option value="spa">{t('apps.createModal.clientTypes.spa')}</option>
-                      <option value="native">{t('apps.createModal.clientTypes.native')}</option>
-                      <option value="m2m">{t('apps.createModal.clientTypes.m2m')}</option>
+                      <option value="oidc">OIDC</option>
+                      <option value="saml">SAML 2.0</option>
+                      <option value="cas">CAS 3.0</option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      {t('apps.createModal.homeUrlLabel')}
-                    </label>
-                    <input
-                      type="text"
-                      value={createForm.home_url}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, home_url: e.target.value }))}
-                      className={inputCls}
-                      placeholder="https://app.example.com"
-                    />
-                  </div>
+                  {createForm.protocol === 'oidc' && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          {t('apps.createModal.clientTypeLabel')}
+                        </label>
+                        <select
+                          value={createForm.client_type}
+                          onChange={(e) => setCreateForm((f) => ({ ...f, client_type: e.target.value }))}
+                          className={inputCls}
+                        >
+                          <option value="web_app">{t('apps.createModal.clientTypes.webApp')}</option>
+                          <option value="spa">{t('apps.createModal.clientTypes.spa')}</option>
+                          <option value="native">{t('apps.createModal.clientTypes.native')}</option>
+                          <option value="m2m">{t('apps.createModal.clientTypes.m2m')}</option>
+                        </select>
+                      </div>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      {t('apps.createModal.redirectUrisLabel')} {createForm.client_type !== 'm2m' && '*'}
-                    </label>
-                    <textarea
-                      value={createForm.redirect_uris}
-                      onChange={(e) =>
-                        setCreateForm((f) => ({ ...f, redirect_uris: e.target.value }))
-                      }
-                      rows={3}
-                      className={inputCls}
-                      placeholder={'http://localhost:8090/callback\nhttps://app.example.com/auth/callback'}
-                      required={createForm.client_type !== 'm2m'}
-                    />
-                  </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          {t('apps.createModal.homeUrlLabel')}
+                        </label>
+                        <input
+                          type="text"
+                          value={createForm.home_url}
+                          onChange={(e) => setCreateForm((f) => ({ ...f, home_url: e.target.value }))}
+                          className={inputCls}
+                          placeholder="https://app.example.com"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          {t('apps.createModal.redirectUrisLabel')} {createForm.client_type !== 'm2m' && '*'}
+                        </label>
+                        <textarea
+                          value={createForm.redirect_uris}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({ ...f, redirect_uris: e.target.value }))
+                          }
+                          rows={3}
+                          className={inputCls}
+                          placeholder={'http://localhost:8090/callback\nhttps://app.example.com/auth/callback'}
+                          required={createForm.client_type !== 'm2m'}
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
               <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="secondary" onClick={() => setShowCreate(false)}>
+                <Button type="button" variant="secondary" onClick={() => { setShowCreate(false); setActiveTemplate(null); setTplFieldValues({}) }}>
                   {t('common.cancel')}
                 </Button>
                 <Button type="submit" loading={creating}>
@@ -1294,6 +1419,10 @@ export default function AppsPage() {
                     {/* ---- App roles tab ---- */}
                     {detailTab === 'roles' && detailApp && (
                       <AppRolesTab owner="app" ownerId={String(detailApp.id)} />
+                    )}
+
+                    {detailTab === 'provisioning' && detailApp && (
+                      <ProvisioningTab appId={String(detailApp.id)} />
                     )}
                   </>
                 )}

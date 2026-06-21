@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   Mail, MailOpen, ShieldCheck, Palette, LogIn,
-  Settings2, MessageSquare, FileClock, Globe, Award, Link2, KeyRound, ShieldAlert, Info,
+  Settings2, MessageSquare, FileClock, Globe, Award, Link2, KeyRound, ShieldAlert, Info, Webhook,
 } from 'lucide-react'
 import { cn, useTranslation, systemApi } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -46,6 +46,7 @@ const buildNav = (t: (k: string) => string): Array<{
     group: t('settings.sections.auditPolicy') + ' / ' + t('settings.sections.license'),
     items: [
       { to: '/settings/audit-policy', icon: FileClock, label: t('settings.sections.auditPolicy') },
+      { to: '/settings/offboarding-webhook', icon: Webhook, label: t('settings.sections.offboardingWebhook') },
       { to: '/settings/license', icon: Award, label: t('settings.sections.license') },
     ],
   },

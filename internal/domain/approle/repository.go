@@ -27,6 +27,7 @@ type Repository interface {
 	// Bindings
 	ListBindings(ctx context.Context, owner Owner, ownerID, tenantID int64) ([]*Binding, error)
 	ListBindingsBySubject(ctx context.Context, subjectType string, subjectID, tenantID int64) ([]*Binding, error)
+	GetBindingByID(ctx context.Context, id, tenantID int64) (*Binding, error)
 	CreateBinding(ctx context.Context, b *Binding) error
 	DeleteBinding(ctx context.Context, id, tenantID int64) error
 
@@ -133,6 +134,17 @@ func (r *repo) ListBindingsBySubject(ctx context.Context, subjectType string, su
 		Order("created_at DESC").
 		Find(&rows).Error
 	return rows, err
+}
+
+func (r *repo) GetBindingByID(ctx context.Context, id, tenantID int64) (*Binding, error) {
+	var row Binding
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND tenant_id = ?", id, tenantID).
+		First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
 }
 
 func (r *repo) CreateBinding(ctx context.Context, b *Binding) error {

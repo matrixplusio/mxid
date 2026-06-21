@@ -54,6 +54,7 @@ var ImplementedFeatures = []Feature{
 	FeatureBranding,         // runtime-gated, CE schema
 	FeatureConditionalAccess, // runtime-gated, CE schema
 	FeatureExternalIDP,      // code-separated, mxid-ee
+	FeatureSCIM,             // code-separated, mxid-ee (L2 offboarding deprovision)
 }
 
 // IsImplemented reports whether f has shipping code (vs a reserved catalog key

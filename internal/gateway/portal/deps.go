@@ -123,6 +123,9 @@ type AppQuerier interface {
 	// index on mxid_app makes it cheap.
 	ListAuthorizedApps(ctx context.Context, userID, tenantID int64, q string) ([]*AppInfo, error)
 	GetAppLaunchURL(ctx context.Context, appID, userID int64) (string, error)
+	// AppName returns an app's display name, used to label the app.launched
+	// audit row so the trail reads "launched <name>" not a bare id.
+	AppName(ctx context.Context, appID int64) (string, error)
 	ListAuthorizedAppGroups(ctx context.Context, userID, tenantID int64) ([]*AppGroupInfo, error)
 	ListFavoriteAppIDs(ctx context.Context, userID int64) ([]int64, error)
 	AddFavorite(ctx context.Context, userID, tenantID, appID int64) error

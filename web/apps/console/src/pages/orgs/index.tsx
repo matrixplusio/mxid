@@ -269,9 +269,12 @@ export default function OrgsPage() {
         await Promise.all(
           unknownIds.map(async (uid) => {
             try {
-              const allUsers = await userApi.list({ id: uid, page: 1, page_size: 1 })
-              if (allUsers.items.length > 0) {
-                newMap.set(uid, allUsers.items[0])
+              // Resolve by id directly. The user list endpoint has no id
+              // filter, so list({id}) returned the first user for EVERY member
+              // — every row rendered as the same person.
+              const user = await userApi.getById(uid)
+              if (user) {
+                newMap.set(uid, user)
               }
             } catch {
               // ignore individual failures

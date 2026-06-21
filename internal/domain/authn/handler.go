@@ -742,6 +742,8 @@ func (h *Handler) handleAuthError(c *gin.Context, err error) {
 			return
 		}
 		response.Error(c, http.StatusForbidden, 40301, "account is locked", "")
+	case errors.Is(err, ErrAccountDisabled):
+		response.Error(c, http.StatusForbidden, 40303, "account is disabled", "")
 	case errors.Is(err, ErrPasswordExpired):
 		response.Error(c, http.StatusForbidden, 40302, "password has expired", "")
 	case errors.Is(err, ErrMFARequired):

@@ -48,6 +48,7 @@ func (h *Handler) List(c *gin.Context) {
 		EventType:    req.EventType,
 		ActorID:      req.ActorID,
 		ResourceType: req.ResourceType,
+		HideAPI:      req.HideAPI,
 	}
 
 	// Parse optional time range

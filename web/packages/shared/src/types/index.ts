@@ -435,3 +435,28 @@ export const AppProtocol = {
   SAML: 'saml',
   CAS: 'cas',
 } as const
+
+export interface AppTemplateField {
+  key: string
+  label: string
+  type: 'text' | 'textarea'
+  placeholder?: string
+  target: string // "redirect_uris" | "home_url" | "protocol_config.<name>"
+}
+
+export interface AppTemplateListItem {
+  key: string
+  name: string
+  icon?: string
+  category: string
+  protocol: string
+  description?: string
+}
+
+export interface AppTemplate extends AppTemplateListItem {
+  client_type: string
+  subject_strategy?: string
+  doc_md?: string
+  defaults?: Record<string, unknown>
+  fields?: AppTemplateField[]
+}

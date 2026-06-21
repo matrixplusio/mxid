@@ -220,12 +220,16 @@ func (h *appsHandler) launchApp(c *gin.Context) {
 	url = urlswap.SwapLocalhostHost(url, c.Request.Host)
 
 	if h.bus != nil {
+		// Best-effort name lookup so the audit row reads "launched <name>".
+		// A lookup failure must not block the launch — fall back to id-only.
+		appName, _ := h.appQuerier.AppName(c.Request.Context(), appID)
 		h.bus.Publish(c.Request.Context(), event.Event{
 			Type: event.AppLaunched,
 			Payload: map[string]any{
 				"user_id":    userID,
 				"tenant_id":  tenantID,
 				"app_id":     appID,
+				"name":       appName,
 				"session_id": sessionID,
 				"ip":         c.ClientIP(),
 				"user_agent": c.Request.UserAgent(),

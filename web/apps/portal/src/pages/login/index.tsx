@@ -35,6 +35,12 @@ function loginErrorMessage(err: unknown, t: (k: string) => string): string {
       return t('login.invalidCredentials')
     case 40102:
       return t('login.invalidMfaCode')
+    case 40301:
+      return t('login.accountLocked')
+    case 40302:
+      return t('login.passwordExpired')
+    case 40303:
+      return t('login.accountDisabled')
     default:
       return e?.response?.data?.message || t('login.failedRetry')
   }

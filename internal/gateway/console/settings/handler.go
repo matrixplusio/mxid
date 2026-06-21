@@ -8,6 +8,7 @@
 package settings
 
 import (
+	"net/url"
 	"strings"
 	"time"
 
@@ -64,6 +65,9 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 
 		g.GET("/audit-policy", h.getAuditPolicy)
 		g.PUT("/audit-policy", h.putAuditPolicy)
+
+		g.GET("/offboarding-webhook", h.getOffboardingWebhook)
+		g.PUT("/offboarding-webhook", h.putOffboardingWebhook)
 
 		g.GET("/mfa", h.getMFA)
 		g.PUT("/mfa", h.putMFA)
@@ -261,6 +265,42 @@ func (h *Handler) getAuditPolicy(c *gin.Context) {
 func (h *Handler) putAuditPolicy(c *gin.Context) {
 	var v setting.AuditPolicy
 	h.genericPut(c, setting.KeyAuditPolicy, &v)
+}
+
+func (h *Handler) getOffboardingWebhook(c *gin.Context) {
+	v := setting.DefaultOffboardingWebhook()
+	if err := h.service.Get(c.Request.Context(), setting.KeyOffboardingWebhook, h.tenantID(c), &v); err != nil && err != setting.ErrNotFound {
+		response.InternalError(c, "")
+		return
+	}
+	hadSecret := v.Secret != ""
+	v.Secret = "" // never echo the signing secret back
+	response.OK(c, gin.H{"config": v, "secret_set": hadSecret})
+}
+
+func (h *Handler) putOffboardingWebhook(c *gin.Context) {
+	var v setting.OffboardingWebhook
+	if err := c.ShouldBindJSON(&v); err != nil {
+		response.BadRequest(c, 40001, err.Error())
+		return
+	}
+	if v.Enabled {
+		if u, err := url.Parse(v.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			response.BadRequest(c, 40001, "invalid webhook url")
+			return
+		}
+	}
+	// Blank secret on save = keep the existing one (the UI never echoes it back).
+	if v.Secret == "" {
+		existing := setting.DefaultOffboardingWebhook()
+		_ = h.service.Get(c.Request.Context(), setting.KeyOffboardingWebhook, h.tenantID(c), &existing)
+		v.Secret = existing.Secret
+	}
+	if err := h.service.Set(c.Request.Context(), setting.KeyOffboardingWebhook, h.tenantID(c), v, h.userID(c)); err != nil {
+		response.InternalError(c, "")
+		return
+	}
+	response.OK(c, gin.H{"saved": true})
 }
 
 func (h *Handler) getMFA(c *gin.Context) {

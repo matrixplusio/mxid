@@ -154,6 +154,7 @@ export default function AuditPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [keyword, setKeyword] = useState('')
+  const [hideApi, setHideApi] = useState(true)
   const [detailLog, setDetailLog] = useState<AuditLog | null>(null)
 
   const loadData = useCallback(async () => {
@@ -164,6 +165,7 @@ export default function AuditPage() {
       if (startDate) params.start_time = startDate
       if (endDate) params.end_time = endDate
       if (keyword) params.keyword = keyword
+      if (hideApi) params.hide_api = true
       const result = await auditApi.list(params)
       setData(result)
     } catch {
@@ -171,7 +173,7 @@ export default function AuditPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, eventType, startDate, endDate, keyword])
+  }, [page, eventType, startDate, endDate, keyword, hideApi])
 
   useEffect(() => {
     loadData()
@@ -240,6 +242,18 @@ export default function AuditPage() {
         <Button onClick={handleFilter}>
           {t('audit.filters.filterBtn')}
         </Button>
+        <label className="flex cursor-pointer select-none items-center gap-2 pb-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={hideApi}
+            onChange={(e) => {
+              setPage(1)
+              setHideApi(e.target.checked)
+            }}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+          />
+          {t('audit.filters.hideApi')}
+        </label>
       </div>
 
       {/* Table */}

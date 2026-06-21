@@ -31,6 +31,11 @@ type ConsentChecker interface {
 	HasAll(ctx context.Context, tenantID, userID, appID int64, requested []string) (bool, error)
 }
 
+// userStatusActive mirrors user.StatusActive (1). Duplicated as a local const
+// so the protocol layer doesn't import the user domain just to gate the
+// refresh grant on account status.
+const userStatusActive = 1
+
 // Handler serves OIDC protocol endpoints.
 type Handler struct {
 	issuer      string
@@ -791,6 +796,17 @@ func (h *Handler) tokenRefreshToken(c *gin.Context) {
 
 	// Resolve subject once for the refresh-issued AT + ID token.
 	refreshInfo, _ := h.idRes.ResolveUser(c.Request.Context(), rt.UserID)
+
+	// Offboarding / disabled-account guard: a refresh token must not keep
+	// minting fresh access tokens once its owner is disabled (e.g. an
+	// offboarded employee). The old token was already consumed above, so a
+	// rejection here ends the family — no new sibling is issued. Closes the
+	// gap where disabling a user left their refresh tokens live until expiry.
+	if refreshInfo == nil || refreshInfo.Status != userStatusActive {
+		h.tokenError(c, "invalid_grant", "user account is not active")
+		return
+	}
+
 	refreshSubj := h.resolveSubject(c.Request.Context(), app, refreshInfo)
 
 	// Issue new access token
@@ -829,9 +845,8 @@ func (h *Handler) tokenRefreshToken(c *gin.Context) {
 	// Reissue id_token on refresh (OIDC Core §12.1 — recommended). auth_time
 	// and amr stay pinned to the original login moment.
 	claims, _ := h.idRes.ResolveClaims(c.Request.Context(), rt.UserID, rt.Scopes)
-	if refreshInfo != nil {
-		applyClaimMappers(claims, oidcCfg.ClaimMappers, refreshInfo, rt.Scopes)
-	}
+	// refreshInfo is guaranteed non-nil by the disabled-account guard above.
+	applyClaimMappers(claims, oidcCfg.ClaimMappers, refreshInfo, rt.Scopes)
 	if refreshSubj.TenantCode != "" {
 		claims["tenant_code"] = refreshSubj.TenantCode
 	}
@@ -1151,6 +1166,46 @@ func (h *Handler) isAllowedPostLogoutRedirect(c *gin.Context, clientID string, s
 		}
 	}
 	return false
+}
+
+// LogoutUserBackchannel fans out a back-channel logout to every RP the user
+// has an active protocol SSO session with — used by offboarding to proactively
+// drop the departing user's session inside each participating app.
+//
+// Must be called BEFORE the user's protocol sessions are killed: the per-RP
+// app sets are keyed by SSO session id, which we derive from the user's live
+// protocol sessions. The collection (session + app-set reads) runs
+// synchronously so it sees the data before the kill; the actual logout_token
+// POSTs are dispatched on a detached goroutine so a slow RP never blocks the
+// offboard. Best-effort — apps that don't implement back-channel logout, or
+// that we can't reach, fall through to failing closed on their next token
+// validation.
+func (h *Handler) LogoutUserBackchannel(ctx context.Context, userID int64) {
+	protoSessions, err := h.sessionMgr.ListByUser(ctx, session.NamespaceProtocol, userID)
+	if err != nil || len(protoSessions) == 0 {
+		return
+	}
+	type target struct {
+		sid    string
+		appIDs []int64
+	}
+	var targets []target
+	for _, s := range protoSessions {
+		// Consume-once read of the SSO session's participating apps. Done now,
+		// before the session is killed, so the set is still present.
+		appIDs, _ := h.store.ListSSOApps(ctx, s.ID)
+		if len(appIDs) > 0 {
+			targets = append(targets, target{sid: s.ID, appIDs: appIDs})
+		}
+	}
+	if len(targets) == 0 {
+		return
+	}
+	go func() {
+		for _, t := range targets {
+			h.fanOutBackchannelLogout(t.appIDs, userID, t.sid)
+		}
+	}()
 }
 
 // fanOutBackchannelLogout posts a signed logout_token to every RP's

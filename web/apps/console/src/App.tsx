@@ -14,6 +14,7 @@ import IDPsPage from './pages/idps'
 import TenantsPage from './pages/tenants'
 import PermissionsPage from './pages/permissions'
 import AuditPage from './pages/audit'
+import OffboardingPage from './pages/offboarding'
 import DocsPage from './pages/docs'
 import AccountPage from './pages/account'
 import SettingsLayout from './pages/settings/SettingsLayout'
@@ -26,6 +27,7 @@ import {
   ProtocolDefaultsPage,
   SMSPage,
   AuditPolicyPage,
+  OffboardingWebhookPage,
   MFAPolicyPage,
   ConditionalAccessPage,
   LocalizationPage,
@@ -105,6 +107,7 @@ export default function App() {
                 <Route path="/tenants" element={<TenantsPage />} />
                 <Route path="/permissions" element={<PermissionsPage />} />
                 <Route path="/audit" element={<AuditPage />} />
+                <Route path="/offboarding" element={<OffboardingPage />} />
                 <Route path="/docs" element={<DocsPage />} />
                 <Route path="/account" element={<AccountPage />} />
                 <Route path="/settings" element={<SettingsLayout />}>
@@ -120,6 +123,7 @@ export default function App() {
                   <Route path="branding" element={<BrandingPage />} />
                   <Route path="localization" element={<LocalizationPage />} />
                   <Route path="audit-policy" element={<AuditPolicyPage />} />
+                  <Route path="offboarding-webhook" element={<OffboardingWebhookPage />} />
                   <Route path="license" element={<LicensePage />} />
                   <Route path="external-urls" element={<ExternalURLsPage />} />
                   <Route path="system-version" element={<SystemVersionPage />} />

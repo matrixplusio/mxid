@@ -3,6 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,18 @@ func (s *Service) RecordAPIRequest(c *gin.Context) {
 		IP:           &ip,
 		UserAgent:    strPtr(ua),
 		CreatedAt:    time.Now(),
+	}
+
+	// Best-effort resource_id: the catch-all can't know the domain, but a
+	// route's primary `:id` path param (the parent resource — e.g. the app in
+	// /apps/:id and /apps/:id/access) is enough to make the row joinable
+	// instead of an anonymous PUT. The richer domain event still carries the
+	// authoritative subject; this only stops the safety-net row from being
+	// blank.
+	if idStr := c.Param("id"); idStr != "" {
+		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			log.ResourceID = &id
+		}
 	}
 
 	// Actor identity + tenant are filled by enrich() from the request-scoped

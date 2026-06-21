@@ -14,6 +14,12 @@ const (
 	AuthLocked
 	AuthPasswordExpired
 	AuthFailed
+	// AuthDisabled marks a correct-credentials login against a disabled
+	// account (e.g. an offboarded user). Distinguished from AuthFailed ONLY
+	// after the password is verified, so an attacker guessing usernames can't
+	// read account-state off the response — a wrong password is always
+	// AuthFailed regardless of account status.
+	AuthDisabled
 )
 
 // Provider defines a pluggable authentication strategy.

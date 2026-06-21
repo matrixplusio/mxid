@@ -21,6 +21,13 @@ with a signed license.
 Feature keys (in the license payload): `multi_tenant`, `external_idp`,
 `branding`, `conditional_access`, `webauthn`, `scim`, `advanced_stepup`, `sms`.
 
+### CE capabilities
+
+- **App template marketplace** (CE): create apps from built-in onboarding
+  presets (Feishu, DingTalk, WeCom, GitLab, Grafana, Jenkins, Jira,
+  Confluence, JumpServer). Templates are declarative and contain no secrets;
+  template-created apps run the same validation as hand-filled ones.
+
 ## How editions are built (architecture)
 
 Three repositories, single source of truth, no fork:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 
 	"gorm.io/gorm"
 
@@ -184,6 +185,9 @@ func (s *Service) CreateRole(ctx context.Context, req CreateRoleRequest) (*AppRo
 		return nil, err
 	}
 	s.publish(req.TenantID)
+	s.auditPublish(ctx, event.AppRoleCreated, r.TenantID, r.AppID, r.AppGroupID, map[string]any{
+		"role_id": r.ID, "code": r.Code, "name": r.Name,
+	})
 	return r, nil
 }
 
@@ -218,14 +222,26 @@ func (s *Service) UpdateRole(ctx context.Context, req UpdateRoleRequest) (*AppRo
 		return nil, err
 	}
 	s.publish(role.TenantID)
+	s.auditPublish(ctx, event.AppRoleUpdated, role.TenantID, role.AppID, role.AppGroupID, map[string]any{
+		"role_id": role.ID, "code": role.Code, "name": role.Name,
+	})
 	return role, nil
 }
 
 func (s *Service) DeleteRole(ctx context.Context, id, tenantID int64) error {
+	// Load the role before deleting so the audit row can name which app/group
+	// and which role lost a definition — DeleteRole's args alone carry no
+	// parent context.
+	role, getErr := s.repo.GetRoleByID(ctx, id, tenantID)
 	if err := s.repo.DeleteRole(ctx, id, tenantID); err != nil {
 		return err
 	}
 	s.publish(tenantID)
+	if getErr == nil {
+		s.auditPublish(ctx, event.AppRoleDeleted, tenantID, role.AppID, role.AppGroupID, map[string]any{
+			"role_id": role.ID, "code": role.Code, "name": role.Name,
+		})
+	}
 	return nil
 }
 
@@ -283,14 +299,25 @@ func (s *Service) AddBinding(ctx context.Context, req AddBindingRequest) (*Bindi
 		return nil, err
 	}
 	s.publish(req.TenantID)
+	s.auditPublish(ctx, event.AppRoleBindingCreated, b.TenantID, b.AppID, b.AppGroupID, map[string]any{
+		"role_id": b.AppRoleID, "subject_type": b.SubjectType, "subject_id": b.SubjectID, "binding_id": b.ID,
+	})
 	return b, nil
 }
 
 func (s *Service) DeleteBinding(ctx context.Context, id, tenantID int64) error {
+	// Load the binding before deleting so the audit row names the parent
+	// app/group, the role and the subject that lost the grant.
+	binding, getErr := s.repo.GetBindingByID(ctx, id, tenantID)
 	if err := s.repo.DeleteBinding(ctx, id, tenantID); err != nil {
 		return err
 	}
 	s.publish(tenantID)
+	if getErr == nil {
+		s.auditPublish(ctx, event.AppRoleBindingDeleted, tenantID, binding.AppID, binding.AppGroupID, map[string]any{
+			"role_id": binding.AppRoleID, "subject_type": binding.SubjectType, "subject_id": binding.SubjectID, "binding_id": binding.ID,
+		})
+	}
 	return nil
 }
 
@@ -329,6 +356,25 @@ func (s *Service) publish(tenantID int64) {
 		Type:    EventAppRoleChanged,
 		Payload: map[string]any{"tenant_id": tenantID},
 	})
+}
+
+// auditPublish emits a security-audit domain event for an app-role/binding
+// change. Unlike publish() (an SSE cache-bust with no actor on a detached
+// context), this carries the REQUEST ctx so the audit enricher can attribute
+// the change to the acting admin. Resource is the parent app or app-group.
+func (s *Service) auditPublish(ctx context.Context, eventType string, tenantID int64, appID, groupID *int64, extra map[string]any) {
+	if s.eventBus == nil {
+		return
+	}
+	payload := map[string]any{"tenant_id": tenantID}
+	if appID != nil {
+		payload["app_id"] = *appID
+	}
+	if groupID != nil {
+		payload["app_group_id"] = *groupID
+	}
+	maps.Copy(payload, extra)
+	s.eventBus.Publish(ctx, event.Event{Type: eventType, Payload: payload})
 }
 
 func validSubject(s string) bool {

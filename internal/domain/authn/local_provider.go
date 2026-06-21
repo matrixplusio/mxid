@@ -78,9 +78,18 @@ func (p *LocalProvider) Authenticate(ctx context.Context, req *AuthRequest) (*Au
 		return &AuthResult{Status: AuthFailed}, nil
 	}
 
-	// Check account status. The locked/disabled/default branches short-circuit
-	// before the real password compare, so each burns a dummy bcrypt first to
-	// keep account-state from leaking via response timing.
+	// Check account status. The locked/default branches short-circuit before
+	// the real password compare, so each burns a dummy bcrypt first to keep
+	// account-state from leaking via response timing.
+	//
+	// statusDisabled is the exception: it does NOT short-circuit here. A
+	// disabled account is indistinguishable from a wrong password to anyone who
+	// doesn't already know the password (both burn one bcrypt and return
+	// AuthFailed below) — but a caller who supplies the CORRECT password has
+	// proven ownership, so we tell them the truth ("account disabled") instead
+	// of the misleading "wrong password". This fixes offboarded users being
+	// told their (correct) password is wrong, without leaking which accounts
+	// exist or are disabled.
 	switch u.Status {
 	case statusLocked:
 		burnDummyCompare(password)
@@ -89,15 +98,8 @@ func (p *LocalProvider) Authenticate(ctx context.Context, req *AuthRequest) (*Au
 			Username: u.Username,
 			Status:   AuthLocked,
 		}, nil
-	case statusDisabled:
-		burnDummyCompare(password)
-		return &AuthResult{
-			UserID:   u.ID,
-			Username: u.Username,
-			Status:   AuthFailed,
-		}, nil
-	case statusActive:
-		// proceed
+	case statusActive, statusDisabled:
+		// proceed to password verification
 	default:
 		burnDummyCompare(password)
 		return &AuthResult{
@@ -113,6 +115,16 @@ func (p *LocalProvider) Authenticate(ctx context.Context, req *AuthRequest) (*Au
 			UserID:   u.ID,
 			Username: u.Username,
 			Status:   AuthFailed,
+		}, nil
+	}
+
+	// Password verified. Reveal a disabled account only now — the caller proved
+	// ownership, so this discloses nothing to an attacker guessing usernames.
+	if u.Status == statusDisabled {
+		return &AuthResult{
+			UserID:   u.ID,
+			Username: u.Username,
+			Status:   AuthDisabled,
 		}, nil
 	}
 

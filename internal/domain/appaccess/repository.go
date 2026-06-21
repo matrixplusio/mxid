@@ -19,6 +19,7 @@ type Repository interface {
 	// ListByAppGroup returns rows owned by an app_group.
 	ListByAppGroup(ctx context.Context, appGroupID, tenantID int64) ([]*Policy, error)
 	Create(ctx context.Context, p *Policy) error
+	GetByID(ctx context.Context, id, tenantID int64) (*Policy, error)
 	Delete(ctx context.Context, id int64) error
 	// AppsForUser returns the set of app_ids the user is allowed to launch
 	// based on combined allow/deny rules across all access subjects (user
@@ -75,6 +76,17 @@ func (r *repo) ListByAppGroup(ctx context.Context, appGroupID, tenantID int64) (
 
 func (r *repo) Create(ctx context.Context, p *Policy) error {
 	return r.db.WithContext(ctx).Create(p).Error
+}
+
+func (r *repo) GetByID(ctx context.Context, id, tenantID int64) (*Policy, error) {
+	var row Policy
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND tenant_id = ?", id, tenantID).
+		First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
 }
 
 func (r *repo) Delete(ctx context.Context, id int64) error {

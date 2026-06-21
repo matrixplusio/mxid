@@ -21,6 +21,7 @@ var (
 	ErrUnknownProvider = errors.New("unknown authentication provider")
 	ErrAuthFailed      = errors.New("authentication failed")
 	ErrAccountLocked   = errors.New("account is locked")
+	ErrAccountDisabled = errors.New("account is disabled")
 	ErrPasswordExpired = errors.New("password has expired")
 	ErrMFARequired     = errors.New("mfa verification required")
 	ErrSessionNotFound = errors.New("session not found")
@@ -183,6 +184,10 @@ func (e *Engine) Login(ctx context.Context, req *AuthRequest, namespace string) 
 	case AuthLocked:
 		e.publishLoginEvent(ctx, result, req, false)
 		return nil, ErrAccountLocked
+
+	case AuthDisabled:
+		e.publishLoginEvent(ctx, result, req, false)
+		return nil, ErrAccountDisabled
 
 	case AuthPasswordExpired:
 		e.publishLoginEvent(ctx, result, req, false)
@@ -622,11 +627,17 @@ func (e *Engine) publishLoginEvent(ctx context.Context, result *AuthResult, req 
 			reason = "invalid credentials"
 		case AuthLocked:
 			reason = "account locked"
+		case AuthDisabled:
+			reason = "account disabled"
 		case AuthPasswordExpired:
 			reason = "password expired"
 		case AuthMFARequired:
 			reason = "mfa required"
 		}
+		// Carry the reason into the audit detail too — previously it was only
+		// fed to the login recorder, leaving every login.failed audit row with
+		// a blank reason (can't tell "account disabled" from "wrong password").
+		payload["reason"] = reason
 	}
 
 	e.eventBus.Publish(ctx, event.Event{

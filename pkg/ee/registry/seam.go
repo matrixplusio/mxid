@@ -59,6 +59,25 @@ type ConsoleGateFunc func(ctx context.Context, tenantID, userID int64) error
 // without one). Unifies external URL config across CE protocols and EE IdP.
 type ExternalURLsFunc func(ctx context.Context, tenantID int64) (issuer, portal, console string)
 
+// OutboxHandler processes a durable outbox message. payload is the raw JSON the
+// producer enqueued. Returning an error reschedules the message with backoff
+// (dead-lettered after max attempts); nil marks it delivered. Must be
+// idempotent — at-least-once delivery means a message can be retried after a
+// crash mid-processing. Neutral ([]byte) so the EE module needs no CE internal
+// type.
+type OutboxHandler func(ctx context.Context, payload []byte) error
+
+// OutboxRegisterFunc binds an EE handler to an outbox message kind. Implemented
+// in CE over the outbox worker. The CE binary registers no EE handler and never
+// enqueues an EE-only kind, so the kind simply has no consumer there.
+type OutboxRegisterFunc func(kind string, h OutboxHandler)
+
+// ProvisioningConfigFunc returns an app's live, decrypted outbound-provisioning
+// config. enabled=false means no downstream deprovision should run. Implemented
+// in CE over the provisioning domain so the EE SCIM connector never touches the
+// config table or the master key.
+type ProvisioningConfigFunc func(ctx context.Context, appID int64) (enabled bool, connector, baseURL, token string, err error)
+
 // InitContext carries everything an EE feature needs from CE at startup. App
 // exposes DB/Redis/router/route-groups/config; the func hooks bridge to CE
 // domains the EE module must not import.
@@ -69,6 +88,11 @@ type InitContext struct {
 	TenantByCode TenantByCodeFunc
 	ConsoleGate  ConsoleGateFunc
 	ExternalURLs ExternalURLsFunc
+	// OutboxRegister binds an EE outbox handler (e.g. SCIM deprovision delivery).
+	OutboxRegister OutboxRegisterFunc
+	// ProvisioningConfig reads an app's outbound-provisioning credentials at
+	// delivery time (the EE SCIM connector uses it).
+	ProvisioningConfig ProvisioningConfigFunc
 }
 
 // Initializer wires one EE feature. Returning an error aborts startup.

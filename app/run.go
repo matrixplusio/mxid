@@ -21,9 +21,11 @@ import (
 	"github.com/imkerbos/mxid/internal/domain/consent"
 	"github.com/imkerbos/mxid/internal/domain/dashboard"
 	"github.com/imkerbos/mxid/internal/domain/group"
+	"github.com/imkerbos/mxid/internal/domain/offboarding"
 	"github.com/imkerbos/mxid/internal/domain/org"
 	"github.com/imkerbos/mxid/internal/domain/permission"
 	"github.com/imkerbos/mxid/internal/domain/platformconfig"
+	"github.com/imkerbos/mxid/internal/domain/provisioning"
 	"github.com/imkerbos/mxid/internal/domain/setting"
 	"github.com/imkerbos/mxid/internal/domain/tenant"
 	"github.com/imkerbos/mxid/internal/domain/upload"
@@ -33,6 +35,7 @@ import (
 	systemgw "github.com/imkerbos/mxid/internal/gateway/console/system"
 	"github.com/imkerbos/mxid/internal/gateway/portal"
 	"github.com/imkerbos/mxid/internal/middleware"
+	"github.com/imkerbos/mxid/internal/outbox"
 	"github.com/imkerbos/mxid/internal/protocol/cas"
 	"github.com/imkerbos/mxid/internal/protocol/oidc"
 	"github.com/imkerbos/mxid/internal/protocol/resolver"
@@ -596,6 +599,22 @@ func registerModules(a *bootstrap.App) {
 	// because retention is a global compliance knob.
 	go runAuditRetention(a, settingService, auditModule.Repo)
 
+	// Transactional outbox worker — durable at-least-once delivery for side
+	// effects that must survive a crash (offboarding webhooks, later L2 SCIM
+	// pushes). Producers enqueue onto outboxRepo; the worker dispatches by
+	// kind. The offboarding webhook handler is registered here; offboarding
+	// (wired below) gets outboxRepo to enqueue.
+	outboxRepo := outbox.NewRepository(a.DB, a.IDGen)
+	outboxWorker := outbox.NewWorker(outboxRepo, a.Logger)
+	outboxWorker.Register(offboarding.WebhookKind, newOffboardingWebhookHandler(settingService))
+	// Worker is STARTED after RunInit (below) so EE features (e.g. the SCIM
+	// deprovision handler) can register their kinds first — Register must not
+	// race Run.
+
+	// Per-app outbound provisioning config (L2). Schema + CRUD are CE; the SCIM
+	// connector that consumes it is EE, handed the decrypted read via the seam.
+	provisioningModule := provisioning.Register(a)
+
 	// Console dashboard aggregation. Live-session gauge sums the interactive
 	// (console + portal) namespaces; the protocol SSO session is internal and
 	// not a "logged-in user" in the dashboard sense.
@@ -733,9 +752,25 @@ func registerModules(a *bootstrap.App) {
 			}
 			return urls.IssuerURL, urls.PortalURL, urls.ConsoleURL
 		},
+		// Let an EE feature bind a durable outbox handler. The neutral
+		// payload-bytes signature is adapted onto the concrete outbox.Handler so
+		// the EE module needs no CE internal type.
+		OutboxRegister: func(kind string, h registry.OutboxHandler) {
+			outboxWorker.Register(kind, func(ctx context.Context, msg *outbox.Message) error {
+				return h(ctx, msg.Payload)
+			})
+		},
+		// Decrypted per-app provisioning config read, for the EE SCIM connector.
+		ProvisioningConfig: provisioningModule.Service.Resolved,
 	}); err != nil {
 		a.Logger.Fatal("init EE features", zap.Error(err))
 	}
+
+	// EE handlers (if any) are now registered — start the outbox worker.
+	go outboxWorker.Run(context.Background())
+
+	// Mount the per-app provisioning config API on the console group.
+	provisioningModule.RegisterRoutes(a)
 
 	// 6. Protocol resolvers — bridge app/user repos to protocol layer.
 	//
@@ -836,6 +871,22 @@ func registerModules(a *bootstrap.App) {
 	}
 	samlModule := saml.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, appResolver, idResolver, sessResolver, tenantResolver)
 	casModule := cas.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, a.Redis, appResolver, idResolver, sessResolver, tenantResolver)
+
+	// One-click offboarding (L1 access cutoff): disable account + back-channel
+	// logout the user's apps + kill all sessions. Wired here (after oidc) so it
+	// can borrow the OIDC handler's back-channel fan-out; the notifier is nil
+	// under the zitadel engine, which degrades to disable + session-kill.
+	// Registered on the console group, which already carries the step-up MFA +
+	// authz middleware chain.
+	var offboardLogout offboarding.LogoutNotifier
+	if oidcModule != nil {
+		offboardLogout = offboarding.LogoutNotifierFunc(oidcModule.Handler.LogoutUserBackchannel)
+	}
+	offboardFP := offboardFootprint{access: accessSvc, apps: appModule.Service, provisioning: provisioningModule.Service}
+	offboardMod := offboarding.Register(a, userModule.Service, sessionMgr, offboardLogout, offboardFP)
+	offboardMod.Service.SetWebhookDispatcher(offboardWebhookDispatcher{settings: settingService, outbox: outboxRepo})
+	offboardMod.Service.SetDeprovisionEnqueuer(offboardDeprovisionEnqueuer{outbox: outboxRepo})
+	offboardMod.RegisterRoutes(a)
 
 	// Runtime URL provider — admin-configurable external URLs. Empty
 	// fields fall through to the bootstrap config (i.e. the static

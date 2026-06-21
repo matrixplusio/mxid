@@ -85,7 +85,7 @@ func majorVersion(v string) string {
 func featureStrings(fs []license.Feature, registeredCodeSep map[string]bool) []string {
 	out := make([]string, 0, len(fs))
 	for _, f := range fs {
-		// Don't advertise reserved-but-unbuilt features (e.g. webauthn/scim)
+		// Don't advertise reserved-but-unbuilt features (e.g. webauthn)
 		// even if a license unlocks them — public metadata must reflect what's
 		// actually usable, not the catalog.
 		if !license.IsImplemented(f) {

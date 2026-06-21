@@ -6,9 +6,9 @@
 //
 // Two layers:
 //
-//   Repository    raw KV against mxid_setting (JSON value, no decryption)
-//   Service       typed Get/Set helpers per category, transparent AES on
-//                 sensitive fields (SMTP password, SMS secret, etc).
+//	Repository    raw KV against mxid_setting (JSON value, no decryption)
+//	Service       typed Get/Set helpers per category, transparent AES on
+//	              sensitive fields (SMTP password, SMS secret, etc).
 //
 // Each typed setting category is a struct in this file. To add a new
 // category, append a struct + define `Key*` constant + add a `Default*`
@@ -50,19 +50,20 @@ func (s *Setting) Decode(target any) error {
 
 // Well-known keys. Prefixed by category so list filtering stays simple.
 const (
-	KeyMailSMTP        = "mail.smtp"
-	KeyMailTemplates   = "mail.templates"
-	KeySMS             = "sms"
-	KeySecurityPolicy  = "security.policy"
-	KeyBranding        = "branding"
-	KeyLoginMethods    = "login.methods"
-	KeyProtocolDefault = "protocol.defaults"
-	KeyAuditPolicy     = "audit.policy"
-	KeyLocalization    = "localization"
-	KeyLicense         = "license"
-	KeyExternalURLs    = "external.urls"
+	KeyMailSMTP           = "mail.smtp"
+	KeyMailTemplates      = "mail.templates"
+	KeySMS                = "sms"
+	KeySecurityPolicy     = "security.policy"
+	KeyBranding           = "branding"
+	KeyLoginMethods       = "login.methods"
+	KeyProtocolDefault    = "protocol.defaults"
+	KeyAuditPolicy        = "audit.policy"
+	KeyLocalization       = "localization"
+	KeyLicense            = "license"
+	KeyExternalURLs       = "external.urls"
 	KeyMFAPolicy          = "security.mfa"
 	KeyConditionalAccess  = "security.conditional_access"
+	KeyOffboardingWebhook = "offboarding.webhook"
 )
 
 // MFA enforcement modes for MFAPolicy.Mode.
@@ -167,10 +168,20 @@ type SMS struct {
 	Enabled   bool   `json:"enabled"`
 	Provider  string `json:"provider"` // "aliyun" | "tencent" | "twilio"
 	AccessKey string `json:"access_key"`
-	Secret    string `json:"secret"`   // AES-encrypted at rest
+	Secret    string `json:"secret"` // AES-encrypted at rest
 	SignName  string `json:"sign_name"`
 	Template  string `json:"template"` // provider-specific template ID
 	Region    string `json:"region,omitempty"`
+}
+
+// OffboardingWebhook — where to notify a customer's IT/HR/ITSM system when a
+// user is offboarded, so downstream accounts the SSO cutoff can't reach get a
+// signed work order. Delivery is durable (via the outbox) and signed with the
+// shared secret (HMAC-SHA256). Disabled by default.
+type OffboardingWebhook struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
+	Secret  string `json:"secret"` // AES-encrypted at rest; signs the payload
 }
 
 // AuditPolicy — audit log retention + notification thresholds.
@@ -231,13 +242,13 @@ type ExternalURLs struct {
 
 // License — commercial license metadata. Optional in OSS builds.
 type License struct {
-	Key             string `json:"key"`
-	RegisteredTo    string `json:"registered_to"`
-	IssuedAt        string `json:"issued_at"`
-	ExpiresAt       string `json:"expires_at"`
-	MaxUsers        int    `json:"max_users"`
-	MaxTenants      int    `json:"max_tenants"`
-	EnableEnterprise bool  `json:"enable_enterprise"`
+	Key              string `json:"key"`
+	RegisteredTo     string `json:"registered_to"`
+	IssuedAt         string `json:"issued_at"`
+	ExpiresAt        string `json:"expires_at"`
+	MaxUsers         int    `json:"max_users"`
+	MaxTenants       int    `json:"max_tenants"`
+	EnableEnterprise bool   `json:"enable_enterprise"`
 	// KeySet is a transient, read-only flag: whether a token is stored. Set by
 	// the GET handler (which blanks Key); never trusted on write.
 	KeySet bool `json:"key_set,omitempty"`
@@ -255,6 +266,7 @@ type License struct {
 //
 // Format: "<setting_key>.<json_field>"
 var sensitiveFields = map[string][]string{
-	KeyMailSMTP: {"password"},
-	KeySMS:      {"secret"},
+	KeyMailSMTP:           {"password"},
+	KeySMS:                {"secret"},
+	KeyOffboardingWebhook: {"secret"},
 }

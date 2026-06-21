@@ -21,6 +21,12 @@ type ListParams struct {
 	ResourceType string
 	StartTime    *time.Time
 	EndTime      *time.Time
+	// HideAPI excludes the generic api.* catch-all rows (the safety-net entries
+	// RecordAPIRequest writes for every non-GET request). They duplicate the
+	// richer domain events for any route that emits one, so the console hides
+	// them by default and only shows them when investigating a route that emits
+	// no domain event.
+	HideAPI bool
 }
 
 // Repository defines the data access interface for audit logs.

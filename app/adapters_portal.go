@@ -448,6 +448,14 @@ func (a *portalAppQuerierAdapter) GetAppLaunchURL(ctx context.Context, appID, us
 	return "", fmt.Errorf("no launch URL configured for app %d", appID)
 }
 
+func (a *portalAppQuerierAdapter) AppName(ctx context.Context, appID int64) (string, error) {
+	ap, err := a.appModule.Repo.GetByID(ctx, appID)
+	if err != nil {
+		return "", err
+	}
+	return ap.Name, nil
+}
+
 /* ─────────── Session ─────────── */
 
 type portalSessionQuerierAdapter struct{ sessionMgr *session.Manager }

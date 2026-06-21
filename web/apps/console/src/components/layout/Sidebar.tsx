@@ -8,6 +8,7 @@ import {
   AppWindow,
   Shield,
   ScrollText,
+  UserX,
   LogOut,
   Plug,
   Building,
@@ -31,6 +32,7 @@ const navItemsBuild = (t: (k: string) => string) => [
   { to: '/idps', icon: Plug, label: t('nav.idps') },
   { to: '/permissions', icon: Shield, label: t('nav.permissions') },
   { to: '/audit', icon: ScrollText, label: t('nav.audit') },
+  { to: '/offboarding', icon: UserX, label: t('nav.offboarding') },
   { to: '/settings', icon: Settings, label: t('nav.settings') },
   { to: '/docs', icon: BookOpen, label: t('nav.docs') },
 ]

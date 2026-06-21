@@ -84,11 +84,25 @@ var detailSchemas = map[string]detailSchema{
 	event.UserPIIView:         {allow: []string{"user_id", "target_id", "tenant_id", "fields"}},
 	event.UserSuperAdminGrant: {allow: []string{"user_id", "target_id", "tenant_id", "username"}},
 	event.UserSuperAdminRevoke: {allow: []string{"user_id", "target_id", "tenant_id", "username"}},
+	event.UserOffboarded:       {allow: []string{"user_id", "tenant_id", "username", "actor_id", "sessions_killed"}},
 
 	event.AppCreated:  {allow: []string{"app_id", "tenant_id", "name", "code", "protocol", "actor_id"}},
-	event.AppUpdated:  {allow: []string{"app_id", "tenant_id", "fields", "actor_id"}},
+	event.AppUpdated:  {allow: []string{"app_id", "tenant_id", "fields", "action", "status", "actor_id"}},
 	event.AppDeleted:  {allow: []string{"app_id", "tenant_id", "name", "code", "actor_id"}},
-	event.AppLaunched: {allow: []string{"app_id", "tenant_id", "user_id", "session_id"}},
+	event.AppLaunched: {allow: []string{"app_id", "tenant_id", "user_id", "name", "session_id"}},
+
+	// Security-sensitive app sub-resource changes.
+	event.AppAccessGranted:       {allow: []string{"app_id", "tenant_id", "subject_type", "subject_id", "actor_id"}},
+	event.AppAccessRevoked:       {allow: []string{"app_id", "tenant_id", "subject_type", "subject_id", "actor_id"}},
+	event.AppCertCreated:         {allow: []string{"app_id", "tenant_id", "kid", "actor_id"}},
+	event.AppCertDeleted:         {allow: []string{"app_id", "tenant_id", "kid", "cert_id", "actor_id"}},
+	event.AppRoleCreated:         {allow: []string{"app_id", "app_group_id", "tenant_id", "role_id", "code", "name", "actor_id"}},
+	event.AppRoleUpdated:         {allow: []string{"app_id", "app_group_id", "tenant_id", "role_id", "code", "name", "actor_id"}},
+	event.AppRoleDeleted:         {allow: []string{"app_id", "app_group_id", "tenant_id", "role_id", "code", "name", "actor_id"}},
+	event.AppRoleBindingCreated:  {allow: []string{"app_id", "app_group_id", "tenant_id", "role_id", "subject_type", "subject_id", "binding_id", "actor_id"}},
+	event.AppRoleBindingDeleted:  {allow: []string{"app_id", "app_group_id", "tenant_id", "role_id", "subject_type", "subject_id", "binding_id", "actor_id"}},
+	event.AppAccessPolicyCreated: {allow: []string{"app_id", "app_group_id", "tenant_id", "policy_id", "subject_type", "subject_id", "effect", "actor_id"}},
+	event.AppAccessPolicyDeleted: {allow: []string{"app_id", "app_group_id", "tenant_id", "policy_id", "subject_type", "subject_id", "effect", "actor_id"}},
 
 	event.OrgCreated:     {allow: []string{"org_id", "tenant_id", "name", "code", "parent_id", "actor_id"}},
 	event.OrgUpdated:     {allow: []string{"org_id", "tenant_id", "fields", "actor_id"}},

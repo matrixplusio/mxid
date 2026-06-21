@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/imkerbos/mxid/pkg/event"
 	"github.com/imkerbos/mxid/pkg/snowflake"
@@ -190,16 +191,27 @@ func (s *Service) AddPolicy(ctx context.Context, req AddPolicyRequest) (*Policy,
 	// (app or group) was touched; the user's effective access set might
 	// change in either case.
 	s.publishGroupOrApp(req.AppID, req.AppGroupID, req.TenantID)
+	s.auditPublish(ctx, event.AppAccessPolicyCreated, p.TenantID, p.AppID, p.AppGroupID, map[string]any{
+		"policy_id": p.ID, "subject_type": p.SubjectType, "subject_id": p.SubjectID, "effect": p.Effect,
+	})
 	return p, nil
 }
 
 func (s *Service) DeletePolicy(ctx context.Context, id, tenantID int64) error {
+	// Load the policy before deleting so the audit row names which app/group
+	// and which subject lost the rule — Delete's args carry no context.
+	policy, getErr := s.repo.GetByID(ctx, id, tenantID)
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
 	// Publish without a specific target id — clients re-fetch the whole
 	// /apps list on apps_updated, so the exact id isn't important.
 	s.publishGroupOrApp(nil, nil, tenantID)
+	if getErr == nil {
+		s.auditPublish(ctx, event.AppAccessPolicyDeleted, tenantID, policy.AppID, policy.AppGroupID, map[string]any{
+			"policy_id": policy.ID, "subject_type": policy.SubjectType, "subject_id": policy.SubjectID, "effect": policy.Effect,
+		})
+	}
 	return nil
 }
 
@@ -325,6 +337,26 @@ func (s *Service) publishGroupOrApp(appID, appGroupID *int64, tenantID int64) {
 		Type:    EventAccessPolicyChanged,
 		Payload: payload,
 	})
+}
+
+// auditPublish emits a security-audit domain event for an access-policy
+// change. Unlike publishGroupOrApp() (an SSE cache-bust with no actor on a
+// detached context), this carries the REQUEST ctx so the audit enricher can
+// attribute the change to the acting admin. Resource is the parent app or
+// app-group.
+func (s *Service) auditPublish(ctx context.Context, eventType string, tenantID int64, appID, groupID *int64, extra map[string]any) {
+	if s.eventBus == nil {
+		return
+	}
+	payload := map[string]any{"tenant_id": tenantID}
+	if appID != nil {
+		payload["app_id"] = *appID
+	}
+	if groupID != nil {
+		payload["app_group_id"] = *groupID
+	}
+	maps.Copy(payload, extra)
+	s.eventBus.Publish(ctx, event.Event{Type: eventType, Payload: payload})
 }
 
 func validSubjectType(s string) bool {

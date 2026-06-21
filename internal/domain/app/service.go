@@ -335,7 +335,7 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req *CreateAppRequ
 
 	s.eventBus.Publish(ctx, event.Event{
 		Type:    event.AppCreated,
-		Payload: map[string]any{"app_id": application.ID, "tenant_id": tenantID, "code": application.Code},
+		Payload: map[string]any{"app_id": application.ID, "tenant_id": tenantID, "name": application.Name, "code": application.Code, "protocol": application.Protocol},
 	})
 
 	return &CreateAppResult{
@@ -481,8 +481,12 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateAppRequest) (
 		return nil, fmt.Errorf("get app: %w", err)
 	}
 
+	// Track which fields the request actually mutated so the audit trail can
+	// answer "what changed" instead of an opaque app.updated row.
+	var fields []string
 	if req.Name != nil {
 		application.Name = *req.Name
+		fields = append(fields, "name")
 	}
 	if req.SubjectStrategy != nil && *req.SubjectStrategy != "" {
 		// Shared apps forbid the bare-username strategy because it can collide
@@ -492,30 +496,39 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateAppRequest) (
 			return nil, fmt.Errorf("shared app cannot use subject_strategy=username")
 		}
 		application.SubjectStrategy = *req.SubjectStrategy
+		fields = append(fields, "subject_strategy")
 	}
 	if req.Icon != nil {
 		application.Icon = req.Icon
+		fields = append(fields, "icon")
 	}
 	if req.Description != nil {
 		application.Description = req.Description
+		fields = append(fields, "description")
 	}
 	if req.HomeURL != nil {
 		application.HomeURL = req.HomeURL
+		fields = append(fields, "home_url")
 	}
 	if req.LoginURL != nil {
 		application.LoginURL = req.LoginURL
+		fields = append(fields, "login_url")
 	}
 	if req.LogoutURL != nil {
 		application.LogoutURL = req.LogoutURL
+		fields = append(fields, "logout_url")
 	}
 	if req.AccessPolicy != nil {
 		application.AccessPolicy = *req.AccessPolicy
+		fields = append(fields, "access_policy")
 	}
 	if req.IsFirstParty != nil {
 		application.IsFirstParty = *req.IsFirstParty
+		fields = append(fields, "is_first_party")
 	}
 	if req.RequireConsent != nil {
 		application.RequireConsent = *req.RequireConsent
+		fields = append(fields, "require_consent")
 	}
 
 	if req.RedirectURIs != nil {
@@ -524,6 +537,7 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateAppRequest) (
 			return nil, fmt.Errorf("marshal redirect uris: %w", err)
 		}
 		application.RedirectURIs = uris
+		fields = append(fields, "redirect_uris")
 	}
 
 	if req.ProtocolConfig != nil {
@@ -532,6 +546,7 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateAppRequest) (
 			return nil, fmt.Errorf("marshal protocol config: %w", err)
 		}
 		application.ProtocolConfig = pc
+		fields = append(fields, "protocol_config")
 	}
 
 	application.UpdatedAt = time.Now()
@@ -542,7 +557,7 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateAppRequest) (
 
 	s.eventBus.Publish(ctx, event.Event{
 		Type:    event.AppUpdated,
-		Payload: map[string]any{"app_id": application.ID},
+		Payload: map[string]any{"app_id": application.ID, "tenant_id": application.TenantID, "name": application.Name, "fields": fields},
 	})
 
 	return application, nil
@@ -550,7 +565,8 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateAppRequest) (
 
 // Delete soft-deletes an application.
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	if _, err := s.repo.GetByID(ctx, id); err != nil {
+	application, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrAppNotFound
 		}
@@ -561,9 +577,11 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return fmt.Errorf("delete app: %w", err)
 	}
 
+	// Carry name + code so the audit row can name which app was deleted — the
+	// row is gone by read time, so the trail is the only record left.
 	s.eventBus.Publish(ctx, event.Event{
 		Type:    event.AppDeleted,
-		Payload: map[string]any{"app_id": id},
+		Payload: map[string]any{"app_id": id, "tenant_id": application.TenantID, "name": application.Name, "code": application.Code},
 	})
 
 	return nil
@@ -634,7 +652,7 @@ func (s *Service) UpdateProtocolConfig(ctx context.Context, id int64, config map
 
 	s.eventBus.Publish(ctx, event.Event{
 		Type:    event.AppUpdated,
-		Payload: map[string]any{"app_id": id},
+		Payload: map[string]any{"app_id": id, "action": "update_protocol_config"},
 	})
 
 	return nil
@@ -917,6 +935,11 @@ func (s *Service) AddAccess(ctx context.Context, appID int64, req *AddAccessRequ
 		return nil, fmt.Errorf("add access: %w", err)
 	}
 
+	s.eventBus.Publish(ctx, event.Event{
+		Type:    event.AppAccessGranted,
+		Payload: map[string]any{"app_id": appID, "subject_type": req.SubjectType, "subject_id": req.SubjectID},
+	})
+
 	return access, nil
 }
 
@@ -945,6 +968,11 @@ func (s *Service) RemoveAccess(ctx context.Context, id int64) error {
 		}
 		return fmt.Errorf("remove access: %w", err)
 	}
+
+	s.eventBus.Publish(ctx, event.Event{
+		Type:    event.AppAccessRevoked,
+		Payload: map[string]any{"app_id": access.AppID, "subject_type": access.SubjectType, "subject_id": access.SubjectID},
+	})
 	return nil
 }
 
@@ -979,7 +1007,18 @@ func (s *Service) CreateCert(ctx context.Context, appID int64) (*AppCert, error)
 		}
 		return nil, fmt.Errorf("get app: %w", err)
 	}
-	return s.keyService.RotateForApp(ctx, appID)
+	cert, err := s.keyService.RotateForApp(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"app_id": appID}
+	if cert != nil && cert.KID != nil {
+		payload["kid"] = *cert.KID
+	}
+	s.eventBus.Publish(ctx, event.Event{Type: event.AppCertCreated, Payload: payload})
+
+	return cert, nil
 }
 
 // ListCerts returns all certificates for an app.
@@ -1018,6 +1057,12 @@ func (s *Service) DeleteCert(ctx context.Context, id int64) error {
 		}
 		return fmt.Errorf("delete cert: %w", err)
 	}
+
+	payload := map[string]any{"app_id": cert.AppID, "cert_id": id}
+	if cert.KID != nil {
+		payload["kid"] = *cert.KID
+	}
+	s.eventBus.Publish(ctx, event.Event{Type: event.AppCertDeleted, Payload: payload})
 	return nil
 }
 

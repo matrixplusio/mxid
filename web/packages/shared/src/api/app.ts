@@ -1,5 +1,22 @@
 import { client } from './client'
-import type { ApiResponse, PaginatedData, App, AppGroup, AppAccess, AppCert } from '../types'
+import type { ApiResponse, PaginatedData, App, AppGroup, AppAccess, AppCert, AppTemplate, AppTemplateListItem } from '../types'
+
+// Outbound provisioning config (L2 offboarding). token_set flags whether a
+// secret is stored without echoing it.
+export interface AppProvisioning {
+  app_id: string
+  enabled: boolean
+  connector: string
+  base_url: string
+  token_set: boolean
+}
+
+export interface AppProvisioningInput {
+  enabled: boolean
+  connector: string
+  base_url: string
+  token: string // blank = keep existing
+}
 
 export const appApi = {
   list: (params: Record<string, unknown>) =>
@@ -18,10 +35,21 @@ export const appApi = {
     client.put<ApiResponse<null>>(`/apps/${id}/config`, { protocol_config: config }).then(r => r.data),
   getProtocolConfig: (id: string) =>
     client.get<ApiResponse<Record<string, unknown>>>(`/apps/${id}/config`).then(r => r.data.data),
+
+  // Outbound provisioning (L2 offboarding deprovision). EE-gated capability;
+  // config schema is CE. Token never echoed back (token_set flags presence).
+  getProvisioning: (id: string) =>
+    client.get<ApiResponse<AppProvisioning>>(`/apps/${id}/provisioning`).then(r => r.data.data),
+  putProvisioning: (id: string, data: AppProvisioningInput) =>
+    client.put<ApiResponse<{ saved: boolean }>>(`/apps/${id}/provisioning`, data).then(r => r.data),
   regenerateSecret: (id: string) =>
     client.post<ApiResponse<{ client_secret: string }>>(`/apps/${id}/regenerate-secret`).then(r => r.data.data),
   quickstart: (id: string, lang: string) =>
     client.get<ApiResponse<{ language: string; sample: string }>>(`/apps/${id}/quickstart/${lang}`).then(r => r.data.data),
+  listTemplates: () =>
+    client.get<ApiResponse<AppTemplateListItem[]>>('/app-templates').then(r => r.data.data),
+  getTemplate: (key: string) =>
+    client.get<ApiResponse<AppTemplate>>(`/app-templates/${key}`).then(r => r.data.data),
 
   // Access policy bindings
   listAccess: (id: string) =>

@@ -38,8 +38,13 @@ func (b *Bus) Subscribe(eventType string, handler Handler) {
 	b.handlers[eventType] = append(b.handlers[eventType], handler)
 }
 
-// Publish sends an event to all registered handlers asynchronously.
+// Publish sends an event to all registered handlers asynchronously. Safe to
+// call on a nil Bus (no subscribers → no-op), so services wired without an
+// event bus — unit tests, minimal embeddings — don't need to guard each call.
 func (b *Bus) Publish(ctx context.Context, evt Event) {
+	if b == nil {
+		return
+	}
 	b.mu.RLock()
 	handlers := b.handlers[evt.Type]
 	b.mu.RUnlock()
@@ -76,6 +81,11 @@ const (
 	UserSuperAdminGrant  = "user.super_admin.grant"
 	UserSuperAdminRevoke = "user.super_admin.revoke"
 
+	// UserOffboarded fires on a one-click offboard: the user is disabled and
+	// all their sessions are killed in one atomic admin action (L1 access
+	// cutoff). Audited as a high-risk security event.
+	UserOffboarded = "user.offboarded"
+
 	LoginSuccess = "login.success"
 	LoginFailed  = "login.failed"
 	Logout       = "logout"
@@ -88,6 +98,22 @@ const (
 	AppUpdated  = "app.updated"
 	AppDeleted  = "app.deleted"
 	AppLaunched = "app.launched" // portal user clicked an app card → drives "Recently used"
+
+	// Security-sensitive app sub-resource changes. The resource is the parent
+	// app (resource_id = app_id) so the trail reads "who changed access/keys on
+	// which app". Distinct from the SSE cache-bust events (EventAppRoleChanged,
+	// EventAccessPolicyChanged) which carry no actor.
+	AppAccessGranted       = "app.access_granted"
+	AppAccessRevoked       = "app.access_revoked"
+	AppCertCreated         = "app.cert_created"
+	AppCertDeleted         = "app.cert_deleted"
+	AppRoleCreated         = "app.role_created"
+	AppRoleUpdated         = "app.role_updated"
+	AppRoleDeleted         = "app.role_deleted"
+	AppRoleBindingCreated  = "app.role_binding_created"
+	AppRoleBindingDeleted  = "app.role_binding_deleted"
+	AppAccessPolicyCreated = "app.access_policy_created"
+	AppAccessPolicyDeleted = "app.access_policy_deleted"
 
 	OrgCreated     = "org.created"
 	OrgUpdated     = "org.updated"

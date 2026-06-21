@@ -8,9 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Offboarding (Phase 1.2).** One-click access cutoff for a departing user
+  (L1, CE): disable account + kill all sessions + back-channel logout + audit.
+- **Offboarding review checklist** (L3, CE): per-offboard record of the user's
+  app footprint with a console review panel to tick off downstream cleanup.
+- **Offboarding webhook** (L3, CE): signed (HMAC-SHA256) notification to a
+  customer IT/HR/ITSM system on offboard, delivered durably via the outbox.
+- **SCIM 2.0 downstream deprovision** (L2, EE): deactivate the downstream
+  account (`PATCH active=false`) for provisioning-enabled apps; per-app config
+  in CE, connector in `mxid-ee` (license-gated `scim`).
+- **Transactional outbox** (`mxid_outbox`): durable at-least-once delivery for
+  side effects that must survive a crash (`FOR UPDATE SKIP LOCKED` worker,
+  backoff, dead-letter).
+- **App template marketplace**: built-in onboarding templates with brand icons
+  and a wider create-app modal.
+- Registry seam extended with `OutboxRegister` + `ProvisioningConfig` hooks so
+  EE features can bind durable handlers and read CE-stored config.
 - AGPL v3.0 license declared, README rewritten, SECURITY policy.
 - `.github/` issue + PR templates.
 - `docs/DEPLOYMENT.md`, `docs/ARCHITECTURE.md`.
+
+### Fixed
+- Audit: `app.*` events now record their resource id (was always blank), the
+  changed-field list on updates, and the failure reason on `login.failed`; the
+  api.* catch-all carries the route's `:id`; console audit log gains an
+  api-noise filter. Closed blind spots: app access grants, signing certs, app
+  roles, role bindings and access policies emit attributed domain events.
+- A disabled account entering the correct password is told the account is
+  disabled (403) instead of "wrong password" — without leaking account state to
+  enumerators (revealed only after a correct password).
+- OIDC refresh grant rejects disabled users (a live refresh token no longer
+  mints access tokens after the account is disabled).
+- Console org members resolve by id instead of a broken list filter (every
+  member used to render as the same user).
 
 ## [1.0.0] — 2026-06-15
 

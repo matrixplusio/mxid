@@ -99,12 +99,30 @@ func (s *Service) SubscribeEvents() {
 	s.eventBus.Subscribe(event.UserPIIView, s.handleUserEvent(event.UserPIIView, EventStatusSuccess))
 	s.eventBus.Subscribe(event.UserSuperAdminGrant, s.handleUserEvent(event.UserSuperAdminGrant, EventStatusSuccess))
 	s.eventBus.Subscribe(event.UserSuperAdminRevoke, s.handleUserEvent(event.UserSuperAdminRevoke, EventStatusSuccess))
+	s.eventBus.Subscribe(event.UserOffboarded, s.handleUserEvent(event.UserOffboarded, EventStatusSuccess))
 
 	// App events
 	s.eventBus.Subscribe(event.AppCreated, s.handleResourceEvent(event.AppCreated, "app"))
 	s.eventBus.Subscribe(event.AppUpdated, s.handleResourceEvent(event.AppUpdated, "app"))
 	s.eventBus.Subscribe(event.AppDeleted, s.handleResourceEvent(event.AppDeleted, "app"))
 	s.eventBus.Subscribe(event.AppLaunched, s.handleAppLaunched)
+
+	// Security-sensitive app sub-resource changes (access grants, signing
+	// certs, app roles, role bindings, access policies). Access/cert always
+	// carry app_id so resolve to resource_type "app"; role/binding/policy can
+	// hang off an app OR an app-group, so handleAppOwnedEvent picks the right
+	// resource_type from the payload.
+	s.eventBus.Subscribe(event.AppAccessGranted, s.handleResourceEvent(event.AppAccessGranted, "app"))
+	s.eventBus.Subscribe(event.AppAccessRevoked, s.handleResourceEvent(event.AppAccessRevoked, "app"))
+	s.eventBus.Subscribe(event.AppCertCreated, s.handleResourceEvent(event.AppCertCreated, "app"))
+	s.eventBus.Subscribe(event.AppCertDeleted, s.handleResourceEvent(event.AppCertDeleted, "app"))
+	s.eventBus.Subscribe(event.AppRoleCreated, s.handleAppOwnedEvent(event.AppRoleCreated))
+	s.eventBus.Subscribe(event.AppRoleUpdated, s.handleAppOwnedEvent(event.AppRoleUpdated))
+	s.eventBus.Subscribe(event.AppRoleDeleted, s.handleAppOwnedEvent(event.AppRoleDeleted))
+	s.eventBus.Subscribe(event.AppRoleBindingCreated, s.handleAppOwnedEvent(event.AppRoleBindingCreated))
+	s.eventBus.Subscribe(event.AppRoleBindingDeleted, s.handleAppOwnedEvent(event.AppRoleBindingDeleted))
+	s.eventBus.Subscribe(event.AppAccessPolicyCreated, s.handleAppOwnedEvent(event.AppAccessPolicyCreated))
+	s.eventBus.Subscribe(event.AppAccessPolicyDeleted, s.handleAppOwnedEvent(event.AppAccessPolicyDeleted))
 
 	// Org events
 	s.eventBus.Subscribe(event.OrgCreated, s.handleResourceEvent(event.OrgCreated, "org"))
@@ -321,13 +339,21 @@ func (s *Service) handleResourceEvent(eventType, resourceType string) event.Hand
 
 		// Actor identity is filled by enrich() from auditctx.
 		rt := resourceType
+		// Publishers are inconsistent about the primary-key field name: some
+		// emit a bare "id", others a domain-scoped "<resource>_id" (e.g. app
+		// events carry "app_id"). Accept either so ResourceID is never silently
+		// dropped to 0 — an audit row that can't name its subject is useless.
+		resourceID := s.toInt64(payload["id"])
+		if resourceID == 0 {
+			resourceID = s.toInt64(payload[resourceType+"_id"])
+		}
 		log := &AuditLog{
 			ID:           s.idGen.Generate(),
 			TenantID:     s.toInt64OrDefault(payload["tenant_id"], s.tenantID),
 			EventType:    eventType,
 			EventStatus:  EventStatusSuccess,
 			ResourceType: &rt,
-			ResourceID:   int64Ptr(s.toInt64(payload["id"])),
+			ResourceID:   int64Ptr(resourceID),
 			Detail:       s.marshalDetailFor(eventType, payload),
 			CreatedAt:    time.Now(),
 		}
@@ -336,6 +362,39 @@ func (s *Service) handleResourceEvent(eventType, resourceType string) event.Hand
 			log.ResourceName = &name
 		}
 
+		s.createLog(ctx, log)
+	}
+}
+
+// handleAppOwnedEvent records a change to a resource that may belong to either
+// an app or an app-group (app roles, role bindings, access policies). The
+// resource_type / resource_id are picked from whichever parent id the payload
+// carries, so the trail reads "who changed role X on app Y" vs "…on group Z".
+func (s *Service) handleAppOwnedEvent(eventType string) event.Handler {
+	return func(ctx context.Context, evt event.Event) {
+		payload := s.toMap(evt.Payload)
+
+		rt := "app"
+		rid := s.toInt64(payload["app_id"])
+		if rid == 0 {
+			if g := s.toInt64(payload["app_group_id"]); g != 0 {
+				rt = "app_group"
+				rid = g
+			}
+		}
+		log := &AuditLog{
+			ID:           s.idGen.Generate(),
+			TenantID:     s.toInt64OrDefault(payload["tenant_id"], s.tenantID),
+			EventType:    eventType,
+			EventStatus:  EventStatusSuccess,
+			ResourceType: &rt,
+			ResourceID:   int64Ptr(rid),
+			Detail:       s.marshalDetailFor(eventType, payload),
+			CreatedAt:    time.Now(),
+		}
+		if name := s.toString(payload["name"]); name != "" {
+			log.ResourceName = &name
+		}
 		s.createLog(ctx, log)
 	}
 }
@@ -370,6 +429,10 @@ func (s *Service) handleAppLaunched(ctx context.Context, evt event.Event) {
 		SessionID:    strPtr(sessionID),
 		Detail:       s.marshalDetailFor(event.AppLaunched, payload),
 		CreatedAt:    time.Now(),
+	}
+
+	if name := s.toString(payload["name"]); name != "" {
+		log.ResourceName = &name
 	}
 
 	s.createLog(ctx, log)
@@ -465,10 +528,41 @@ func (s *Service) createLog(ctx context.Context, log *AuditLog) {
 		s.fillGeo(log, *log.IP)
 	}
 	if err := s.repo.Create(context.Background(), log); err != nil {
-		s.logger.Error("failed to create audit log",
+		// A dropped audit write is itself a security incident: the action
+		// happened but left no trail. We can't fail the originating request
+		// (it already committed), so the log line below MUST stand in as the
+		// fallback record — it carries every field needed to reconstruct the
+		// lost row. The stable "audit_write_failed" marker + alert=true field
+		// are what log-based alerting keys on; wire a metrics counter here if
+		// one is ever added. See [[project_audit_architecture]].
+		fields := []zap.Field{
+			zap.String("marker", "audit_write_failed"),
+			zap.Bool("alert", true),
+			zap.Int64("audit_id", log.ID),
 			zap.String("event_type", log.EventType),
+			zap.Int("event_status", log.EventStatus),
+			zap.Int64("tenant_id", log.TenantID),
 			zap.Error(err),
-		)
+		}
+		if log.ActorID != nil {
+			fields = append(fields, zap.Int64("actor_id", *log.ActorID))
+		}
+		if log.ActorName != nil {
+			fields = append(fields, zap.String("actor_name", *log.ActorName))
+		}
+		if log.ResourceType != nil {
+			fields = append(fields, zap.String("resource_type", *log.ResourceType))
+		}
+		if log.ResourceID != nil {
+			fields = append(fields, zap.Int64("resource_id", *log.ResourceID))
+		}
+		if log.IP != nil {
+			fields = append(fields, zap.String("ip", *log.IP))
+		}
+		if len(log.Detail) > 0 {
+			fields = append(fields, zap.ByteString("detail", log.Detail))
+		}
+		s.logger.Error("audit write failed — row dropped, this log line is the fallback record", fields...)
 	}
 }
 

@@ -220,11 +220,39 @@ packages, and runs the same `app.Run()`.
 
 User-facing matrix, activation, and limits: [EDITIONS.md](EDITIONS.md).
 
+## Offboarding & durable delivery
+
+Revoking a departing user's access is tiered by how much MXID controls the
+target (`internal/domain/offboarding`):
+
+- **L1 — SSO cut (CE).** One admin action disables the account (which also makes
+  the OIDC refresh grant reject the user) and kills every session across the
+  console / portal / protocol namespaces, then back-channel-logs-out the apps the
+  user is signed into. This revokes access to every app reached through MXID SSO,
+  with no downstream credentials.
+- **L3 — review checklist (CE).** Records the user's app footprint as a console
+  review panel so an admin can confirm cleanup for apps that also hold local
+  accounts, and (optionally) fires a signed webhook to the customer's IT/HR/ITSM
+  system.
+- **L2 — downstream deprovision (EE).** For an app with provisioning enabled, an
+  EE-only SCIM 2.0 connector (`mxid-ee/features/scim`, license-gated `scim`)
+  deactivates the downstream account (`PATCH active=false`). The per-app config
+  schema is CE; only the connector is EE.
+
+Side effects that must survive a crash (the offboarding webhook, the SCIM
+deprovision) ride a **transactional outbox** (`internal/outbox`,
+`mxid_outbox`): producers `EnqueueTx` in the same DB transaction as the state
+change, and a worker claims due rows with `FOR UPDATE SKIP LOCKED` (replica-safe,
+no leader election), dispatches by kind, and backs off / dead-letters on failure.
+The in-memory event bus is at-most-once, so security actions never ride it.
+
 ## Things deliberately not done (yet)
 
 - **Federation across MXID instances.** Single-instance only.
 - **WebAuthn / FIDO2** — only TOTP for MFA today.
-- **SCIM** — no user provisioning protocol yet.
+- **SCIM inbound provisioning** — MXID is not yet a SCIM *service provider* (no
+  inbound create/update of MXID users via SCIM). Outbound SCIM 2.0
+  *deprovisioning* exists for offboarding (L2, EE) — see below.
 - **DPoP / OAuth 2.1 strict mode** — token endpoint stays on Bearer.
 - **JIT user provisioning from external IdP** — exists per-IdP but not configurable through UI.
 

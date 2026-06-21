@@ -89,6 +89,13 @@ export interface SMS {
   region?: string
 }
 
+// ─── Offboarding webhook ───
+export interface OffboardingWebhook {
+  enabled: boolean
+  url: string
+  secret: string
+}
+
 // ─── Audit ───
 export interface AuditPolicy {
   retention_days: number
@@ -181,6 +188,12 @@ export const settingsApi = {
   // SMS
   getSMS: () => client.get<ApiResponse<{ config: SMS; secret_set: boolean }>>('/settings/sms').then(r => r.data.data),
   putSMS: (v: SMS) => client.put<ApiResponse<{ saved: boolean }>>('/settings/sms', v).then(r => r.data),
+
+  // Offboarding webhook
+  getOffboardingWebhook: () =>
+    client.get<ApiResponse<{ config: OffboardingWebhook; secret_set: boolean }>>('/settings/offboarding-webhook').then(r => r.data.data),
+  putOffboardingWebhook: (v: OffboardingWebhook) =>
+    client.put<ApiResponse<{ saved: boolean }>>('/settings/offboarding-webhook', v).then(r => r.data),
 
   // Audit
   getAuditPolicy: () => client.get<ApiResponse<AuditPolicy>>('/settings/audit-policy').then(r => r.data.data),

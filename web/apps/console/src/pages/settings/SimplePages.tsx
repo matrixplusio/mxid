@@ -18,6 +18,7 @@ import {
   type ProtocolDefaults,
   type SMS,
   type AuditPolicy,
+  type OffboardingWebhook,
   type MFAPolicy,
   type ConditionalAccess,
   type Localization,
@@ -126,7 +127,29 @@ function GenericForm<T>({
         {banner && <div className="mb-4">{banner}</div>}
 
         <fieldset disabled={locked} className={cn('grid grid-cols-1 gap-4 md:grid-cols-2', locked && 'opacity-60')}>
-          {rows.map((r) => (
+          {rows.map((r) => {
+            // Booleans render as a self-contained toggle row (label inside a
+            // bordered box, checkbox on the right) so they sit flush with the
+            // adjacent inputs instead of a stray checkbox under a redundant
+            // label. self-end aligns the box bottom with the neighbouring
+            // input box (which has a label above it).
+            if (r.kind === 'bool') {
+              return (
+                <label
+                  key={r.key}
+                  className="flex cursor-pointer select-none items-center justify-between gap-3 self-end rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm hover:bg-gray-50"
+                >
+                  <span className="font-medium text-gray-700">{r.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={!!get(v, r.key)}
+                    onChange={(e) => setV(set(v, r.key, e.target.checked))}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+                  />
+                </label>
+              )
+            }
+            return (
             <Field key={r.key} label={r.label} hint={'hint' in r ? r.hint : undefined}>
               {r.kind === 'text' && (
                 <Input
@@ -141,17 +164,6 @@ function GenericForm<T>({
                   value={(get(v, r.key) as number | undefined) ?? 0}
                   onChange={(e) => setV(set(v, r.key, Number(e.target.value) || 0))}
                 />
-              )}
-              {r.kind === 'bool' && (
-                <label className="flex items-center gap-2 pt-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={!!get(v, r.key)}
-                    onChange={(e) => setV(set(v, r.key, e.target.checked))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  {t('common.enable')}
-                </label>
               )}
               {r.kind === 'select' && (
                 <Select
@@ -179,7 +191,8 @@ function GenericForm<T>({
                 />
               )}
             </Field>
-          ))}
+            )
+          })}
         </fieldset>
 
         <div className="mt-6 flex justify-end">
@@ -323,6 +336,28 @@ export function AuditPolicyPage() {
       ]}
       load={() => settingsApi.getAuditPolicy()}
       save={(v) => settingsApi.putAuditPolicy(v)}
+    />
+  )
+}
+
+export function OffboardingWebhookPage() {
+  const { t } = useTranslation()
+  const [secretSet, setSecretSet] = useState(false)
+  return (
+    <GenericForm<OffboardingWebhook>
+      title={t('settings.offboardingWebhook.title')}
+      desc={t('settings.offboardingWebhook.desc')}
+      rows={[
+        { kind: 'bool', key: 'enabled', label: t('settings.offboardingWebhook.enabled') },
+        { kind: 'text', key: 'url', label: t('settings.offboardingWebhook.url'), placeholder: 'https://itsm.example.com/hooks/offboard' },
+        { kind: 'text', key: 'secret', label: t('settings.offboardingWebhook.secret'), hint: secretSet ? t('settings.offboardingWebhook.secretSet') : t('settings.offboardingWebhook.secretHint') },
+      ]}
+      load={async () => {
+        const r = await settingsApi.getOffboardingWebhook()
+        setSecretSet(r.secret_set)
+        return r.config
+      }}
+      save={(v) => settingsApi.putOffboardingWebhook(v)}
     />
   )
 }

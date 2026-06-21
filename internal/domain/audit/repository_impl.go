@@ -52,6 +52,7 @@ func (r *gormRepository) List(ctx context.Context, params ListParams) ([]*AuditL
 		actorIDScope(params.ActorID),
 		resourceTypeScope(params.ResourceType),
 		timeRangeScope(params.StartTime, params.EndTime),
+		hideAPIScope(params.HideAPI),
 	)
 
 	if err := query.Count(&total).Error; err != nil {
@@ -126,6 +127,18 @@ func eventTypesScope(types []string) func(db *gorm.DB) *gorm.DB {
 			return db
 		}
 		return db.Where("event_type IN ?", types)
+	}
+}
+
+// hideAPIScope excludes the generic api.* catch-all rows when enabled. Uses a
+// prefix match so only the safety-net middleware rows (api.put/api.post/…) are
+// dropped, leaving every domain event intact.
+func hideAPIScope(hide bool) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if !hide {
+			return db
+		}
+		return db.Where("event_type NOT LIKE ?", "api.%")
 	}
 }
 
