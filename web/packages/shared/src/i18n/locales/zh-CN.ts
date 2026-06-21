@@ -776,6 +776,16 @@ export default {
         credentials: '认证信息',
         access: '访问策略',
         roles: '角色管理',
+        provisioning: '下游供应',
+      },
+      provisioning: {
+        warning: '离职时,MXID 会调用此应用的 SCIM 接口停用(active=false)对应下游账号。仅在客户 IT 授予写凭据时配置;默认关闭,误填不会触达。',
+        enabled: '启用下游供应(离职自动停用账号)',
+        baseUrl: 'SCIM 服务地址',
+        baseUrlHint: 'SCIM 2.0 服务提供方 base URL,如 https://scim.example.com/scim/v2',
+        token: 'Bearer Token',
+        tokenHint: '调用 SCIM 接口的访问令牌(加密存储,不回显)',
+        tokenSet: '已设置(留空保持不变)',
       },
       basic: {
         nameLabel: '应用名称 *',

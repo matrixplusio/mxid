@@ -11,9 +11,10 @@ import { IconPicker } from '../../components/icon-picker/IconPicker'
 import { toast, extractMessage } from '../../components/ui/toast'
 import AccessPolicyTab from './AccessPolicyTab'
 import AppRolesTab from './AppRolesTab'
+import ProvisioningTab from './ProvisioningTab'
 
 const APPS_VIEW_VALUES = ['apps', 'groups'] as const
-const DETAIL_TAB_VALUES = ['basic', 'protocol', 'credentials', 'access', 'roles'] as const
+const DETAIL_TAB_VALUES = ['basic', 'protocol', 'credentials', 'access', 'roles', 'provisioning'] as const
 
 const protocolColors: Record<string, string> = {
   oidc: 'bg-blue-100 text-blue-700',
@@ -310,9 +311,9 @@ function SecretField({ label, value }: { label: string; value: string }) {
 // Detail drawer tabs
 // ---------------------------------------------------------------------------
 
-type DetailTab = 'basic' | 'protocol' | 'credentials' | 'access' | 'roles'
+type DetailTab = 'basic' | 'protocol' | 'credentials' | 'access' | 'roles' | 'provisioning'
 
-const DETAIL_TAB_KEYS: DetailTab[] = ['basic', 'protocol', 'credentials', 'access', 'roles']
+const DETAIL_TAB_KEYS: DetailTab[] = ['basic', 'protocol', 'credentials', 'access', 'roles', 'provisioning']
 
 // ---------------------------------------------------------------------------
 // Input class constant
@@ -1418,6 +1419,10 @@ export default function AppsPage() {
                     {/* ---- App roles tab ---- */}
                     {detailTab === 'roles' && detailApp && (
                       <AppRolesTab owner="app" ownerId={String(detailApp.id)} />
+                    )}
+
+                    {detailTab === 'provisioning' && detailApp && (
+                      <ProvisioningTab appId={String(detailApp.id)} />
                     )}
                   </>
                 )}

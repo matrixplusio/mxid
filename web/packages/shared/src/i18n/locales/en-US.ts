@@ -773,6 +773,16 @@ export default {
         credentials: 'Credentials',
         access: 'Access policy',
         roles: 'Roles',
+        provisioning: 'Provisioning',
+      },
+      provisioning: {
+        warning: 'On offboard, MXID calls this app SCIM endpoint to deactivate (active=false) the matching downstream account. Configure only when the customer IT granted write credentials; off by default so a mistake never reaches their directory.',
+        enabled: 'Enable downstream provisioning (auto-deactivate on offboard)',
+        baseUrl: 'SCIM base URL',
+        baseUrlHint: 'SCIM 2.0 service provider base URL, e.g. https://scim.example.com/scim/v2',
+        token: 'Bearer token',
+        tokenHint: 'Access token for the SCIM API (encrypted at rest, never echoed)',
+        tokenSet: 'Set (leave blank to keep)',
       },
       basic: {
         nameLabel: 'App name *',
