@@ -21,8 +21,8 @@ import (
 	"github.com/imkerbos/mxid/internal/domain/consent"
 	"github.com/imkerbos/mxid/internal/domain/dashboard"
 	"github.com/imkerbos/mxid/internal/domain/group"
-	"github.com/imkerbos/mxid/internal/domain/org"
 	"github.com/imkerbos/mxid/internal/domain/offboarding"
+	"github.com/imkerbos/mxid/internal/domain/org"
 	"github.com/imkerbos/mxid/internal/domain/permission"
 	"github.com/imkerbos/mxid/internal/domain/platformconfig"
 	"github.com/imkerbos/mxid/internal/domain/setting"
@@ -34,6 +34,7 @@ import (
 	systemgw "github.com/imkerbos/mxid/internal/gateway/console/system"
 	"github.com/imkerbos/mxid/internal/gateway/portal"
 	"github.com/imkerbos/mxid/internal/middleware"
+	"github.com/imkerbos/mxid/internal/outbox"
 	"github.com/imkerbos/mxid/internal/protocol/cas"
 	"github.com/imkerbos/mxid/internal/protocol/oidc"
 	"github.com/imkerbos/mxid/internal/protocol/resolver"
@@ -596,6 +597,13 @@ func registerModules(a *bootstrap.App) {
 	// risks losing the window during long maintenance. Default-tenant scope
 	// because retention is a global compliance knob.
 	go runAuditRetention(a, settingService, auditModule.Repo)
+
+	// Transactional outbox worker — durable at-least-once delivery for side
+	// effects that must survive a crash (offboarding webhooks, later L2 SCIM
+	// pushes). Starts here and polls; consumers register handlers + enqueue
+	// messages. Idle until a consumer is wired.
+	outboxWorker := outbox.NewWorker(outbox.NewRepository(a.DB, a.IDGen), a.Logger)
+	go outboxWorker.Run(context.Background())
 
 	// Console dashboard aggregation. Live-session gauge sums the interactive
 	// (console + portal) namespaces; the protocol SSO session is internal and
