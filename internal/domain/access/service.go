@@ -34,41 +34,68 @@ type SubjectMatcher interface {
 	UserHasRole(ctx context.Context, tenantID, userID, roleID int64) bool
 }
 
+// DownstreamTerminator forces logout of a user's session on ONE downstream app
+// (the app whose elevated role just ended), so the elevated role can't outlive
+// the grant in the app's own session. Implemented per-protocol in the
+// jit-downstream-logout plan. AppID is nil for console-target grants (nothing
+// downstream to terminate).
+type DownstreamTerminator interface {
+	TerminateAppSession(ctx context.Context, tenantID, userID, appID int64)
+}
+
+type noopTerminator struct{}
+
+func (noopTerminator) TerminateAppSession(context.Context, int64, int64, int64) {}
+
+// NoopTerminator returns a DownstreamTerminator that does nothing. Use it
+// until the jit-downstream-logout plan lands a real implementation.
+func NoopTerminator() DownstreamTerminator { return noopTerminator{} }
+
 // Service orchestrates the JIT access lifecycle: eligibility management,
 // request creation, approval (with immediate cache invalidation so the role
 // goes live with no re-login), rejection, cancellation, revocation, and
 // expiry.
 type Service struct {
-	repo    Repository
-	idGen   *snowflake.Generator
-	busAdp  EventPublisher
-	cache   CacheInvalidator
-	matcher SubjectMatcher
-	logger  *zap.Logger
+	repo       Repository
+	idGen      *snowflake.Generator
+	busAdp     EventPublisher
+	cache      CacheInvalidator
+	matcher    SubjectMatcher
+	terminator DownstreamTerminator
+	logger     *zap.Logger
 }
 
 // NewService constructs a Service. bus may be nil (events are silently skipped
 // when there are no subscribers; *event.Bus.Publish is nil-safe).
-// logger may be nil (cache errors are silently swallowed).
-func NewService(repo Repository, idGen *snowflake.Generator, bus EventPublisher, cache CacheInvalidator, matcher SubjectMatcher) *Service {
+// terminator may be nil (defaults to noopTerminator).
+func NewService(repo Repository, idGen *snowflake.Generator, bus EventPublisher, cache CacheInvalidator, matcher SubjectMatcher, terminator DownstreamTerminator) *Service {
+	if terminator == nil {
+		terminator = noopTerminator{}
+	}
 	return &Service{
-		repo:    repo,
-		idGen:   idGen,
-		busAdp:  bus,
-		cache:   cache,
-		matcher: matcher,
+		repo:       repo,
+		idGen:      idGen,
+		busAdp:     bus,
+		cache:      cache,
+		matcher:    matcher,
+		terminator: terminator,
 	}
 }
 
 // NewServiceWithLogger is the production constructor used by app/run.go.
-func NewServiceWithLogger(repo Repository, idGen *snowflake.Generator, bus EventPublisher, cache CacheInvalidator, matcher SubjectMatcher, logger *zap.Logger) *Service {
+// terminator may be nil (defaults to noopTerminator).
+func NewServiceWithLogger(repo Repository, idGen *snowflake.Generator, bus EventPublisher, cache CacheInvalidator, matcher SubjectMatcher, terminator DownstreamTerminator, logger *zap.Logger) *Service {
+	if terminator == nil {
+		terminator = noopTerminator{}
+	}
 	return &Service{
-		repo:    repo,
-		idGen:   idGen,
-		busAdp:  bus,
-		cache:   cache,
-		matcher: matcher,
-		logger:  logger,
+		repo:       repo,
+		idGen:      idGen,
+		busAdp:     bus,
+		cache:      cache,
+		matcher:    matcher,
+		terminator: terminator,
+		logger:     logger,
 	}
 }
 
@@ -304,6 +331,7 @@ func (s *Service) Revoke(ctx context.Context, tenantID, requestID, actorID int64
 	}
 
 	s.publish(ctx, EventGrantRevoked, req, actorID)
+	s.terminateIfApp(ctx, req)
 	return nil
 }
 
@@ -324,10 +352,20 @@ func (s *Service) Expire(ctx context.Context, req *Request) error {
 	}
 
 	s.publish(ctx, EventGrantExpired, req, req.RequesterID)
+	s.terminateIfApp(ctx, req)
 	return nil
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+// terminateIfApp calls the DownstreamTerminator for app-target grants so the
+// elevated role can't outlive the grant in the app's own session.
+// Console-target grants have no downstream app session; this is a no-op for them.
+func (s *Service) terminateIfApp(ctx context.Context, req *Request) {
+	if req.TargetKind == TargetApp && req.AppID != nil {
+		s.terminator.TerminateAppSession(ctx, req.TenantID, req.RequesterID, *req.AppID)
+	}
+}
 
 func (s *Service) publish(ctx context.Context, eventType string, req *Request, actorID int64) {
 	if s.busAdp == nil {

@@ -219,12 +219,47 @@ func (fakeMatcher) UserInGroup(_ context.Context, _, _, _ int64) bool { return t
 func (fakeMatcher) UserInOrg(_ context.Context, _, _, _ int64) bool   { return true }
 func (fakeMatcher) UserHasRole(_ context.Context, _, _, _ int64) bool { return true }
 
+// fakeTerminator records TerminateAppSession calls.
+type fakeTerminator struct {
+	mu    sync.Mutex
+	calls []terminateCall
+}
+
+type terminateCall struct {
+	userID int64
+	appID  int64
+}
+
+func (f *fakeTerminator) TerminateAppSession(_ context.Context, _, userID, appID int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, terminateCall{userID: userID, appID: appID})
+}
+
+func (f *fakeTerminator) calledFor(userID, appID int64) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.calls {
+		if c.userID == userID && c.appID == appID {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeTerminator) anyCalled() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls) > 0
+}
+
 // testFakes bundles all fakes for assertion.
 type testFakes struct {
-	repo    *fakeRepo
-	cache   *fakeCache
-	bus     *fakePublisher
-	matcher SubjectMatcher
+	repo       *fakeRepo
+	cache      *fakeCache
+	bus        *fakePublisher
+	matcher    SubjectMatcher
+	terminator *fakeTerminator
 }
 
 // ── setup helpers ──────────────────────────────────────────────────────────────
@@ -251,13 +286,14 @@ func newServiceWithFakes(t *testing.T) (*Service, *testFakes) {
 	}
 
 	fakes := &testFakes{
-		repo:    newFakeRepo(),
-		cache:   &fakeCache{},
-		bus:     &fakePublisher{},
-		matcher: fakeMatcher{},
+		repo:       newFakeRepo(),
+		cache:      &fakeCache{},
+		bus:        &fakePublisher{},
+		matcher:    fakeMatcher{},
+		terminator: &fakeTerminator{},
 	}
 
-	svc := NewService(fakes.repo, idGen, fakes.bus, fakes.cache, fakes.matcher)
+	svc := NewService(fakes.repo, idGen, fakes.bus, fakes.cache, fakes.matcher, fakes.terminator)
 
 	// Seed one enabled eligibility.
 	elig := &Eligibility{
@@ -391,5 +427,72 @@ func TestExpire_EndsGrantAndInvalidatesCache(t *testing.T) {
 	}
 	if !fakes.bus.published(EventGrantExpired) {
 		t.Fatalf("expire event not published; got=%v", fakes.bus.events)
+	}
+}
+
+// mustApprovedAppRequest seeds an app-target eligibility with the given appID,
+// creates a request against it, and approves it. Uses a separate eligibility
+// from testEligID (which is console-target).
+func mustApprovedAppRequest(t *testing.T, s *Service, fakes *testFakes, appID int64) *Request {
+	t.Helper()
+	idGen, err := snowflake.New(2)
+	if err != nil {
+		t.Fatalf("snowflake.New: %v", err)
+	}
+	elig := &Eligibility{
+		ID:                   idGen.Generate(),
+		TenantID:             testTenant,
+		TargetKind:           TargetApp,
+		AppID:                &appID,
+		RoleID:               99,
+		RequesterSubjectType: "any",
+		AllowedDurations:     IntSlice{3600},
+		MaxDurationSeconds:   3600,
+		ApproverSubjectType:  ApproverRole,
+		RequireJustification: false,
+		Status:               1,
+	}
+	if err := fakes.repo.CreateEligibility(testCtx, elig); err != nil {
+		t.Fatalf("mustApprovedAppRequest seed elig: %v", err)
+	}
+	req, err := s.CreateRequest(testCtx, testTenant, testRequester, CreateAccessRequest{
+		EligibilityID:    elig.ID,
+		RequestedSeconds: 3600,
+	})
+	if err != nil {
+		t.Fatalf("mustApprovedAppRequest CreateRequest: %v", err)
+	}
+	approved, err := s.Approve(testCtx, testTenant, req.ID, testApprover, "ok")
+	if err != nil {
+		t.Fatalf("mustApprovedAppRequest Approve: %v", err)
+	}
+	return approved
+}
+
+// mustApprovedConsoleRequest uses the pre-seeded console eligibility.
+func mustApprovedConsoleRequest(t *testing.T, s *Service) *Request {
+	t.Helper()
+	return mustApprovedRequest(t, s)
+}
+
+func TestRevoke_AppGrant_TerminatesDownstream(t *testing.T) {
+	s, fakes := newServiceWithFakes(t)
+	req := mustApprovedAppRequest(t, s, fakes, 7777)
+	if err := s.Revoke(testCtx, testTenant, req.ID, testApprover); err != nil {
+		t.Fatal(err)
+	}
+	if !fakes.terminator.calledFor(req.RequesterID, 7777) {
+		t.Fatal("expected downstream terminate for the app grant")
+	}
+}
+
+func TestExpire_ConsoleGrant_DoesNotTerminate(t *testing.T) {
+	s, fakes := newServiceWithFakes(t)
+	req := mustApprovedConsoleRequest(t, s)
+	if err := s.Expire(testCtx, req); err != nil {
+		t.Fatal(err)
+	}
+	if fakes.terminator.anyCalled() {
+		t.Fatal("console grant must not trigger downstream terminate")
 	}
 }
