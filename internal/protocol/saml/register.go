@@ -19,8 +19,9 @@ func Register(
 	idRes resolver.IdentityResolver,
 	sessRes resolver.SessionResolver,
 	tenantRes resolver.TenantResolver,
+	sessionIdx *SessionIndexStore,
 ) *Module {
-	handler := NewHandler(issuer, portalURL, appRes, idRes, sessRes, tenantRes)
+	handler := NewHandler(issuer, portalURL, appRes, idRes, sessRes, tenantRes, sessionIdx)
 	handler.RegisterRoutes(rg)
 	return &Module{Handler: handler}
 }

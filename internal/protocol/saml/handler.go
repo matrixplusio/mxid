@@ -35,6 +35,7 @@ type Handler struct {
 	idRes       resolver.IdentityResolver
 	sessRes     resolver.SessionResolver
 	tenantRes   resolver.TenantResolver
+	sessionIdx  *SessionIndexStore
 }
 
 // SetURLProvider wires the runtime URL lookup. nil = stick with the
@@ -50,6 +51,8 @@ func (h *Handler) resolveURLs(ctx context.Context, reqHost string) urlswap.URLs 
 
 // NewHandler creates a SAML handler. portalURL is where the user-facing
 // login lives; empty falls back to issuer (single-domain deploy).
+// sessionIdx may be nil — when nil the session index is not persisted
+// (degrades gracefully; L3 SLO will simply find nothing to send).
 func NewHandler(
 	issuer string,
 	portalURL string,
@@ -57,17 +60,19 @@ func NewHandler(
 	idRes resolver.IdentityResolver,
 	sessRes resolver.SessionResolver,
 	tenantRes resolver.TenantResolver,
+	sessionIdx *SessionIndexStore,
 ) *Handler {
 	if portalURL == "" {
 		portalURL = issuer
 	}
 	return &Handler{
-		issuer:    issuer,
-		portalURL: portalURL,
-		appRes:    appRes,
-		idRes:     idRes,
-		sessRes:   sessRes,
-		tenantRes: tenantRes,
+		issuer:     issuer,
+		portalURL:  portalURL,
+		appRes:     appRes,
+		idRes:      idRes,
+		sessRes:    sessRes,
+		tenantRes:  tenantRes,
+		sessionIdx: sessionIdx,
 	}
 }
 
@@ -284,14 +289,14 @@ func (h *Handler) processSSO(c *gin.Context, appCode, requestID, relayState stri
 		attrs["username"] = subj.DisplayUsername
 	}
 
-	h.emitCrewjamResponse(c, appCode, app.ID, samlCfg, requestID, relayState, nameIDValue, attrs)
+	h.emitCrewjamResponse(c, appCode, app.ID, ssoSess.UserID, samlCfg, requestID, relayState, nameIDValue, attrs)
 }
 
 // emitCrewjamResponse builds and writes the SAML Response via crewjam/saml,
 // which signs the assertion (and response), handles NameID / Conditions /
 // element ordering / canonicalisation, and renders the auto-submit POST form.
 // Handles both SP-initiated (requestID set) and IdP-initiated (empty) flows.
-func (h *Handler) emitCrewjamResponse(c *gin.Context, appCode string, appID int64, samlCfg *SAMLConfig, requestID, relayState, nameIDValue string, attrs map[string]string) {
+func (h *Handler) emitCrewjamResponse(c *gin.Context, appCode string, appID, userID int64, samlCfg *SAMLConfig, requestID, relayState, nameIDValue string, attrs map[string]string) {
 	key, cert, err := h.loadKeyAndCert(c.Request.Context(), appID)
 	if err != nil {
 		response.InternalError(c, "load signing key: "+err.Error())
@@ -362,6 +367,25 @@ func (h *Handler) emitCrewjamResponse(c *gin.Context, appCode string, appID int6
 		response.InternalError(c, "make assertion: "+err.Error())
 		return
 	}
+
+	// Record the session index for IdP-initiated SLO (Task L3).
+	// Best-effort: a Redis failure must not block the SSO response.
+	if h.sessionIdx != nil {
+		sessionTTL := time.Duration(samlCfg.SessionTTL) * time.Second
+		if sessionTTL <= 0 {
+			sessionTTL = 8 * time.Hour
+		}
+		ref := SAMLSessionRef{
+			SessionIndex: session.Index,
+			NameID:       session.NameID,
+			SPEntityID:   samlCfg.SPEntityID,
+		}
+		if rerr := h.sessionIdx.Record(c.Request.Context(), userID, appID, ref, sessionTTL); rerr != nil {
+			// Log but do not abort — SSO must succeed even if the index store is down.
+			_ = rerr
+		}
+	}
+
 	if err := req.WriteResponse(c.Writer); err != nil {
 		response.InternalError(c, "write saml response: "+err.Error())
 		return
