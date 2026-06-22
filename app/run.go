@@ -910,7 +910,7 @@ func registerModules(a *bootstrap.App) {
 		oidcModule = oidc.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, a.Redis, appResolver, idResolver, sessResolver, tenantResolver, consentModule.Service, accessAdapter, appRolesAdapter, sessionMgr, a.EventBus)
 	}
 	samlModule := saml.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, appResolver, idResolver, sessResolver, tenantResolver, saml.NewSessionIndexStore(a.Redis), a.Logger)
-	casModule := cas.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, a.Redis, appResolver, idResolver, sessResolver, tenantResolver)
+	casModule := cas.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, a.Redis, appResolver, idResolver, sessResolver, tenantResolver, a.Logger)
 
 	// One-click offboarding (L1 access cutoff): disable account + back-channel
 	// logout the user's apps + kill all sessions. Wired here (after oidc) so it

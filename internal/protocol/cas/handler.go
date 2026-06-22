@@ -13,7 +13,15 @@ import (
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantscope"
 	"github.com/imkerbos/mxid/pkg/urlswap"
+	"go.uber.org/zap"
 )
+
+// httpDoer is the minimal HTTP interface used by SingleLogout so tests can
+// substitute a plain http.Client while production always uses the SSRF-safe
+// casLogoutClient package var.
+type httpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
 
 // Handler serves CAS protocol endpoints.
 type Handler struct {
@@ -26,6 +34,11 @@ type Handler struct {
 	tenantRes       resolver.TenantResolver
 	store           *TicketStore
 	serviceRegistry *ServiceRegistry
+	logger          *zap.Logger
+	// backchannelClient overrides the package-level casLogoutClient when
+	// non-nil. Used in tests so an httptest SP on loopback can receive SLO
+	// POSTs; production always uses the SSRF-safe client.
+	backchannelClient httpDoer
 }
 
 // SetURLProvider installs the runtime URL lookup. nil = stick with
@@ -51,7 +64,11 @@ func NewHandler(
 	tenantRes resolver.TenantResolver,
 	store *TicketStore,
 	serviceRegistry *ServiceRegistry,
+	logger *zap.Logger,
 ) *Handler {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &Handler{
 		issuer:          issuer,
 		portalURL:       portalURL,
@@ -61,6 +78,7 @@ func NewHandler(
 		tenantRes:       tenantRes,
 		store:           store,
 		serviceRegistry: serviceRegistry,
+		logger:          logger,
 	}
 }
 
