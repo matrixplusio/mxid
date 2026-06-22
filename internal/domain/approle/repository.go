@@ -160,8 +160,15 @@ func (r *repo) DeleteBinding(ctx context.Context, id, tenantID int64) error {
 // ResolveCodesForUser unions:
 //   - bindings where app_id = appID
 //   - bindings where app_group_id ∈ groups containing appID
+//
+// Only active bindings count: status=1 AND (expires_at IS NULL OR expires_at > NOW()).
+// NULL expires_at = permanent binding (unchanged behavior).
 // Empty result → fall back to default role of the app (app-level priority).
 func (r *repo) ResolveCodesForUser(ctx context.Context, userID, appID, tenantID int64) ([]string, error) {
+	// activeBindingSQL filters out expired and revoked time-bound bindings.
+	// Uses no extra query params (NOW() is a SQL function call, not a placeholder).
+	const activeBindingSQL = ` AND b.status = 1 AND (b.expires_at IS NULL OR b.expires_at > NOW()) `
+
 	const subjectMatchSQL = `
     (
       (b.subject_type = 'user'  AND b.subject_id = ?)
@@ -183,6 +190,8 @@ func (r *repo) ResolveCodesForUser(ctx context.Context, userID, appID, tenantID 
           WHERE rb.role_id = b.subject_id
             AND rb.subject_type = 'user'
             AND rb.subject_id = ?
+            AND rb.status = 1
+            AND (rb.expires_at IS NULL OR rb.expires_at > NOW())
       ))
     )`
 
@@ -191,7 +200,7 @@ func (r *repo) ResolveCodesForUser(ctx context.Context, userID, appID, tenantID 
     SELECT DISTINCT ar.code, ar.sort_order
     FROM mxid_app_role_binding b
     INNER JOIN mxid_app_role ar ON ar.id = b.app_role_id
-    WHERE b.app_id = ? AND b.tenant_id IN (?, 0)
+    WHERE b.app_id = ? AND b.tenant_id IN (?, 0)` + activeBindingSQL + `
       AND ` + subjectMatchSQL + `
 )
 UNION
@@ -200,7 +209,7 @@ UNION
     FROM mxid_app_role_binding b
     INNER JOIN mxid_app_role ar ON ar.id = b.app_role_id
     INNER JOIN mxid_app_group_rel rel ON rel.group_id = b.app_group_id
-    WHERE rel.app_id = ? AND b.tenant_id IN (?, 0) AND b.app_group_id IS NOT NULL
+    WHERE rel.app_id = ? AND b.tenant_id IN (?, 0) AND b.app_group_id IS NOT NULL` + activeBindingSQL + `
       AND ` + subjectMatchSQL + `
 )
 ORDER BY sort_order ASC, code ASC`

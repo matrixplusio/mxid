@@ -51,15 +51,20 @@ func (AppRole) TenantScoped() {}
 // Binding glues a subject (user/group/org/system-role) to an app_role.
 // Same exactly-one-of (app_id, app_group_id) invariant as AppRole.
 type Binding struct {
-	ID          int64     `gorm:"column:id;primaryKey" json:"id,string"`
-	AppID       *int64    `gorm:"column:app_id" json:"app_id,omitempty,string"`
-	AppGroupID  *int64    `gorm:"column:app_group_id" json:"app_group_id,omitempty,string"`
-	TenantID    int64     `gorm:"column:tenant_id;not null;default:0" json:"tenant_id,string"`
-	AppRoleID   int64     `gorm:"column:app_role_id;not null" json:"app_role_id,string"`
-	SubjectType string    `gorm:"column:subject_type;size:16;not null" json:"subject_type"`
-	SubjectID   int64     `gorm:"column:subject_id;not null" json:"subject_id,string"`
-	CreatedAt   time.Time `gorm:"column:created_at;not null" json:"created_at"`
-	CreatedBy   *int64    `gorm:"column:created_by" json:"created_by,string,omitempty"`
+	ID          int64      `gorm:"column:id;primaryKey" json:"id,string"`
+	AppID       *int64     `gorm:"column:app_id" json:"app_id,omitempty,string"`
+	AppGroupID  *int64     `gorm:"column:app_group_id" json:"app_group_id,omitempty,string"`
+	TenantID    int64      `gorm:"column:tenant_id;not null;default:0" json:"tenant_id,string"`
+	AppRoleID   int64      `gorm:"column:app_role_id;not null" json:"app_role_id,string"`
+	SubjectType string     `gorm:"column:subject_type;size:16;not null" json:"subject_type"`
+	SubjectID   int64      `gorm:"column:subject_id;not null" json:"subject_id,string"`
+	// Time-bound JIT fields (added by migration 000045). NULL ExpiresAt = permanent.
+	// Status: 1=active, 2=expired, 3=revoked. Default 1 (permanent bindings unaffected).
+	GrantID     *int64     `gorm:"column:grant_id" json:"grant_id,omitempty,string"`
+	ExpiresAt   *time.Time `gorm:"column:expires_at" json:"expires_at,omitempty"`
+	Status      int16      `gorm:"column:status;not null;default:1" json:"status"`
+	CreatedAt   time.Time  `gorm:"column:created_at;not null" json:"created_at"`
+	CreatedBy   *int64     `gorm:"column:created_by" json:"created_by,string,omitempty"`
 }
 
 func (Binding) TableName() string { return "mxid_app_role_binding" }
