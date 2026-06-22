@@ -193,6 +193,7 @@ type serializedBinding struct {
 	SourceID    int64    `json:"src_id"`
 	ScopeType   string   `json:"scope_type,omitempty"`
 	ScopeID     int64    `json:"scope_id,omitempty"`
+	ExpiresAt   *int64   `json:"expires_at,omitempty"` // unix seconds; nil = permanent
 }
 
 func (c *CachedBindingProvider) l2Get(ctx context.Context, key string) ([]EffectiveBinding, bool) {
@@ -210,7 +211,7 @@ func (c *CachedBindingProvider) l2Get(ctx context.Context, key string) ([]Effect
 		for _, p := range s.Permissions {
 			perms[p] = struct{}{}
 		}
-		out[i] = EffectiveBinding{
+		eb := EffectiveBinding{
 			RoleID:      s.RoleID,
 			Permissions: perms,
 			Source:      s.Source,
@@ -218,6 +219,11 @@ func (c *CachedBindingProvider) l2Get(ctx context.Context, key string) ([]Effect
 			ScopeType:   ScopeKind(s.ScopeType),
 			ScopeID:     s.ScopeID,
 		}
+		if s.ExpiresAt != nil {
+			t := time.Unix(*s.ExpiresAt, 0)
+			eb.ExpiresAt = &t
+		}
+		out[i] = eb
 	}
 	return out, true
 }
@@ -229,7 +235,7 @@ func (c *CachedBindingProvider) l2Set(ctx context.Context, key string, bindings 
 		for p := range b.Permissions {
 			perms = append(perms, p)
 		}
-		serialized[i] = serializedBinding{
+		sb := serializedBinding{
 			RoleID:      b.RoleID,
 			Permissions: perms,
 			Source:      b.Source,
@@ -237,6 +243,11 @@ func (c *CachedBindingProvider) l2Set(ctx context.Context, key string, bindings 
 			ScopeType:   string(b.ScopeType),
 			ScopeID:     b.ScopeID,
 		}
+		if b.ExpiresAt != nil {
+			unix := b.ExpiresAt.Unix()
+			sb.ExpiresAt = &unix
+		}
+		serialized[i] = sb
 	}
 	raw, err := json.Marshal(serialized)
 	if err != nil {

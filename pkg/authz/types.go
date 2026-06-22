@@ -9,7 +9,10 @@
 // GroupLookup / OrgLookup) so the domain package wiring stays uni-directional.
 package authz
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ScopeKind enumerates the resource container kinds a binding can target.
 // "" (empty) means a global binding — applies regardless of resource.
@@ -48,7 +51,8 @@ type EffectiveBinding struct {
 	Source      string // "direct" | "group" | "org"
 	SourceID    int64
 	ScopeType   ScopeKind
-	ScopeID     int64 // 0 when ScopeType == ScopeGlobal
+	ScopeID     int64      // 0 when ScopeType == ScopeGlobal
+	ExpiresAt   *time.Time // nil = permanent binding; non-nil = time-bound (JIT) grant
 }
 
 // BindingProvider is the permission domain's data access surface that the

@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/imkerbos/mxid/internal/bootstrap"
 	"github.com/imkerbos/mxid/internal/domain/group"
@@ -93,21 +94,30 @@ func (a *authzBindingProvider) EffectiveBindingsForUser(ctx context.Context, ten
 		ScopeID   *int64
 		Source    string
 		SourceID  int64
+		ExpiresAt *time.Time
 	}
 	var rows []row
+
+	// Build the subject OR group first, then AND the time/status guard around
+	// the entire group so the filter applies to every subject branch.
+	subjects := a.app.DB.Where("b.subject_type = 'user' AND b.subject_id = ?", userID)
+	if len(groupIDs) > 0 {
+		subjects = subjects.Or("b.subject_type = 'group' AND b.subject_id IN ?", groupIDs)
+	}
+	if len(orgIDs) > 0 {
+		subjects = subjects.Or("b.subject_type = 'org' AND b.subject_id IN ?", orgIDs)
+	}
+
 	q := a.app.DB.WithContext(ctx).
 		Table("mxid_role_binding b").
 		Joins("INNER JOIN mxid_role r ON r.id = b.role_id AND r.tenant_id = ? AND r.deleted_at IS NULL", tenantID).
 		Select(`DISTINCT b.role_id, b.scope_type, b.scope_id,
 			CASE b.subject_type WHEN 'user' THEN 'direct' WHEN 'group' THEN 'group' WHEN 'org' THEN 'org' ELSE 'direct' END AS source,
-			b.subject_id AS source_id`).
-		Where("(b.subject_type = 'user' AND b.subject_id = ?)", userID)
-	if len(groupIDs) > 0 {
-		q = q.Or("b.subject_type = 'group' AND b.subject_id IN ?", groupIDs)
-	}
-	if len(orgIDs) > 0 {
-		q = q.Or("b.subject_type = 'org' AND b.subject_id IN ?", orgIDs)
-	}
+			b.subject_id AS source_id,
+			b.expires_at`).
+		Where("b.status = 1 AND (b.expires_at IS NULL OR b.expires_at > NOW())").
+		Where(subjects)
+
 	if err := q.Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -149,6 +159,7 @@ func (a *authzBindingProvider) EffectiveBindingsForUser(ctx context.Context, ten
 		eb := authz.EffectiveBinding{
 			RoleID: r.RoleID, Permissions: perms,
 			Source: r.Source, SourceID: r.SourceID,
+			ExpiresAt: r.ExpiresAt,
 		}
 		if r.ScopeType != nil {
 			eb.ScopeType = authz.ScopeKind(*r.ScopeType)
