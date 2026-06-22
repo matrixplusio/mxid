@@ -13,6 +13,7 @@ import AppsPage from './pages/apps'
 import IDPsPage from './pages/idps'
 import TenantsPage from './pages/tenants'
 import PermissionsPage from './pages/permissions'
+import AccessApprovalsPage from './pages/access-approvals'
 import AuditPage from './pages/audit'
 import OffboardingPage from './pages/offboarding'
 import DocsPage from './pages/docs'
@@ -106,6 +107,7 @@ export default function App() {
                 <Route path="/idps" element={<IDPsPage />} />
                 <Route path="/tenants" element={<TenantsPage />} />
                 <Route path="/permissions" element={<PermissionsPage />} />
+                <Route path="/access-approvals" element={<AccessApprovalsPage />} />
                 <Route path="/audit" element={<AuditPage />} />
                 <Route path="/offboarding" element={<OffboardingPage />} />
                 <Route path="/docs" element={<DocsPage />} />

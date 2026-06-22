@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { useAuthStore, authApi, cn, setActiveTenantID, useTranslation, setLanguage, SUPPORTED_LANGS, useBootstrap } from '@mxid/shared'
+import { useAuthStore, authApi, cn, setActiveTenantID, useTranslation, setLanguage, SUPPORTED_LANGS, useBootstrap, useEdition } from '@mxid/shared'
 import {
   LayoutDashboard,
   Users,
@@ -15,6 +15,7 @@ import {
   BookOpen,
   Settings,
   ExternalLink,
+  CheckSquare,
 } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import TenantSwitcher from './TenantSwitcher'
@@ -22,7 +23,7 @@ import TenantSwitcher from './TenantSwitcher'
 // navItemsBuild resolves to live translated labels each render — keeps
 // the sidebar in sync when the user picks a different language without
 // a full reload.
-const navItemsBuild = (t: (k: string) => string) => [
+const navItemsBuild = (t: (k: string) => string, hasConditionalAccess: boolean) => [
   { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
   { to: '/tenants', icon: Building, label: t('nav.tenants') },
   { to: '/users', icon: Users, label: t('nav.users') },
@@ -31,6 +32,9 @@ const navItemsBuild = (t: (k: string) => string) => [
   { to: '/apps', icon: AppWindow, label: t('nav.apps') },
   { to: '/idps', icon: Plug, label: t('nav.idps') },
   { to: '/permissions', icon: Shield, label: t('nav.permissions') },
+  ...(hasConditionalAccess
+    ? [{ to: '/access-approvals', icon: CheckSquare, label: t('nav.accessApprovals') }]
+    : []),
   { to: '/audit', icon: ScrollText, label: t('nav.audit') },
   { to: '/offboarding', icon: UserX, label: t('nav.offboarding') },
   { to: '/settings', icon: Settings, label: t('nav.settings') },
@@ -42,7 +46,8 @@ export default function Sidebar() {
   const { user, clear } = useAuthStore()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
-  const navItems = navItemsBuild(t)
+  const edition = useEdition()
+  const navItems = navItemsBuild(t, edition.has('conditional_access'))
 
   const handleLogout = async () => {
     try {
