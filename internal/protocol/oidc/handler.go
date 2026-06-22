@@ -36,6 +36,13 @@ type ConsentChecker interface {
 // refresh grant on account status.
 const userStatusActive = 1
 
+// httpDoer is the minimal interface used by sendBackchannelLogout so tests can
+// substitute a plain http.Client while production always uses the SSRF-safe
+// backchannelLogoutClient package var.
+type httpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 // Handler serves OIDC protocol endpoints.
 type Handler struct {
 	issuer      string
@@ -52,6 +59,10 @@ type Handler struct {
 	store       *Store
 	tokenIss    *TokenIssuer
 	eventBus    *event.Bus
+	// backchannelClient overrides the package-level backchannelLogoutClient
+	// when non-nil. Used in tests to bypass the SSRF guard so an httptest RP
+	// on loopback can receive logout_tokens.
+	backchannelClient httpDoer
 }
 
 // SetURLProvider wires the runtime URL lookup. Empty / nil → stick with
@@ -1208,6 +1219,56 @@ func (h *Handler) LogoutUserBackchannel(ctx context.Context, userID int64) {
 	}()
 }
 
+// LogoutUserAppBackchannel sends a back-channel logout_token only to the RP
+// identified by appID, for every protocol SSO session of the user where that
+// app participated. Used by JIT elevation expiry/revoke to drop an elevated
+// role from one downstream app without logging the user out of their other
+// apps.
+//
+// Best-effort + async: the logout_token POST runs on a detached goroutine so
+// a slow RP never blocks the caller. If the app has no backchannel_logout_uri
+// configured, the call is a no-op.
+//
+// Must be called BEFORE the user's protocol sessions are killed (same
+// constraint as LogoutUserBackchannel) so the SSO-app tracking sets are still
+// present in Redis.
+func (h *Handler) LogoutUserAppBackchannel(ctx context.Context, userID, appID int64) {
+	protoSessions, err := h.sessionMgr.ListByUser(ctx, session.NamespaceProtocol, userID)
+	if err != nil || len(protoSessions) == 0 {
+		return
+	}
+
+	type target struct {
+		sid string
+	}
+	var targets []target
+
+	for _, s := range protoSessions {
+		// Read (and consume) the SSO-app tracking set for this session.
+		// ListSSOApps removes the Redis key as a side effect — consistent with
+		// how LogoutUserBackchannel drains the sets before they are cleaned up.
+		appIDs, _ := h.store.ListSSOApps(ctx, s.ID)
+		for _, a := range appIDs {
+			if a == appID {
+				targets = append(targets, target{sid: s.ID})
+				break
+			}
+		}
+	}
+
+	if len(targets) == 0 {
+		return
+	}
+
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		for _, t := range targets {
+			h.sendBackchannelLogout(bgCtx, appID, userID, t.sid)
+		}
+	}()
+}
+
 // fanOutBackchannelLogout posts a signed logout_token to every RP's
 // configured backchannel_logout_uri. Detached from the request context so
 // per-RP latency does not block the user; uses a fresh context with a
@@ -1286,7 +1347,11 @@ func (h *Handler) sendBackchannelLogout(ctx context.Context, appID, userID int64
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := backchannelLogoutClient.Do(req)
+	doer := httpDoer(backchannelLogoutClient)
+	if h.backchannelClient != nil {
+		doer = h.backchannelClient
+	}
+	resp, err := doer.Do(req)
 	if err != nil {
 		// Includes the SSRF-guard block case (backchannel_logout_uri resolving
 		// to an internal/disallowed address, or a non-https scheme). This is a
