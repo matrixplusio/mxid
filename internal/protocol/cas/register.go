@@ -24,7 +24,8 @@ func Register(
 	tenantRes resolver.TenantResolver,
 ) *Module {
 	store := NewTicketStore(rdb)
-	handler := NewHandler(issuer, portalURL, appRes, idRes, sessRes, tenantRes, store)
+	serviceRegistry := NewServiceRegistry(rdb)
+	handler := NewHandler(issuer, portalURL, appRes, idRes, sessRes, tenantRes, store, serviceRegistry)
 	handler.RegisterRoutes(rg)
 	return &Module{
 		Handler: handler,
