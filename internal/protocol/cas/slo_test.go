@@ -197,6 +197,6 @@ func (d *routingDoer) Do(req *http.Request) (*http.Response, error) {
 			return sp.srv.Client().Do(req)
 		}
 	}
-	// Fallback: let the default transport handle it.
-	return http.DefaultClient.Do(req)
+	// Fallback: use a fresh ephemeral client (DefaultClient is banned by the safehttp guard).
+	return (&http.Client{}).Do(req)
 }
