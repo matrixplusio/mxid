@@ -39,3 +39,6 @@ export type {
   ProtocolDefaults, SMS, AuditPolicy, Localization, License, ExternalURLs,
   MFAMode, MFAPolicy, ConditionalAccess, OffboardingWebhook,
 } from './settings'
+export { accessRequestApi } from './accessrequest'
+export { accessApprovalApi } from './accessapproval'
+export type { Eligibility, AccessRequest, CreateAccessRequestBody, CreateEligibilityBody } from '../types/access'
