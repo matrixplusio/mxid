@@ -70,16 +70,20 @@ func (h *Handler) SingleLogout(ctx context.Context, userID, appID int64) {
 	doer := h.sloDoer()
 
 	now := time.Now().UTC()
-	for _, svc := range services {
+	for i, svc := range services {
 		target := svc.ServiceURL
 		if logoutURLOverride != "" {
 			target = logoutURLOverride
 		}
 
-		id := fmt.Sprintf("LR-%d-%d-%d", userID, appID, now.UnixNano())
+		id := fmt.Sprintf("LR-%d-%d-%d-%d", userID, appID, now.UnixNano(), i)
 		body := fmt.Sprintf(casLogoutXMLTemplate, id, now.Format(time.RFC3339), svc.Ticket)
 
-		go h.sendCASLogout(doer, target, body, appID)
+		go func() {
+			sloCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			h.sendCASLogout(sloCtx, doer, target, body, appID)
+		}()
 	}
 
 	// Clear the registry after dispatching goroutines. A failure here is
@@ -93,9 +97,9 @@ func (h *Handler) SingleLogout(ctx context.Context, userID, appID int64) {
 // sendCASLogout POSTs the CAS logoutRequest form body to target via the
 // provided doer. Errors (including SSRF-guard blocks) are logged at WARN;
 // the response body is discarded.
-func (h *Handler) sendCASLogout(doer httpDoer, target, xmlBody string, appID int64) {
+func (h *Handler) sendCASLogout(ctx context.Context, doer httpDoer, target, xmlBody string, appID int64) {
 	form := url.Values{"logoutRequest": {xmlBody}}
-	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, strings.NewReader(form.Encode()))
 	if err != nil {
 		h.logger.Warn("cas slo: build request failed",
 			zap.Int64("app_id", appID), zap.String("target", target), zap.Error(err))

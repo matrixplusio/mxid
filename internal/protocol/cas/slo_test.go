@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -34,9 +35,31 @@ func newStubSP(t *testing.T) *stubSP {
 	return sp
 }
 
-func (s *stubSP) posts() int          { return int(s.postCount.Load()) }
-func (s *stubSP) lastBodyStr() string  { v := s.lastBody.Load(); if v == nil { return "" }; return v.(string) }
+func (s *stubSP) posts() int                       { return int(s.postCount.Load()) }
+func (s *stubSP) lastBodyStr() string              { v := s.lastBody.Load(); if v == nil { return "" }; return v.(string) }
 func (s *stubSP) lastBodyContains(sub string) bool { return strings.Contains(s.lastBodyStr(), sub) }
+
+// extractLogoutRequestID extracts the ID attribute value from a CAS logoutRequest
+// form body (URL-encoded). The body looks like: logoutRequest=<url-encoded XML>.
+func extractLogoutRequestID(rawBody string) string {
+	vals, err := url.ParseQuery(rawBody)
+	if err != nil {
+		return ""
+	}
+	xml := vals.Get("logoutRequest")
+	// ID attribute appears as: ... ID="LR-..." ...
+	const prefix = ` ID="`
+	idx := strings.Index(xml, prefix)
+	if idx < 0 {
+		return ""
+	}
+	rest := xml[idx+len(prefix):]
+	end := strings.Index(rest, `"`)
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
 
 // waitAsync gives the goroutines spawned by SingleLogout time to complete.
 func waitAsync() { time.Sleep(150 * time.Millisecond) }
@@ -134,6 +157,15 @@ func TestSingleLogout_MultipleServices(t *testing.T) {
 	}
 	if !sp1.lastBodyContains("ST-B") && !sp2.lastBodyContains("ST-B") {
 		t.Error("ticket ST-B not found in any SP body")
+	}
+
+	// Each LogoutRequest must have a unique ID (Fix 1: index suffix prevents collisions).
+	id1 := extractLogoutRequestID(sp1.lastBodyStr())
+	id2 := extractLogoutRequestID(sp2.lastBodyStr())
+	if id1 == "" || id2 == "" {
+		t.Errorf("could not extract LogoutRequest IDs (id1=%q id2=%q)", id1, id2)
+	} else if id1 == id2 {
+		t.Errorf("LogoutRequest IDs must be unique across services, both were %q", id1)
 	}
 }
 
