@@ -115,7 +115,7 @@ func (b *LoginBridge) Handle(c *gin.Context) {
 		amr = append(amr, "mfa")
 	}
 	if err := b.storage.AuthRequestDone(ctx, authReqID, itoa(sess.UserID), time.Now(), amr); err != nil {
-		c.String(http.StatusInternalServerError, "complete auth request failed")
+		c.String(http.StatusBadRequest, "unknown or expired auth request")
 		return
 	}
 	b.redirect(c, b.callbackURL(ctx, authReqID))

@@ -172,13 +172,13 @@ func (s *ClientStore) resolve(ctx context.Context, clientID string) (*oidcClient
 		return nil, err
 	}
 	if app == nil {
-		return nil, fmt.Errorf("client not found")
+		return nil, oidc.ErrInvalidClient().WithParent(fmt.Errorf("client not found"))
 	}
 	if app.Protocol != "oidc" {
-		return nil, fmt.Errorf("app %s is not an OIDC client", clientID)
+		return nil, oidc.ErrInvalidClient().WithParent(fmt.Errorf("app %s is not an OIDC client", clientID))
 	}
 	if app.Status != 1 {
-		return nil, fmt.Errorf("client %s is disabled", clientID)
+		return nil, oidc.ErrInvalidClient().WithParent(fmt.Errorf("client %s is disabled", clientID))
 	}
 	return &oidcClient{app: app, cfg: parseClientConfig(app.ProtocolConfig), loginURL: s.loginURL}, nil
 }

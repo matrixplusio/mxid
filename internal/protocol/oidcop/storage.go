@@ -440,10 +440,10 @@ func (s *Storage) renewRefreshToken(ctx context.Context, currentToken, newToken 
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("invalid refresh token")
+		return oidc.ErrInvalidGrant().WithDescription("invalid refresh token")
 	}
 	if rt.Expiration.Before(time.Now()) {
-		return fmt.Errorf("expired refresh token")
+		return oidc.ErrInvalidGrant().WithDescription("expired refresh token")
 	}
 	_ = s.rdb.Del(ctx, kRefresh(currentToken), kToken(rt.AccessTokenID)).Err()
 
