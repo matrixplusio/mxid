@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { accessApprovalApi, formatDate, useTranslation, useEdition } from '@mxid/shared'
 import type { AccessRequest } from '@mxid/shared'
-import { pageMotion, Button, Modal, Field, Textarea } from '@mxid/shared/ui'
+import { pageMotion, Button, Modal, Field, Textarea, Card, DataTable, FilterBar, Select, ConfirmDialog } from '@mxid/shared/ui'
+import type { Column } from '@mxid/shared/ui'
 import PageHeader from '../../components/layout/PageHeader'
 import { toast, extractMessage } from '../../components/ui/toast'
 
@@ -17,6 +18,8 @@ export default function AccessApprovalsPage() {
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejecting, setRejecting] = useState(false)
+  const [revokeTargetId, setRevokeTargetId] = useState<string | null>(null)
+  const [revoking, setRevoking] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,133 +72,103 @@ export default function AccessApprovalsPage() {
     }
   }
 
-  const handleRevoke = async (id: string) => {
-    if (!confirm(t('approvals.confirmRevoke'))) return
+  const confirmRevoke = async () => {
+    if (!revokeTargetId) return
+    setRevoking(true)
     try {
-      await accessApprovalApi.revoke(id)
+      await accessApprovalApi.revoke(revokeTargetId)
       toast.success(t('approvals.revoked'))
+      setRevokeTargetId(null)
       void load()
     } catch (e) {
       toast.error(t('approvals.revokeFailed'), extractMessage(e))
+    } finally {
+      setRevoking(false)
     }
   }
 
   if (!edition.has('conditional_access')) {
     return (
       <motion.div {...pageMotion} className="p-6">
-        <p className="text-gray-500">{t('approvals.featureDisabled')}</p>
+        <p className="text-muted">{t('approvals.featureDisabled')}</p>
       </motion.div>
     )
   }
 
+  const columns: Column<AccessRequest>[] = [
+    {
+      key: 'requester',
+      title: t('approvals.columns.requester'),
+      render: (r) => <span className="font-medium text-ink">{r.requester_name || r.requester_id}</span>,
+    },
+    {
+      key: 'target',
+      title: t('approvals.columns.target'),
+      render: (r) => <span className="text-muted">{r.target_kind === 'console' ? t('access.targetConsole') : t('access.targetApp')}</span>,
+    },
+    { key: 'role_id', title: t('approvals.columns.role'), render: (r) => <span className="text-muted">{r.role_id}</span> },
+    {
+      key: 'duration',
+      title: t('approvals.columns.duration'),
+      render: (r) => <span className="whitespace-nowrap text-muted">{Math.round(r.requested_seconds / 60)}m</span>,
+    },
+    {
+      key: 'justification',
+      title: t('approvals.columns.justification'),
+      render: (r) => <span className="block max-w-xs truncate text-muted">{r.justification || '—'}</span>,
+    },
+    {
+      key: 'expires_at',
+      title: t('approvals.columns.expiresAt'),
+      render: (r) => <span className="whitespace-nowrap text-muted">{r.expires_at ? formatDate(r.expires_at) : '—'}</span>,
+    },
+    {
+      key: 'created_at',
+      title: t('approvals.columns.requestedAt'),
+      render: (r) => <span className="whitespace-nowrap text-muted">{formatDate(r.created_at)}</span>,
+    },
+    {
+      key: 'actions',
+      title: t('common.actions'),
+      align: 'right',
+      render: (r) => (
+        <div className="flex items-center justify-end gap-2">
+          {r.status === 'pending' && (
+            <>
+              <Button size="sm" onClick={() => handleApprove(r.id)}>{t('approvals.approve')}</Button>
+              <Button size="sm" variant="secondary" onClick={() => openRejectModal(r.id)}>{t('approvals.reject')}</Button>
+            </>
+          )}
+          {r.status === 'approved' && (
+            <Button size="sm" variant="danger" onClick={() => setRevokeTargetId(r.id)}>{t('approvals.revoke')}</Button>
+          )}
+        </div>
+      ),
+    },
+  ]
+
   return (
     <motion.div {...pageMotion}>
-      <PageHeader
-        title={t('approvals.title')}
-        description={t('approvals.subtitle')}
-      />
+      <PageHeader title={t('approvals.title')} description={t('approvals.subtitle')} />
 
-      {/* Status filter */}
-      <div className="mb-4 flex items-center gap-4">
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {t(`access.status.${s}`, { defaultValue: s })}
-            </option>
-          ))}
-        </select>
-      </div>
+      <div className="space-y-4">
+        <FilterBar>
+          <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-auto">
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{t(`access.status.${s}`, { defaultValue: s })}</option>
+            ))}
+          </Select>
+        </FilterBar>
 
-      {/* Request list */}
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                <th className="px-6 py-3">{t('approvals.columns.requester')}</th>
-                <th className="px-6 py-3">{t('approvals.columns.target')}</th>
-                <th className="px-6 py-3">{t('approvals.columns.role')}</th>
-                <th className="px-6 py-3">{t('approvals.columns.duration')}</th>
-                <th className="px-6 py-3">{t('approvals.columns.justification')}</th>
-                <th className="px-6 py-3">{t('approvals.columns.expiresAt')}</th>
-                <th className="px-6 py-3">{t('approvals.columns.requestedAt')}</th>
-                <th className="px-6 py-3 text-right">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-400">
-                    {t('common.loading')}
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-400">
-                    {t('approvals.empty')}
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-3 text-sm font-medium text-gray-700">
-                      {r.requester_name || r.requester_id}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-gray-600">
-                      {r.target_kind === 'console'
-                        ? t('access.targetConsole')
-                        : t('access.targetApp')}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{r.role_id}</td>
-                    <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-600">
-                      {Math.round(r.requested_seconds / 60)}m
-                    </td>
-                    <td className="max-w-xs truncate px-6 py-3 text-sm text-gray-500">
-                      {r.justification || '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500">
-                      {r.expires_at ? formatDate(r.expires_at) : '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500">
-                      {formatDate(r.created_at)}
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {r.status === 'pending' && (
-                          <>
-                            <Button size="sm" onClick={() => handleApprove(r.id)}>
-                              {t('approvals.approve')}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => openRejectModal(r.id)}
-                            >
-                              {t('approvals.reject')}
-                            </Button>
-                          </>
-                        )}
-                        {r.status === 'approved' && (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleRevoke(r.id)}
-                          >
-                            {t('approvals.revoke')}
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Card className="overflow-hidden hover:shadow-card">
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.id}
+            loading={loading}
+            emptyText={t('approvals.empty')}
+          />
+        </Card>
       </div>
 
       <Modal
@@ -223,6 +196,15 @@ export default function AccessApprovalsPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={revokeTargetId !== null}
+        title={t('approvals.revoke')}
+        desc={t('approvals.confirmRevoke')}
+        loading={revoking}
+        onConfirm={confirmRevoke}
+        onCancel={() => setRevokeTargetId(null)}
+      />
     </motion.div>
   )
 }

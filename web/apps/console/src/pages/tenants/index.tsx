@@ -5,10 +5,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Pencil, Trash2, Building } from 'lucide-react'
-import { tenantApi, cn, useTranslation } from '@mxid/shared'
+import { tenantApi, useTranslation } from '@mxid/shared'
 import type { Tenant } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
-import { Field, Input, Select, Button, Tag, Modal, EmptyState, LoadingState, pageMotion } from '../../components/ui'
+import { Field, Input, Select, Button, Tag, Modal, EmptyState, LoadingState, Card, ConfirmDialog, pageMotion } from '../../components/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
 
 export default function TenantsPage() {
@@ -19,6 +19,8 @@ export default function TenantsPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', code: '', status: 1 })
   const [saving, setSaving] = useState(false)
+  const [delTarget, setDelTarget] = useState<Tenant | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -64,14 +66,18 @@ export default function TenantsPage() {
     }
   }
 
-  const remove = async (tenant: Tenant) => {
-    if (!confirm(t('tenants.confirmDelete', { name: tenant.name }))) return
+  const confirmRemove = async () => {
+    if (!delTarget) return
+    setDeleting(true)
     try {
-      await tenantApi.delete(tenant.id)
+      await tenantApi.delete(delTarget.id)
       toast.success(t('common.deleteSuccess'))
+      setDelTarget(null)
       await load()
     } catch (e) {
       toast.error(t('common.deleteFailed'), extractMessage(e))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -87,23 +93,23 @@ export default function TenantsPage() {
         }
       />
 
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+      <Card className="overflow-hidden hover:shadow-card">
         {loading ? (
           <LoadingState />
         ) : items.length === 0 ? (
           <EmptyState>{t('tenants.empty')}</EmptyState>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border">
             {items.map((tenant) => (
-              <div key={tenant.id} className="flex items-center justify-between p-5 hover:bg-gray-50/50">
+              <div key={tenant.id} className="flex items-center justify-between p-5 transition-colors hover:bg-surface-muted">
                 <div className="flex items-center gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Building className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">{tenant.name}</span>
-                      <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{tenant.code}</code>
+                      <span className="text-sm font-semibold text-ink">{tenant.name}</span>
+                      <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-muted">{tenant.code}</code>
                       {tenant.status === 1 ? (
                         <Tag variant="green">{t('common.enabled')}</Tag>
                       ) : (
@@ -111,7 +117,7 @@ export default function TenantsPage() {
                       )}
                       {String(tenant.id) === '1' && <Tag variant="amber">{t('tenants.defaultTag')}</Tag>}
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-400">id: {tenant.id}</p>
+                    <p className="mt-0.5 text-xs text-faint">id: {tenant.id}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -119,7 +125,7 @@ export default function TenantsPage() {
                     {t('common.edit')}
                   </Button>
                   {String(tenant.id) !== '1' && (
-                    <Button size="sm" variant="danger" onClick={() => remove(tenant)} icon={<Trash2 className="h-3.5 w-3.5" />}>
+                    <Button size="sm" variant="danger" onClick={() => setDelTarget(tenant)} icon={<Trash2 className="h-3.5 w-3.5" />}>
                       {t('common.delete')}
                     </Button>
                   )}
@@ -128,7 +134,7 @@ export default function TenantsPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       <Modal
         open={showForm}
@@ -145,7 +151,6 @@ export default function TenantsPage() {
               onChange={(e) => setForm({ ...form, code: e.target.value })}
               disabled={!!editing}
               required={!editing}
-              className={cn(editing ? 'bg-gray-50 text-gray-500' : '')}
             />
           </Field>
           <Field label={t('tenants.fields.status')}>
@@ -162,6 +167,15 @@ export default function TenantsPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!delTarget}
+        title={t('tenants.confirmDelete', { name: delTarget?.name ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deleting}
+        onConfirm={confirmRemove}
+        onCancel={() => setDelTarget(null)}
+      />
     </motion.div>
   )
 }
