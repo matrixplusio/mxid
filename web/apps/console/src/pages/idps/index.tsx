@@ -3,12 +3,12 @@
 // Admin 在这里配置 Lark / Feishu / GitHub / DingTalk / ... 的 OAuth 凭证。
 // 保存后 portal 登录页会自动出现「使用 Lark 登录」等按钮。
 import { useCallback, useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Pencil, Trash2, X, Plug, Power } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Plus, Pencil, Trash2, Plug, Power } from 'lucide-react'
 import { externalIdpApi, cn, useTranslation } from '@mxid/shared'
 import type { ExternalIDP } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
-import { Field, Button, Tag, EmptyState, LoadingState, pageMotion } from '../../components/ui'
+import { Field, Button, Tag, EmptyState, LoadingState, Card, ConfirmDialog, Modal, pageMotion } from '../../components/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
 
 // Provider field schemas — what the config form renders per type. Keep this
@@ -53,6 +53,8 @@ export default function IDPsPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<ExternalIDP | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [delTarget, setDelTarget] = useState<ExternalIDP | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,14 +79,18 @@ export default function IDPsPage() {
     setEditing(idp)
     setShowForm(true)
   }
-  const remove = async (idp: ExternalIDP) => {
-    if (!confirm(t('idps.confirmDelete', { name: idp.name }))) return
+  const confirmRemove = async () => {
+    if (!delTarget) return
+    setDeleting(true)
     try {
-      await externalIdpApi.delete(idp.id)
+      await externalIdpApi.delete(delTarget.id)
       toast.success(t('common.deleteSuccess'))
+      setDelTarget(null)
       await load()
     } catch (e) {
       toast.error(t('common.deleteFailed'), extractMessage(e))
+    } finally {
+      setDeleting(false)
     }
   }
   const toggleStatus = async (idp: ExternalIDP) => {
@@ -109,22 +115,22 @@ export default function IDPsPage() {
         }
       />
 
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+      <Card className="overflow-hidden hover:shadow-card">
         {loading ? (
           <LoadingState />
         ) : items.length === 0 ? (
           <EmptyState>{t('idps.empty')}</EmptyState>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border">
             {items.map((idp) => (
-              <div key={idp.id} className="flex items-center justify-between p-5 hover:bg-gray-50/50">
+              <div key={idp.id} className="flex items-center justify-between p-5 transition-colors hover:bg-surface-muted">
                 <div className="flex min-w-0 items-center gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     {idp.icon ? <img src={idp.icon} alt="" className="h-6 w-6" /> : <Plug className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">{idp.name}</span>
+                      <span className="text-sm font-semibold text-ink">{idp.name}</span>
                       <Tag variant="blue">{PROVIDER_LABEL[idp.type] ?? idp.type}</Tag>
                       {idp.status === 1 ? (
                         <Tag variant="green">{t('common.enabled')}</Tag>
@@ -133,8 +139,8 @@ export default function IDPsPage() {
                       )}
                       {idp.auto_create && <Tag variant="amber">{t('idps.autoCreateTag')}</Tag>}
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      <code className="rounded bg-gray-100 px-1.5 py-0.5">{idp.code}</code>
+                    <p className="mt-0.5 text-xs text-muted">
+                      <code className="rounded bg-surface-muted px-1.5 py-0.5">{idp.code}</code>
                       {idp.description ? ` · ${idp.description}` : ''}
                     </p>
                   </div>
@@ -151,7 +157,7 @@ export default function IDPsPage() {
                   <Button size="sm" variant="secondary" onClick={() => openEdit(idp)} icon={<Pencil className="h-3.5 w-3.5" />}>
                     {t('common.edit')}
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => remove(idp)} icon={<Trash2 className="h-3.5 w-3.5" />}>
+                  <Button size="sm" variant="danger" onClick={() => setDelTarget(idp)} icon={<Trash2 className="h-3.5 w-3.5" />}>
                     {t('common.delete')}
                   </Button>
                 </div>
@@ -159,21 +165,28 @@ export default function IDPsPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
-      <AnimatePresence>
-        {showForm && (
-          <IDPForm
-            initial={editing}
-            allowedTypes={types}
-            onCancel={() => setShowForm(false)}
-            onSaved={async () => {
-              setShowForm(false)
-              await load()
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {showForm && (
+        <IDPForm
+          initial={editing}
+          allowedTypes={types}
+          onCancel={() => setShowForm(false)}
+          onSaved={async () => {
+            setShowForm(false)
+            await load()
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!delTarget}
+        title={t('idps.confirmDelete', { name: delTarget?.name ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deleting}
+        onConfirm={confirmRemove}
+        onCancel={() => setDelTarget(null)}
+      />
     </motion.div>
   )
 }
@@ -287,18 +300,7 @@ function IDPForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold">{initial ? t('idps.editTitle') : t('idps.createTitle')}</h3>
-          <button onClick={onCancel} className="rounded p-1 text-gray-400 hover:bg-gray-100"><X className="h-4 w-4" /></button>
-        </div>
-
+    <Modal open title={initial ? t('idps.editTitle') : t('idps.createTitle')} onClose={onCancel} size="xl">
         <form onSubmit={submit} className="space-y-4">
           <Field label={t('idps.fields.providerType')} hint={t('idps.fields.providerTypeHint')}>
             <select
@@ -407,8 +409,7 @@ function IDPForm({
             </Button>
           </div>
         </form>
-      </motion.div>
-    </div>
+    </Modal>
   )
 }
 

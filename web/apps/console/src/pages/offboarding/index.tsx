@@ -8,7 +8,7 @@ import {
   type OffboardingTask,
   type OffboardingItem,
 } from '@mxid/shared'
-import { pageMotion } from '@mxid/shared/ui'
+import { pageMotion, Button, Card, StatusTag, LoadingState, EmptyState } from '@mxid/shared/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
 import PageHeader from '../../components/layout/PageHeader'
 
@@ -17,7 +17,6 @@ export default function OffboardingPage() {
   const [tasks, setTasks] = useState<OffboardingTask[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
-
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -39,25 +38,25 @@ export default function OffboardingPage() {
 
   return (
     <motion.div {...pageMotion}>
-      <div className="flex items-start justify-between">
-        <PageHeader title={t('offboarding.title')} description={t('offboarding.subtitle')} />
-        <button
-          onClick={load}
-          className="mt-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-        >
-          {t('common.refresh')}
-        </button>
-      </div>
+      <PageHeader
+        title={t('offboarding.title')}
+        description={t('offboarding.subtitle')}
+        actions={
+          <Button variant="secondary" onClick={load}>
+            {t('common.refresh')}
+          </Button>
+        }
+      />
 
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+      <Card className="overflow-hidden hover:shadow-card">
         {loading ? (
-          <div className="px-6 py-10 text-center text-sm text-gray-400">{t('common.loading')}</div>
+          <LoadingState />
         ) : error ? (
-          <div className="px-6 py-12 text-center text-sm text-red-500">{error}</div>
+          <div className="px-6 py-12 text-center text-sm text-danger">{error}</div>
         ) : tasks.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-gray-400">{t('offboarding.empty')}</div>
+          <EmptyState>{t('offboarding.empty')}</EmptyState>
         ) : (
-          <ul className="divide-y divide-gray-50">
+          <ul className="divide-y divide-border">
             {tasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -69,7 +68,7 @@ export default function OffboardingPage() {
             ))}
           </ul>
         )}
-      </div>
+      </Card>
     </motion.div>
   )
 }
@@ -116,59 +115,52 @@ function TaskRow({
     <li>
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-6 py-4 text-left hover:bg-gray-50/60"
+        className="flex w-full items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-surface-muted"
       >
-        {open ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
-        <UserX className="h-4 w-4 text-red-500" />
+        {open ? <ChevronDown className="h-4 w-4 text-faint" /> : <ChevronRight className="h-4 w-4 text-faint" />}
+        <UserX className="h-4 w-4 text-danger" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-gray-900">{task.username || task.user_id}</div>
-          <div className="text-xs text-gray-400">
+          <div className="truncate text-sm font-medium text-ink">{task.username || task.user_id}</div>
+          <div className="text-xs text-faint">
             {formatDate(task.created_at)} · {t('offboarding.sessionsKilled', { n: task.sessions_killed })}
           </div>
         </div>
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            resolved ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-          }`}
-        >
+        <StatusTag tone={resolved ? 'success' : 'warning'}>
           {resolved
             ? t('offboarding.statusResolved')
             : t('offboarding.progress', { done: task.done_count, total: task.item_count })}
-        </span>
+        </StatusTag>
       </button>
 
       {open && (
-        <div className="border-t border-gray-50 bg-gray-50/40 px-6 py-3">
+        <div className="border-t border-border bg-surface-muted/40 px-6 py-3">
           {loadingItems ? (
-            <div className="py-3 text-center text-xs text-gray-400">{t('common.loading')}</div>
+            <div className="py-3 text-center text-xs text-faint">{t('common.loading')}</div>
           ) : !items || items.length === 0 ? (
-            <div className="py-3 text-center text-xs text-gray-400">{t('offboarding.noItems')}</div>
+            <div className="py-3 text-center text-xs text-faint">{t('offboarding.noItems')}</div>
           ) : (
             <ul className="space-y-1">
               {items.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center gap-3 rounded-lg bg-white px-3 py-2 ring-1 ring-gray-100"
+                  className="flex items-center gap-3 rounded-lg bg-surface px-3 py-2 ring-1 ring-border"
                 >
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                  <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-muted">
                     {item.tier}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-gray-800">{item.app_name || item.app_code}</div>
-                    <div className="truncate font-mono text-[11px] text-gray-400">{item.app_code}</div>
+                    <div className="truncate text-sm text-ink">{item.app_name || item.app_code}</div>
+                    <div className="truncate font-mono text-[11px] text-faint">{item.app_code}</div>
                   </div>
                   {item.status === 1 ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                       <Check className="h-3.5 w-3.5" />
                       {t('offboarding.done')}
                     </span>
                   ) : (
-                    <button
-                      onClick={() => markDone(item)}
-                      className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-emerald-400 hover:text-emerald-700"
-                    >
+                    <Button size="sm" variant="secondary" onClick={() => markDone(item)}>
                       {t('offboarding.markDone')}
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}
