@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Plus, RotateCcw, Trash2, Loader2, Pencil, X } from 'lucide-react'
 import { userApi, formatDate, statusLabel, statusColor, cn, useTranslation } from '@mxid/shared'
-import { pageMotion, Button, Card, DataTable, Pagination, SearchInput, Select, FilterBar } from '@mxid/shared/ui'
+import { pageMotion, Button, Card, DataTable, Pagination, SearchInput, Select, FilterBar, ConfirmDialog } from '@mxid/shared/ui'
 import type { Column } from '@mxid/shared/ui'
 import type { User, PaginatedData, UpdateUserRequest } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -34,6 +34,8 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState({ display_name: '', email: '', phone: '', status: 1 })
   const [editLoading, setEditLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [delUser, setDelUser] = useState<User | null>(null)
+  const [deletingUser, setDeletingUser] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -72,14 +74,18 @@ export default function UsersPage() {
     }
   }
 
-  const handleDelete = async (user: User) => {
-    if (!confirm(t('users.list.confirmDelete', { name: user.username }))) return
+  const confirmDeleteUser = async () => {
+    if (!delUser) return
+    setDeletingUser(true)
     try {
-      await userApi.delete(user.id)
+      await userApi.delete(delUser.id)
       toast.success(t('common.success'))
+      setDelUser(null)
       loadData()
     } catch (e) {
       toast.error(t('common.failed'), extractMessage(e))
+    } finally {
+      setDeletingUser(false)
     }
   }
 
@@ -240,7 +246,7 @@ export default function UsersPage() {
             <RotateCcw className="h-3.5 w-3.5" />
           </button>
           <button
-            onClick={() => handleDelete(u)}
+            onClick={() => setDelUser(u)}
             className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
             title={t('common.delete')}
           >
@@ -511,6 +517,15 @@ export default function UsersPage() {
           </motion.div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!delUser}
+        title={t('users.list.confirmDelete', { name: delUser?.username ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deletingUser}
+        onConfirm={confirmDeleteUser}
+        onCancel={() => setDelUser(null)}
+      />
     </motion.div>
   )
 }
