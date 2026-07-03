@@ -65,6 +65,7 @@ func (h *Handler) userID(c *gin.Context) int64 {
 //
 //	GET    /access-eligibilities            — access.eligibility.manage
 //	POST   /access-eligibilities            — access.eligibility.manage
+//	PUT    /access-eligibilities/:id        — access.eligibility.manage
 //	DELETE /access-eligibilities/:id        — access.eligibility.manage
 //	GET    /access-requests                 — access.request.approve
 //	POST   /access-requests/:id/approve     — access.request.approve
@@ -78,6 +79,7 @@ func (h *Handler) RegisterConsole(rg *gin.RouterGroup) {
 	{
 		el.GET("", h.listEligibility)
 		el.POST("", h.createEligibility)
+		el.PUT("/:id", h.updateEligibility)
 		el.DELETE("/:id", h.deleteEligibility)
 	}
 
@@ -126,6 +128,8 @@ func (h *Handler) RegisterPortal(rg *gin.RouterGroup) {
 //	40007 — revoke: service error
 //	40008 — createRequest (portal): bad request body
 //	40009 — createRequest (portal): service/validation error
+//	40010 — updateEligibility: bad request body
+//	40011 — updateEligibility: service/validation error
 //	40101 — createRequest (portal): no authenticated user in context
 
 // ─── console handlers ─────────────────────────────────────────────────────────
@@ -143,6 +147,21 @@ func (h *Handler) createEligibility(c *gin.Context) {
 		return
 	}
 	response.Created(c, e)
+}
+
+func (h *Handler) updateEligibility(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	var body CreateEligibilityRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, 40010, err.Error())
+		return
+	}
+	e, err := h.svc.UpdateEligibility(c.Request.Context(), h.tenantID(c), id, body)
+	if err != nil {
+		response.BadRequest(c, 40011, err.Error())
+		return
+	}
+	response.OK(c, e)
 }
 
 func (h *Handler) listEligibility(c *gin.Context) {

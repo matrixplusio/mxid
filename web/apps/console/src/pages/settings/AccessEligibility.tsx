@@ -58,6 +58,9 @@ export default function AccessEligibilityPage() {
   const [rows, setRows] = useState<Eligibility[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<CreateEligibilityBody>(DEFAULT_FORM)
+  // Non-null while editing an existing row — the same form section below is
+  // reused for both create and edit; submit() branches on this id.
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   // Option lists for the dropdown pickers below. Each is fetched lazily,
   // only once the form actually needs it, and cached for the session.
@@ -194,7 +197,34 @@ export default function AccessEligibilityPage() {
         : [...f.allowed_durations, d],
     }))
 
-  const create = async () => {
+  // startEdit pre-fills the (shared) form from an existing row and drives
+  // the cascading pickers (target_kind -> role/app, subject types -> subject
+  // lists) exactly like a fresh selection would, since they all key off
+  // `form` state via the useEffect option-loaders above.
+  const startEdit = (row: Eligibility) => {
+    setEditingId(row.id)
+    setForm({
+      target_kind: row.target_kind,
+      role_id: row.role_id,
+      app_id: row.target_kind === 'app' ? row.app_id : undefined,
+      requester_subject_type: row.requester_subject_type,
+      requester_subject_id: row.requester_subject_id,
+      allowed_durations: row.allowed_durations,
+      max_duration_seconds: row.max_duration_seconds,
+      approver_subject_type: row.approver_subject_type,
+      approver_subject_id: row.approver_subject_id,
+      require_justification: row.require_justification,
+      require_stepup: row.require_stepup,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setForm(DEFAULT_FORM)
+  }
+
+  const submit = async () => {
     if (form.target_kind === 'app' && !form.app_id) {
       toast.error(t('eligibility.createFailed'), t('eligibility.appIdRequired'))
       return
@@ -209,12 +239,21 @@ export default function AccessEligibilityPage() {
         // omit app_id when target is console
         app_id: form.target_kind === 'app' ? form.app_id : undefined,
       }
-      await accessApprovalApi.createEligibility(body)
-      toast.success(t('eligibility.created'))
+      if (editingId) {
+        await accessApprovalApi.updateEligibility(editingId, body)
+        toast.success(t('eligibility.updated'))
+      } else {
+        await accessApprovalApi.createEligibility(body)
+        toast.success(t('eligibility.created'))
+      }
+      setEditingId(null)
       setForm(DEFAULT_FORM)
       void load()
     } catch (e) {
-      toast.error(t('eligibility.createFailed'), extractMessage(e))
+      toast.error(
+        editingId ? t('eligibility.updateFailed') : t('eligibility.createFailed'),
+        extractMessage(e),
+      )
     }
   }
 
@@ -239,11 +278,15 @@ export default function AccessEligibilityPage() {
 
   return (
     <motion.div {...pageMotion} className="space-y-6">
-      {/* Create form */}
+      {/* Create / edit form — reused for both via editingId */}
       <section className="rounded-xl border border-gray-200 bg-white p-6">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">{t('eligibility.createTitle')}</h2>
-          <p className="mt-0.5 text-sm text-gray-500">{t('eligibility.createDesc')}</p>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {editingId ? t('eligibility.editTitle') : t('eligibility.createTitle')}
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            {editingId ? t('eligibility.editDesc') : t('eligibility.createDesc')}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -513,8 +556,15 @@ export default function AccessEligibilityPage() {
           </div>
         </div>
 
-        <div className="mt-5 flex justify-end">
-          <Button onClick={create}>{t('eligibility.create')}</Button>
+        <div className="mt-5 flex justify-end gap-2">
+          {editingId && (
+            <Button variant="secondary" onClick={cancelEdit}>
+              {t('eligibility.cancelEdit')}
+            </Button>
+          )}
+          <Button onClick={submit}>
+            {editingId ? t('eligibility.update') : t('eligibility.create')}
+          </Button>
         </div>
       </section>
 
@@ -555,16 +605,24 @@ export default function AccessEligibilityPage() {
                       {row.target_kind === 'console'
                         ? t('access.targetConsole')
                         : t('access.targetApp')}
-                      {row.app_id && (
-                        <span className="ml-1 text-gray-400">({row.app_id})</span>
+                      {row.target_kind === 'app' && row.app_id && (
+                        <span className="ml-1 text-gray-400">
+                          ({row.app_name || row.app_id})
+                        </span>
                       )}
                     </td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{row.role_id}</td>
                     <td className="px-6 py-3 text-sm text-gray-600">
-                      {row.requester_subject_type}:{row.requester_subject_id || '—'}
+                      {row.target_name || row.role_id}
                     </td>
                     <td className="px-6 py-3 text-sm text-gray-600">
-                      {row.approver_subject_type}:{row.approver_subject_id || '—'}
+                      {row.requester_subject_type === 'any'
+                        ? t('eligibility.everyone')
+                        : row.requester_subject_name || row.requester_subject_id || '—'}
+                    </td>
+                    <td className="px-6 py-3 text-sm text-gray-600">
+                      {row.approver_subject_type === 'auto'
+                        ? t('eligibility.autoApprover')
+                        : row.approver_subject_name || row.approver_subject_id || '—'}
                     </td>
                     <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-600">
                       {row.allowed_durations
@@ -572,13 +630,22 @@ export default function AccessEligibilityPage() {
                         .join(' / ')}
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => void remove(row.id)}
-                      >
-                        {t('common.delete')}
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => startEdit(row)}
+                        >
+                          {t('common.edit')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => void remove(row.id)}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

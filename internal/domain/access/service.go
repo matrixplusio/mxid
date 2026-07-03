@@ -102,25 +102,40 @@ func NewServiceWithLogger(repo Repository, idGen *snowflake.Generator, bus Event
 
 // ─── Eligibility ──────────────────────────────────────────────────────────────
 
-// CreateEligibility validates and persists a new access eligibility rule.
-func (s *Service) CreateEligibility(ctx context.Context, tenantID int64, createdBy *int64, req CreateEligibilityRequest) (*Eligibility, error) {
+// maxEligibilityTTL is the 7-day hard ceiling (seconds) on any eligibility's
+// max_duration_seconds, enforced by both CreateEligibility and
+// UpdateEligibility.
+const maxEligibilityTTL = 604800
+
+// validateEligibilityRequest applies the same validation to both create and
+// update: target_kind/app_id consistency, a non-empty allowed_durations set,
+// max_duration_seconds within (0, 7d], and every allowed duration within
+// (0, max_duration_seconds].
+func validateEligibilityRequest(req CreateEligibilityRequest) error {
 	if req.TargetKind != TargetConsole && req.TargetKind != TargetApp {
-		return nil, fmt.Errorf("access: invalid target_kind %q", req.TargetKind)
+		return fmt.Errorf("access: invalid target_kind %q", req.TargetKind)
 	}
 	if req.TargetKind == TargetApp && req.AppID == nil {
-		return nil, fmt.Errorf("access: app_id required for app target")
+		return fmt.Errorf("access: app_id required for app target")
 	}
 	if len(req.AllowedDurations) == 0 {
-		return nil, fmt.Errorf("access: allowed_durations must not be empty")
+		return fmt.Errorf("access: allowed_durations must not be empty")
 	}
-	const maxTTL = 604800 // 7-day hard ceiling (seconds)
-	if req.MaxDurationSeconds <= 0 || req.MaxDurationSeconds > maxTTL {
-		return nil, fmt.Errorf("access: max_duration_seconds must be in (0, %d]", maxTTL)
+	if req.MaxDurationSeconds <= 0 || req.MaxDurationSeconds > maxEligibilityTTL {
+		return fmt.Errorf("access: max_duration_seconds must be in (0, %d]", maxEligibilityTTL)
 	}
 	for _, d := range req.AllowedDurations {
 		if d <= 0 || d > req.MaxDurationSeconds {
-			return nil, fmt.Errorf("access: each allowed duration must be in (0, max_duration_seconds=%d]", req.MaxDurationSeconds)
+			return fmt.Errorf("access: each allowed duration must be in (0, max_duration_seconds=%d]", req.MaxDurationSeconds)
 		}
+	}
+	return nil
+}
+
+// CreateEligibility validates and persists a new access eligibility rule.
+func (s *Service) CreateEligibility(ctx context.Context, tenantID int64, createdBy *int64, req CreateEligibilityRequest) (*Eligibility, error) {
+	if err := validateEligibilityRequest(req); err != nil {
+		return nil, err
 	}
 
 	e := &Eligibility{
@@ -146,6 +161,43 @@ func (s *Service) CreateEligibility(ctx context.Context, tenantID int64, created
 		return nil, err
 	}
 	return e, nil
+}
+
+// UpdateEligibility re-validates req exactly like CreateEligibility, then
+// overwrites the editable fields of the existing eligibility identified by
+// (id, tenantID). TenantID, CreatedBy, CreatedAt, and Status are preserved
+// from the existing row — this endpoint edits the rule's shape, not its
+// enable/disable state or ownership. RequireJustification/RequireStepUp fall
+// back to the CURRENT value (not "true") when omitted from the request, so a
+// partial edit payload can't silently flip either flag back on.
+func (s *Service) UpdateEligibility(ctx context.Context, tenantID, id int64, req CreateEligibilityRequest) (*Eligibility, error) {
+	if err := validateEligibilityRequest(req); err != nil {
+		return nil, err
+	}
+
+	existing, err := s.repo.GetEligibility(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	existing.TargetKind = req.TargetKind
+	existing.RoleID = req.RoleID
+	existing.ScopeType = req.ScopeType
+	existing.ScopeID = req.ScopeID
+	existing.AppID = req.AppID
+	existing.RequesterSubjectType = req.RequesterSubjectType
+	existing.RequesterSubjectID = req.RequesterSubjectID
+	existing.AllowedDurations = IntSlice(req.AllowedDurations)
+	existing.MaxDurationSeconds = req.MaxDurationSeconds
+	existing.ApproverSubjectType = orDefault(req.ApproverSubjectType, ApproverRole)
+	existing.ApproverSubjectID = req.ApproverSubjectID
+	existing.RequireJustification = boolOrDefault(req.RequireJustification, existing.RequireJustification)
+	existing.RequireStepUp = boolOrDefault(req.RequireStepUp, existing.RequireStepUp)
+
+	if err := s.repo.UpdateEligibility(ctx, existing); err != nil {
+		return nil, err
+	}
+	return existing, nil
 }
 
 // ListEligibilityForRequester returns enabled eligibilities that the given

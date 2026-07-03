@@ -60,6 +60,18 @@ func (r *fakeRepo) ListEligibility(_ context.Context, tenantID int64) ([]*Eligib
 	return out, nil
 }
 
+func (r *fakeRepo) UpdateEligibility(_ context.Context, e *Eligibility) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	existing, ok := r.eligibilities[e.ID]
+	if !ok || existing.TenantID != e.TenantID {
+		return errors.New("eligibility not found")
+	}
+	cp := *e
+	r.eligibilities[e.ID] = &cp
+	return nil
+}
+
 func (r *fakeRepo) DeleteEligibility(_ context.Context, id, _ int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -559,6 +571,118 @@ func TestExpire_AppGrant_TerminatesDownstream(t *testing.T) {
 	}
 	if !fakes.terminator.calledFor(testTenant, req.RequesterID, 8888) {
 		t.Fatal("expected downstream terminate for the app grant on expire")
+	}
+}
+
+// ── UpdateEligibility ──────────────────────────────────────────────────────────
+
+// TestUpdateEligibility_ValidatesLikeCreate proves UpdateEligibility rejects
+// the same invalid shapes CreateEligibility does: bad target_kind, missing
+// app_id for an app target, empty allowed_durations, max_duration_seconds
+// outside (0, 7d], and an allowed duration exceeding max_duration_seconds.
+func TestUpdateEligibility_ValidatesLikeCreate(t *testing.T) {
+	s, fakes := newServiceWithFakes(t)
+
+	cases := map[string]CreateEligibilityRequest{
+		"bad target_kind": {
+			TargetKind: "bogus", RoleID: 1, RequesterSubjectType: "any",
+			AllowedDurations: []int{3600}, MaxDurationSeconds: 3600,
+		},
+		"app target missing app_id": {
+			TargetKind: TargetApp, RoleID: 1, RequesterSubjectType: "any",
+			AllowedDurations: []int{3600}, MaxDurationSeconds: 3600,
+		},
+		"empty allowed_durations": {
+			TargetKind: TargetConsole, RoleID: 1, RequesterSubjectType: "any",
+			AllowedDurations: nil, MaxDurationSeconds: 3600,
+		},
+		"max_duration_seconds over 7d ceiling": {
+			TargetKind: TargetConsole, RoleID: 1, RequesterSubjectType: "any",
+			AllowedDurations: []int{3600}, MaxDurationSeconds: maxEligibilityTTL + 1,
+		},
+		"max_duration_seconds zero": {
+			TargetKind: TargetConsole, RoleID: 1, RequesterSubjectType: "any",
+			AllowedDurations: []int{3600}, MaxDurationSeconds: 0,
+		},
+		"allowed duration exceeds max": {
+			TargetKind: TargetConsole, RoleID: 1, RequesterSubjectType: "any",
+			AllowedDurations: []int{7200}, MaxDurationSeconds: 3600,
+		},
+	}
+
+	for name, req := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := s.UpdateEligibility(testCtx, testTenant, testEligID, req); err == nil {
+				t.Fatalf("%s: expected validation error, got nil", name)
+			}
+			// The seeded eligibility must be untouched by a rejected update.
+			got, gerr := fakes.repo.GetEligibility(testCtx, testEligID, testTenant)
+			if gerr != nil {
+				t.Fatalf("GetEligibility: %v", gerr)
+			}
+			if got.RoleID != 42 || got.MaxDurationSeconds != 3600 {
+				t.Fatalf("%s: rejected update must not mutate the stored row, got %+v", name, got)
+			}
+		})
+	}
+}
+
+// TestUpdateEligibility_PersistsChangesAndPreservesStatus proves a valid
+// update overwrites the editable fields while leaving TenantID, Status, and
+// CreatedBy exactly as they were (edit changes shape, not lifecycle state or
+// ownership).
+func TestUpdateEligibility_PersistsChangesAndPreservesStatus(t *testing.T) {
+	s, fakes := newServiceWithFakes(t)
+
+	before, err := fakes.repo.GetEligibility(testCtx, testEligID, testTenant)
+	if err != nil {
+		t.Fatalf("GetEligibility (before): %v", err)
+	}
+
+	updated, err := s.UpdateEligibility(testCtx, testTenant, testEligID, CreateEligibilityRequest{
+		TargetKind:           TargetConsole,
+		RoleID:               99,
+		RequesterSubjectType: "group",
+		RequesterSubjectID:   555,
+		AllowedDurations:     []int{1800, 3600},
+		MaxDurationSeconds:   3600,
+		ApproverSubjectType:  ApproverAuto,
+	})
+	if err != nil {
+		t.Fatalf("UpdateEligibility: %v", err)
+	}
+	if updated.RoleID != 99 || updated.RequesterSubjectType != "group" || updated.RequesterSubjectID != 555 {
+		t.Fatalf("update did not apply new fields: %+v", updated)
+	}
+	if updated.ApproverSubjectType != ApproverAuto {
+		t.Fatalf("approver_subject_type not updated: %+v", updated)
+	}
+	if updated.TenantID != before.TenantID || updated.Status != before.Status {
+		t.Fatalf("update must preserve tenant_id/status, got tenant_id=%d status=%d", updated.TenantID, updated.Status)
+	}
+
+	got, err := fakes.repo.GetEligibility(testCtx, testEligID, testTenant)
+	if err != nil {
+		t.Fatalf("GetEligibility (after): %v", err)
+	}
+	if got.RoleID != 99 {
+		t.Fatalf("repo row not persisted: role_id=%d", got.RoleID)
+	}
+}
+
+// TestUpdateEligibility_UnknownID_Fails proves an id/tenant mismatch (or a
+// nonexistent id) surfaces as an error rather than silently no-op'ing.
+func TestUpdateEligibility_UnknownID_Fails(t *testing.T) {
+	s, _ := newServiceWithFakes(t)
+	_, err := s.UpdateEligibility(testCtx, testTenant, 999999999, CreateEligibilityRequest{
+		TargetKind:           TargetConsole,
+		RoleID:               1,
+		RequesterSubjectType: "any",
+		AllowedDurations:     []int{3600},
+		MaxDurationSeconds:   3600,
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown eligibility id, got nil")
 	}
 }
 

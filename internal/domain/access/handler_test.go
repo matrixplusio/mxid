@@ -71,6 +71,14 @@ func doPOST(r *gin.Engine, path, body string) *httptest.ResponseRecorder {
 	return w
 }
 
+func doPUT(r *gin.Engine, path, body string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, path, bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	return w
+}
+
 func doGET(r *gin.Engine, path string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, path, nil)
@@ -117,6 +125,7 @@ func consoleEngine(h *Handler) *gin.Engine {
 	{
 		el.GET("", h.listEligibility)
 		el.POST("", h.createEligibility)
+		el.PUT("/:id", h.updateEligibility)
 		el.DELETE("/:id", h.deleteEligibility)
 	}
 	rq := grp.Group("/access-requests")

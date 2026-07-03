@@ -15,6 +15,7 @@ type Repository interface {
 	CreateEligibility(ctx context.Context, e *Eligibility) error
 	GetEligibility(ctx context.Context, id, tenantID int64) (*Eligibility, error)
 	ListEligibility(ctx context.Context, tenantID int64) ([]*Eligibility, error)
+	UpdateEligibility(ctx context.Context, e *Eligibility) error
 	DeleteEligibility(ctx context.Context, id, tenantID int64) error
 
 	// Request CRUD.
@@ -75,7 +76,189 @@ func (r *repo) ListEligibility(ctx context.Context, tenantID int64) ([]*Eligibil
 		Where("tenant_id = ?", tenantID).
 		Order("created_at DESC").
 		Find(&rows).Error
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	// Console (and portal) eligibility lists show target/requester/approver by
+	// name, not a raw snowflake id. Best-effort: a lookup failure must not
+	// fail the list — the name is cosmetic display only, the id columns
+	// remain authoritative.
+	r.populateEligibilityNames(ctx, rows)
+	return rows, nil
+}
+
+// populateEligibilityNames resolves the four cosmetic *Name fields on each
+// Eligibility row. Batches one query per distinct backing table rather than
+// N+1 per row — dedup ids first, then a single `IN (...)` per table.
+//
+// Table notes (verified against migrations 000003/000004/000006/000026):
+//   - mxid_role, mxid_app, mxid_user_group, mxid_organization all soft-delete
+//     via deleted_at — filtered out so a deleted row's stale name never leaks.
+//   - mxid_app_role has no deleted_at column (hard-delete only) — no filter.
+//   - mxid_user resolution mirrors populateRequesterNames's
+//     display_name-with-username-fallback rule (batchUserNames).
+func (r *repo) populateEligibilityNames(ctx context.Context, rows []*Eligibility) {
+	if len(rows) == 0 {
+		return
+	}
+
+	var roleIDs, appRoleIDs, appIDs, groupIDs, orgIDs, userIDs []int64
+	seenRole := map[int64]bool{}
+	seenAppRole := map[int64]bool{}
+	seenApp := map[int64]bool{}
+	seenGroup := map[int64]bool{}
+	seenOrg := map[int64]bool{}
+	seenUser := map[int64]bool{}
+
+	add := func(dst *[]int64, seen map[int64]bool, id int64) {
+		if id == 0 || seen[id] {
+			return
+		}
+		seen[id] = true
+		*dst = append(*dst, id)
+	}
+
+	for _, e := range rows {
+		switch e.TargetKind {
+		case TargetConsole:
+			add(&roleIDs, seenRole, e.RoleID)
+		case TargetApp:
+			add(&appRoleIDs, seenAppRole, e.RoleID)
+			if e.AppID != nil {
+				add(&appIDs, seenApp, *e.AppID)
+			}
+		}
+		switch e.RequesterSubjectType {
+		case "user":
+			add(&userIDs, seenUser, e.RequesterSubjectID)
+		case "group":
+			add(&groupIDs, seenGroup, e.RequesterSubjectID)
+		case "org":
+			add(&orgIDs, seenOrg, e.RequesterSubjectID)
+		}
+		switch e.ApproverSubjectType {
+		case ApproverRole:
+			add(&roleIDs, seenRole, e.ApproverSubjectID)
+		case ApproverGroup:
+			add(&groupIDs, seenGroup, e.ApproverSubjectID)
+		case ApproverUser:
+			add(&userIDs, seenUser, e.ApproverSubjectID)
+		}
+	}
+
+	roleNames := r.batchNames(ctx, "mxid_role", roleIDs, true)
+	appRoleNames := r.batchNames(ctx, "mxid_app_role", appRoleIDs, false)
+	appNames := r.batchNames(ctx, "mxid_app", appIDs, true)
+	groupNames := r.batchNames(ctx, "mxid_user_group", groupIDs, true)
+	orgNames := r.batchNames(ctx, "mxid_organization", orgIDs, true)
+	userNames := r.batchUserNames(ctx, userIDs)
+
+	for _, e := range rows {
+		switch e.TargetKind {
+		case TargetConsole:
+			e.TargetName = roleNames[e.RoleID]
+		case TargetApp:
+			e.TargetName = appRoleNames[e.RoleID]
+			if e.AppID != nil {
+				e.AppName = appNames[*e.AppID]
+			}
+		}
+		switch e.RequesterSubjectType {
+		case "user":
+			e.RequesterSubjectName = userNames[e.RequesterSubjectID]
+		case "group":
+			e.RequesterSubjectName = groupNames[e.RequesterSubjectID]
+		case "org":
+			e.RequesterSubjectName = orgNames[e.RequesterSubjectID]
+			// case "any": leave empty — frontend renders "Everyone".
+		}
+		switch e.ApproverSubjectType {
+		case ApproverRole:
+			e.ApproverSubjectName = roleNames[e.ApproverSubjectID]
+		case ApproverGroup:
+			e.ApproverSubjectName = groupNames[e.ApproverSubjectID]
+		case ApproverUser:
+			e.ApproverSubjectName = userNames[e.ApproverSubjectID]
+			// case "auto": leave empty — frontend renders "Auto".
+		}
+	}
+}
+
+// batchNames looks up `name` for the given ids from table in one query,
+// returning an id->name map. filterDeleted adds `AND deleted_at IS NULL` for
+// tables that soft-delete (mxid_app_role does not have this column).
+// A query error or empty ids returns a nil map (callers get "" on lookup).
+func (r *repo) batchNames(ctx context.Context, table string, ids []int64, filterDeleted bool) map[int64]string {
+	if len(ids) == 0 {
+		return nil
+	}
+	var out []struct {
+		ID   int64
+		Name string
+	}
+	q := r.db.WithContext(ctx).Table(table).Select("id, name").Where("id IN ?", ids)
+	if filterDeleted {
+		q = q.Where("deleted_at IS NULL")
+	}
+	if err := q.Find(&out).Error; err != nil {
+		return nil
+	}
+	m := make(map[int64]string, len(out))
+	for _, row := range out {
+		m[row.ID] = row.Name
+	}
+	return m
+}
+
+// batchUserNames resolves display_name (falling back to username) for the
+// given mxid_user ids in one query. Shared by populateEligibilityNames and
+// populateRequesterNames so the fallback rule stays in one place.
+func (r *repo) batchUserNames(ctx context.Context, ids []int64) map[int64]string {
+	if len(ids) == 0 {
+		return nil
+	}
+	var users []struct {
+		ID          int64
+		DisplayName *string
+		Username    string
+	}
+	if err := r.db.WithContext(ctx).
+		Table("mxid_user").
+		Select("id, display_name, username").
+		Where("id IN ?", ids).
+		Find(&users).Error; err != nil {
+		return nil
+	}
+	m := make(map[int64]string, len(users))
+	for _, u := range users {
+		if u.DisplayName != nil && *u.DisplayName != "" {
+			m[u.ID] = *u.DisplayName
+		} else {
+			m[u.ID] = u.Username
+		}
+	}
+	return m
+}
+
+// UpdateEligibility overwrites the editable columns of an existing
+// eligibility row, scoped by (id, tenant_id) so a caller can never update
+// another tenant's row. Uses an explicit Select so GORM includes zero-valued
+// fields (e.g. require_justification:false) in the UPDATE — the same
+// footgun documented on Eligibility.RequireJustification/RequireStepUp
+// applies to Updates() with a bare struct, not just Create().
+func (r *repo) UpdateEligibility(ctx context.Context, e *Eligibility) error {
+	e.UpdatedAt = time.Now()
+	return r.db.WithContext(ctx).
+		Model(&Eligibility{}).
+		Where("id = ? AND tenant_id = ?", e.ID, e.TenantID).
+		Select(
+			"target_kind", "role_id", "scope_type", "scope_id", "app_id",
+			"requester_subject_type", "requester_subject_id",
+			"allowed_durations", "max_duration_seconds",
+			"approver_subject_type", "approver_subject_id",
+			"require_justification", "require_stepup", "updated_at",
+		).
+		Updates(e).Error
 }
 
 func (r *repo) DeleteEligibility(ctx context.Context, id, tenantID int64) error {
@@ -142,27 +325,7 @@ func (r *repo) populateRequesterNames(ctx context.Context, rows []*Request) {
 		}
 	}
 
-	var users []struct {
-		ID          int64
-		DisplayName *string
-		Username    string
-	}
-	if err := r.db.WithContext(ctx).
-		Table("mxid_user").
-		Select("id, display_name, username").
-		Where("id IN ?", ids).
-		Find(&users).Error; err != nil {
-		return
-	}
-
-	names := make(map[int64]string, len(users))
-	for _, u := range users {
-		if u.DisplayName != nil && *u.DisplayName != "" {
-			names[u.ID] = *u.DisplayName
-		} else {
-			names[u.ID] = u.Username
-		}
-	}
+	names := r.batchUserNames(ctx, ids)
 	for _, row := range rows {
 		row.RequesterName = names[row.RequesterID]
 	}

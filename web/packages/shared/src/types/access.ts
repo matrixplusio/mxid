@@ -16,6 +16,13 @@ export interface Eligibility {
   require_stepup: boolean
   status: number
   created_at: string
+  // Cosmetic display-only names resolved server-side (ListEligibility);
+  // empty when not applicable (e.g. requester_subject_type "any") or when
+  // the referenced row could not be resolved — fall back to the raw id.
+  target_name?: string
+  app_name?: string
+  requester_subject_name?: string
+  approver_subject_name?: string
 }
 
 export interface AccessRequest {

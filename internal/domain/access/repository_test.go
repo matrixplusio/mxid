@@ -505,6 +505,219 @@ func seedAppRole(t *testing.T, db *gorm.DB, tenantID, appID int64) int64 {
 	return id
 }
 
+// seedUserGroup inserts a minimal mxid_user_group row and returns its id.
+func seedUserGroup(t *testing.T, db *gorm.DB, tenantID int64, name string) int64 {
+	t.Helper()
+	id := accessNextID()
+	code := fmt.Sprintf("jit-test-group-%d", id)
+	if err := db.Exec(`
+		INSERT INTO mxid_user_group (id, tenant_id, name, code, created_at, updated_at)
+		VALUES (?, ?, ?, ?, NOW(), NOW())`,
+		id, tenantID, name, code).Error; err != nil {
+		t.Fatalf("seed user group: %v", err)
+	}
+	return id
+}
+
+// seedOrg inserts a minimal mxid_organization row and returns its id.
+func seedOrg(t *testing.T, db *gorm.DB, tenantID int64, name string) int64 {
+	t.Helper()
+	id := accessNextID()
+	code := fmt.Sprintf("jit-test-org-%d", id)
+	if err := db.Exec(`
+		INSERT INTO mxid_organization (id, tenant_id, name, code, path, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?::ltree, NOW(), NOW())`,
+		id, tenantID, name, code, fmt.Sprintf("n%d", id)).Error; err != nil {
+		t.Fatalf("seed org: %v", err)
+	}
+	return id
+}
+
+// TestListEligibility_PopulatesNames_ConsoleTarget verifies target_name (the
+// mxid_role name) and requester/approver subject names are resolved for a
+// console-target eligibility with group requester + role approver.
+func TestListEligibility_PopulatesNames_ConsoleTarget(t *testing.T) {
+	repo, db, idGen, tenantID := setupAccessRepo(t)
+	roleID := seedConsoleRole(t, db, tenantID)
+	approverRoleID := seedConsoleRole(t, db, tenantID)
+	groupID := seedUserGroup(t, db, tenantID, "JIT Requesters")
+
+	// Rename the target role to something distinctive so the test can assert
+	// on more than "non-empty".
+	if err := db.Exec(`UPDATE mxid_role SET name = 'JIT Target Role' WHERE id = ?`, roleID).Error; err != nil {
+		t.Fatalf("rename role: %v", err)
+	}
+	if err := db.Exec(`UPDATE mxid_role SET name = 'JIT Approver Role' WHERE id = ?`, approverRoleID).Error; err != nil {
+		t.Fatalf("rename approver role: %v", err)
+	}
+
+	e := &Eligibility{
+		ID:                   idGen.Generate(),
+		TenantID:             tenantID,
+		TargetKind:           TargetConsole,
+		RoleID:               roleID,
+		RequesterSubjectType: "group",
+		RequesterSubjectID:   groupID,
+		AllowedDurations:     IntSlice{3600},
+		MaxDurationSeconds:   3600,
+		ApproverSubjectType:  ApproverRole,
+		ApproverSubjectID:    approverRoleID,
+		Status:               1,
+	}
+	if err := repo.CreateEligibility(context.Background(), e); err != nil {
+		t.Fatalf("CreateEligibility: %v", err)
+	}
+
+	rows, err := repo.ListEligibility(context.Background(), tenantID)
+	if err != nil {
+		t.Fatalf("ListEligibility: %v", err)
+	}
+	var found *Eligibility
+	for _, row := range rows {
+		if row.ID == e.ID {
+			found = row
+		}
+	}
+	if found == nil {
+		t.Fatal("created eligibility not found in ListEligibility")
+	}
+	if found.TargetName != "JIT Target Role" {
+		t.Fatalf("want target_name=%q, got %q", "JIT Target Role", found.TargetName)
+	}
+	if found.RequesterSubjectName != "JIT Requesters" {
+		t.Fatalf("want requester_subject_name=%q, got %q", "JIT Requesters", found.RequesterSubjectName)
+	}
+	if found.ApproverSubjectName != "JIT Approver Role" {
+		t.Fatalf("want approver_subject_name=%q, got %q", "JIT Approver Role", found.ApproverSubjectName)
+	}
+}
+
+// TestListEligibility_PopulatesNames_AppTarget verifies target_name (the
+// mxid_app_role name), app_name (mxid_app name), and an org requester name
+// (mxid_organization — NOT mxid_org, a table name that does not exist and
+// was a previously-fixed bug) are all resolved for an app-target eligibility.
+func TestListEligibility_PopulatesNames_AppTarget(t *testing.T) {
+	repo, db, idGen, tenantID := setupAccessRepo(t)
+	appID := seedApp(t, db, tenantID)
+	appRoleID := seedAppRole(t, db, tenantID, appID)
+	orgID := seedOrg(t, db, tenantID, "JIT Org")
+
+	if err := db.Exec(`UPDATE mxid_app SET name = 'JIT Target App' WHERE id = ?`, appID).Error; err != nil {
+		t.Fatalf("rename app: %v", err)
+	}
+	if err := db.Exec(`UPDATE mxid_app_role SET name = 'JIT App Role' WHERE id = ?`, appRoleID).Error; err != nil {
+		t.Fatalf("rename app role: %v", err)
+	}
+
+	e := &Eligibility{
+		ID:                   idGen.Generate(),
+		TenantID:             tenantID,
+		TargetKind:           TargetApp,
+		RoleID:               appRoleID,
+		AppID:                &appID,
+		RequesterSubjectType: "org",
+		RequesterSubjectID:   orgID,
+		AllowedDurations:     IntSlice{3600},
+		MaxDurationSeconds:   3600,
+		ApproverSubjectType:  ApproverAuto,
+		Status:               1,
+	}
+	if err := repo.CreateEligibility(context.Background(), e); err != nil {
+		t.Fatalf("CreateEligibility: %v", err)
+	}
+
+	rows, err := repo.ListEligibility(context.Background(), tenantID)
+	if err != nil {
+		t.Fatalf("ListEligibility: %v", err)
+	}
+	var found *Eligibility
+	for _, row := range rows {
+		if row.ID == e.ID {
+			found = row
+		}
+	}
+	if found == nil {
+		t.Fatal("created eligibility not found in ListEligibility")
+	}
+	if found.TargetName != "JIT App Role" {
+		t.Fatalf("want target_name=%q, got %q", "JIT App Role", found.TargetName)
+	}
+	if found.AppName != "JIT Target App" {
+		t.Fatalf("want app_name=%q, got %q", "JIT Target App", found.AppName)
+	}
+	if found.RequesterSubjectName != "JIT Org" {
+		t.Fatalf("want requester_subject_name=%q, got %q", "JIT Org", found.RequesterSubjectName)
+	}
+	if found.ApproverSubjectName != "" {
+		t.Fatalf("auto approver must have empty approver_subject_name, got %q", found.ApproverSubjectName)
+	}
+}
+
+// TestUpdateEligibility_PersistsAllEditableColumns is the repository-level
+// counterpart to the service tests: proves UpdateEligibility's explicit
+// Select actually reaches every editable column, including a zero-valued
+// bool (require_justification:false), through a real GORM UPDATE.
+func TestUpdateEligibility_PersistsAllEditableColumns(t *testing.T) {
+	repo, db, idGen, tenantID := setupAccessRepo(t)
+	roleID := seedConsoleRole(t, db, tenantID)
+	appID := seedApp(t, db, tenantID)
+	appRoleID := seedAppRole(t, db, tenantID, appID)
+
+	e := &Eligibility{
+		ID:                   idGen.Generate(),
+		TenantID:             tenantID,
+		TargetKind:           TargetConsole,
+		RoleID:               roleID,
+		RequesterSubjectType: "any",
+		AllowedDurations:     IntSlice{3600},
+		MaxDurationSeconds:   3600,
+		ApproverSubjectType:  ApproverAuto,
+		RequireJustification: true,
+		RequireStepUp:        true,
+		Status:               1,
+	}
+	if err := repo.CreateEligibility(context.Background(), e); err != nil {
+		t.Fatalf("CreateEligibility: %v", err)
+	}
+
+	e.TargetKind = TargetApp
+	e.RoleID = appRoleID
+	e.AppID = &appID
+	e.RequesterSubjectType = "user"
+	e.RequesterSubjectID = 4242
+	e.AllowedDurations = IntSlice{1800}
+	e.MaxDurationSeconds = 1800
+	e.ApproverSubjectType = ApproverUser
+	e.ApproverSubjectID = 9191
+	e.RequireJustification = false // zero value — must still persist as false
+	e.RequireStepUp = false
+
+	if err := repo.UpdateEligibility(context.Background(), e); err != nil {
+		t.Fatalf("UpdateEligibility: %v", err)
+	}
+
+	got, err := repo.GetEligibility(context.Background(), e.ID, tenantID)
+	if err != nil {
+		t.Fatalf("GetEligibility: %v", err)
+	}
+	if got.TargetKind != TargetApp || got.RoleID != appRoleID || got.AppID == nil || *got.AppID != appID {
+		t.Fatalf("target fields not persisted: %+v", got)
+	}
+	if got.RequesterSubjectType != "user" || got.RequesterSubjectID != 4242 {
+		t.Fatalf("requester fields not persisted: %+v", got)
+	}
+	if len(got.AllowedDurations) != 1 || got.AllowedDurations[0] != 1800 || got.MaxDurationSeconds != 1800 {
+		t.Fatalf("duration fields not persisted: %+v", got)
+	}
+	if got.ApproverSubjectType != ApproverUser || got.ApproverSubjectID != 9191 {
+		t.Fatalf("approver fields not persisted: %+v", got)
+	}
+	if got.RequireJustification != false || got.RequireStepUp != false {
+		t.Fatalf("explicit false booleans must persist as false, got justification=%v stepup=%v",
+			got.RequireJustification, got.RequireStepUp)
+	}
+}
+
 // TestApproveAndGrant_InsertsAppBinding verifies that ApproveAndGrant atomically
 // marks the request approved and inserts a time-bound row in mxid_app_role_binding
 // when TargetKind == TargetApp — the primary SSO app-role elevation path.

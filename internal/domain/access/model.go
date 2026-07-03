@@ -73,6 +73,28 @@ type Eligibility struct {
 	CreatedAt            time.Time `gorm:"column:created_at;not null" json:"created_at"`
 	CreatedBy            *int64    `gorm:"column:created_by" json:"created_by,omitempty,string"`
 	UpdatedAt            time.Time `gorm:"column:updated_at;not null" json:"updated_at"`
+
+	// The four *Name fields below are cosmetic display-only lookups populated
+	// by ListEligibility (console + portal list paths) so the admin UI shows
+	// human names instead of raw snowflake ids. All are gorm:"-" — fully
+	// ignored by GORM, never persisted, never read back on Create/Update.
+	// A lookup failure (deleted row, mismatched tenant, ...) leaves the field
+	// empty rather than failing the list; the raw id column remains
+	// authoritative in every other code path.
+	//
+	// TargetName is the mxid_role name (target_kind=console) or the
+	// mxid_app_role name (target_kind=app) for RoleID.
+	TargetName string `gorm:"-" json:"target_name,omitempty"`
+	// AppName is the mxid_app name for AppID (target_kind=app only).
+	AppName string `gorm:"-" json:"app_name,omitempty"`
+	// RequesterSubjectName resolves RequesterSubjectID by RequesterSubjectType
+	// (user -> mxid_user, group -> mxid_user_group, org -> mxid_organization).
+	// Left empty for RequesterSubjectType == "any" (frontend renders "Everyone").
+	RequesterSubjectName string `gorm:"-" json:"requester_subject_name,omitempty"`
+	// ApproverSubjectName resolves ApproverSubjectID by ApproverSubjectType
+	// (role/group -> mxid_role/mxid_user_group, user -> mxid_user).
+	// Left empty for ApproverSubjectType == "auto" (frontend renders "Auto").
+	ApproverSubjectName string `gorm:"-" json:"approver_subject_name,omitempty"`
 }
 
 func (Eligibility) TableName() string { return "mxid_access_eligibility" }
