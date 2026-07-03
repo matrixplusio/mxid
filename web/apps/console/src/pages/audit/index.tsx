@@ -70,16 +70,19 @@ function EventPill({ eventType, label }: { eventType: string; label: string }) {
   )
 }
 
-function DetailModal({ log, onClose }: { log: AuditLog; onClose: () => void }) {
-  const { t } = useTranslation()
-  const eventTypes = useEventTypes()
-  const getEventLabel = (et: string) => eventTypes.find((x) => x.value === et)?.label ?? et
-  const Row = ({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) => (
+function DetailRow({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  return (
     <div className={wide ? 'col-span-2' : undefined}>
       <p className="text-xs font-medium text-faint">{label}</p>
       <p className="mt-1 text-sm text-ink">{children}</p>
     </div>
   )
+}
+
+function DetailModal({ log, onClose }: { log: AuditLog; onClose: () => void }) {
+  const { t } = useTranslation()
+  const eventTypes = useEventTypes()
+  const getEventLabel = (et: string) => eventTypes.find((x) => x.value === et)?.label ?? et
   return (
     <Modal open title={t('audit.detailModalTitle')} onClose={onClose} size="xl">
       <div className="mb-6 grid grid-cols-2 gap-4">
@@ -87,10 +90,10 @@ function DetailModal({ log, onClose }: { log: AuditLog; onClose: () => void }) {
           <p className="text-xs font-medium text-faint">{t('audit.fields.eventType')}</p>
           <p className="mt-1"><EventPill eventType={log.event_type} label={getEventLabel(log.event_type)} /></p>
         </div>
-        <Row label={t('audit.fields.time')}>{formatDate(log.created_at)}</Row>
-        <Row label={t('audit.fields.actor')}>{log.actor_name || '-'}</Row>
-        <Row label={t('audit.fields.ip')}>{log.ip || '-'}</Row>
-        <Row label={t('audit.fields.resourceType')}>{log.resource_type}</Row>
+        <DetailRow label={t('audit.fields.time')}>{formatDate(log.created_at)}</DetailRow>
+        <DetailRow label={t('audit.fields.actor')}>{log.actor_name || '-'}</DetailRow>
+        <DetailRow label={t('audit.fields.ip')}>{log.ip || '-'}</DetailRow>
+        <DetailRow label={t('audit.fields.resourceType')}>{log.resource_type}</DetailRow>
         <div>
           <p className="text-xs font-medium text-faint">{t('audit.fields.resourceId')}</p>
           <p className="mt-1">
@@ -98,9 +101,9 @@ function DetailModal({ log, onClose }: { log: AuditLog; onClose: () => void }) {
           </p>
         </div>
         {log.user_agent && (
-          <Row label={t('audit.fields.userAgent')} wide>
+          <DetailRow label={t('audit.fields.userAgent')} wide>
             <span className="break-all">{log.user_agent}</span>
-          </Row>
+          </DetailRow>
         )}
       </div>
       <div>

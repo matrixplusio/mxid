@@ -625,7 +625,7 @@ export default function AppsPage() {
     setCreating(true)
     try {
       // Build protocol_config + top-level fields from the active template (if any).
-      let tplProtocolConfig: Record<string, unknown> = activeTemplate?.defaults ? { ...activeTemplate.defaults } : {}
+      const tplProtocolConfig: Record<string, unknown> = activeTemplate?.defaults ? { ...activeTemplate.defaults } : {}
       let redirectURIs: string[] = createForm.redirect_uris.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
       let homeUrl = createForm.home_url
 
