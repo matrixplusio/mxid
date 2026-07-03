@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Search, RotateCcw, Trash2, Loader2, Pencil, X } from 'lucide-react'
+import { Plus, RotateCcw, Trash2, Loader2, Pencil, X } from 'lucide-react'
 import { userApi, formatDate, statusLabel, statusColor, cn, useTranslation } from '@mxid/shared'
-import { pageMotion, Button } from '@mxid/shared/ui'
+import { pageMotion, Button, Card, DataTable, Pagination, SearchInput, Select, FilterBar } from '@mxid/shared/ui'
+import type { Column } from '@mxid/shared/ui'
 import type { User, PaginatedData, UpdateUserRequest } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { toast, extractMessage } from '../../components/ui/toast'
@@ -168,7 +169,87 @@ export default function UsersPage() {
     }
   }
 
-  const totalPages = Math.ceil(data.total / data.page_size) || 1
+  // Column config for the shared DataTable. Row click navigates to detail; the
+  // actions cell stops propagation so its buttons don't trigger the nav.
+  const columns: Column<User>[] = [
+    {
+      key: 'username',
+      title: t('users.columns.username'),
+      render: (u) => <span className="font-medium text-primary hover:underline">{u.username}</span>,
+    },
+    {
+      key: 'display_name',
+      title: t('users.columns.displayName'),
+      render: (u) => <span className="text-muted">{u.display_name || '-'}</span>,
+    },
+    {
+      key: 'email',
+      title: t('users.columns.email'),
+      render: (u) => <span className="text-muted">{u.email || '-'}</span>,
+    },
+    {
+      key: 'status',
+      title: t('users.columns.status'),
+      render: (u) => (
+        <span className={cn('text-sm font-medium', statusColor(u.status))}>{statusLabel(u.status)}</span>
+      ),
+    },
+    {
+      key: 'last_login',
+      title: t('users.columns.lastLogin'),
+      render: (u) => <span className="whitespace-nowrap text-muted">{formatDate(u.last_login_at)}</span>,
+    },
+    {
+      key: 'created_at',
+      title: t('users.columns.createdAt'),
+      render: (u) => <span className="whitespace-nowrap text-muted">{formatDate(u.created_at)}</span>,
+    },
+    {
+      key: 'actions',
+      title: t('common.actions'),
+      align: 'right',
+      render: (u) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => openEditModal(u)}
+            className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500"
+            title={t('common.edit')}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          {u.status === 1 ? (
+            <button
+              onClick={() => handleStatusChange(u, 3)}
+              className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            >
+              {t('common.disable')}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleStatusChange(u, 1)}
+              className="rounded px-2 py-1 text-xs text-emerald-600 hover:bg-emerald-50"
+            >
+              {t('common.enable')}
+            </button>
+          )}
+          <button
+            onClick={() => setResetTarget(u)}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            title={t('users.resetPassword')}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => handleDelete(u)}
+            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+            title={t('common.delete')}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ]
 
   return (
     <motion.div {...pageMotion}>
@@ -182,152 +263,44 @@ export default function UsersPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="mb-4 flex items-center gap-4">
-        <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
+      <div className="space-y-4">
+        <FilterBar>
+          <SearchInput
             value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={handleSearchChange}
             placeholder={t('common.search')}
-            className="w-full rounded-lg border border-gray-200 py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="max-w-xs flex-1"
           />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value === '' ? '' : Number(e.target.value))
-            setPage(1)
-          }}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-        >
-          <option value="">{t('common.all')}</option>
-          <option value={1}>{t('users.statusActive')}</option>
-          <option value={2}>{t('users.statusLocked')}</option>
-          <option value={3}>{t('users.statusDisabled')}</option>
-          <option value={4}>{t('users.statusPending')}</option>
-        </select>
-      </div>
+          <Select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value === '' ? '' : Number(e.target.value))
+              setPage(1)
+            }}
+            className="w-auto"
+          >
+            <option value="">{t('common.all')}</option>
+            <option value={1}>{t('users.statusActive')}</option>
+            <option value={2}>{t('users.statusLocked')}</option>
+            <option value={3}>{t('users.statusDisabled')}</option>
+            <option value={4}>{t('users.statusPending')}</option>
+          </Select>
+        </FilterBar>
 
-      {/* Table */}
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                <th className="px-6 py-3">{t('users.columns.username')}</th>
-                <th className="px-6 py-3">{t('users.columns.displayName')}</th>
-                <th className="px-6 py-3">{t('users.columns.email')}</th>
-                <th className="px-6 py-3">{t('users.columns.status')}</th>
-                <th className="px-6 py-3">{t('users.columns.lastLogin')}</th>
-                <th className="px-6 py-3">{t('users.columns.createdAt')}</th>
-                <th className="px-6 py-3 text-right">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-400">
-{t('common.loading')}
-                  </td>
-                </tr>
-              ) : data.items.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-400">
-{t('common.empty')}
-                  </td>
-                </tr>
-              ) : (
-                data.items.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="cursor-pointer hover:bg-gray-50/50"
-                    onClick={() => navigate(`/users/${user.id}`)}
-                  >
-                    <td className="px-6 py-3 text-sm font-medium text-primary hover:underline">
-                      {user.username}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-gray-600">
-                      {user.display_name || '-'}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-gray-600">
-                      {user.email || '-'}
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={cn('text-sm font-medium', statusColor(user.status))}>
-                        {statusLabel(user.status)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500">
-                      {formatDate(user.last_login_at)}
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500">
-                      {formatDate(user.created_at)}
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => openEditModal(user)}
-                          className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500"
-                          title={t('common.edit')}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        {user.status === 1 ? (
-                          <button
-                            onClick={() => handleStatusChange(user, 3)}
-                            className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                          >
-{t('common.disable')}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleStatusChange(user, 1)}
-                            className="rounded px-2 py-1 text-xs text-emerald-600 hover:bg-emerald-50"
-                          >
-{t('common.enable')}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setResetTarget(user)}
-                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                          title={t('users.resetPassword')}
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(user)}
-                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                          title={t('common.delete')}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {data.total > 0 && (
-          <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
-            <p className="text-sm text-gray-500">
-              {t('users.list.pagingSummary', { total: data.total, page, pages: totalPages })}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="md" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-                {t('users.list.prevPage')}
-              </Button>
-              <Button variant="secondary" size="md" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
-                {t('users.list.nextPage')}
-              </Button>
+        <Card className="overflow-hidden hover:shadow-card">
+          <DataTable
+            columns={columns}
+            rows={data.items}
+            rowKey={(u) => u.id}
+            loading={loading}
+            onRowClick={(u) => navigate(`/users/${u.id}`)}
+          />
+          {data.total > 0 && (
+            <div className="border-t border-border">
+              <Pagination page={page} pageSize={data.page_size} total={data.total} onChange={setPage} />
             </div>
-          </div>
-        )}
+          )}
+        </Card>
       </div>
 
       {/* Create User Modal */}
