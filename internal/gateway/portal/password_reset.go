@@ -162,14 +162,14 @@ func (h *PasswordResetHandler) forgot(c *gin.Context) {
 
 	token, err := generateToken()
 	if err != nil {
-		response.InternalError(c, "failed to generate token")
+		response.InternalError(c, "failed to generate token", err)
 		return
 	}
 	// Bind both tenant and user to the token so the (tenant-less) reset call
 	// can re-establish the tenant scope before mutating the user row.
 	tokenVal := strconv.FormatInt(tenantID, 10) + ":" + strconv.FormatInt(userID, 10)
 	if err := h.rdb.Set(c.Request.Context(), pwdResetKeyPrefix+token, tokenVal, pwdResetTTL*1e9).Err(); err != nil {
-		response.InternalError(c, "failed to persist token")
+		response.InternalError(c, "failed to persist token", err)
 		return
 	}
 
@@ -248,7 +248,7 @@ func (h *PasswordResetHandler) reset(c *gin.Context) {
 		case strings.Contains(msg, "password"):
 			response.BadRequest(c, 40003, msg)
 		default:
-			response.InternalError(c, "failed to reset password")
+			response.InternalError(c, "failed to reset password", err)
 		}
 		return
 	}

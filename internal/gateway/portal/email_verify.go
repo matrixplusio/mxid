@@ -88,7 +88,7 @@ func (h *EmailVerifyHandler) sendVerification(c *gin.Context) {
 	}
 	email, err := h.users.GetEmail(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to read user")
+		response.InternalError(c, "failed to read user", err)
 		return
 	}
 	if email == "" {
@@ -98,11 +98,11 @@ func (h *EmailVerifyHandler) sendVerification(c *gin.Context) {
 
 	token, err := generateToken()
 	if err != nil {
-		response.InternalError(c, "failed to generate token")
+		response.InternalError(c, "failed to generate token", err)
 		return
 	}
 	if err := h.rdb.Set(c.Request.Context(), verifyKeyPrefix+token, userID, emailVerifyTTL*1e9).Err(); err != nil {
-		response.InternalError(c, "failed to persist token")
+		response.InternalError(c, "failed to persist token", err)
 		return
 	}
 
@@ -175,7 +175,7 @@ func (h *EmailVerifyHandler) verify(c *gin.Context) {
 	}
 
 	if err := h.users.MarkEmailVerified(c.Request.Context(), userID); err != nil {
-		response.InternalError(c, "failed to mark verified")
+		response.InternalError(c, "failed to mark verified", err)
 		return
 	}
 

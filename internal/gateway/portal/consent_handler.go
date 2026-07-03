@@ -113,7 +113,7 @@ func (h *consentHandler) grant(c *gin.Context) {
 		return
 	}
 	if _, err := h.consentSvc.Grant(c.Request.Context(), h.tenantID, userID, req.AppID, req.Scopes); err != nil {
-		response.InternalError(c, "failed to record consent")
+		response.InternalError(c, "failed to record consent", err)
 		return
 	}
 	if h.bus != nil {
@@ -137,7 +137,7 @@ func (h *consentHandler) list(c *gin.Context) {
 	}
 	rows, err := h.consentSvc.ListByUser(c.Request.Context(), h.tenantID, userID)
 	if err != nil {
-		response.InternalError(c, "failed to list consents")
+		response.InternalError(c, "failed to list consents", err)
 		return
 	}
 	out := make([]gin.H, 0, len(rows))
@@ -167,7 +167,7 @@ func (h *consentHandler) revoke(c *gin.Context) {
 		return
 	}
 	if err := h.consentSvc.Revoke(c.Request.Context(), h.tenantID, userID, appID); err != nil {
-		response.InternalError(c, "failed to revoke consent")
+		response.InternalError(c, "failed to revoke consent", err)
 		return
 	}
 	if h.bus != nil {

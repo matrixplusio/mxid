@@ -163,12 +163,12 @@ func (h *SMSOTPHandler) send(c *gin.Context) {
 
 	code, err := generateSMSCode()
 	if err != nil {
-		response.InternalError(c, "failed to generate code")
+		response.InternalError(c, "failed to generate code", err)
 		return
 	}
 	val := fmt.Sprintf("%d:%s", userID, code)
 	if err := h.rdb.Set(c.Request.Context(), smsOTPKeyPrefix+phone, val, smsOTPTTL*1e9).Err(); err != nil {
-		response.InternalError(c, "failed to persist code")
+		response.InternalError(c, "failed to persist code", err)
 		return
 	}
 	// Set cooldown after token persist.
@@ -254,7 +254,7 @@ func (h *SMSOTPHandler) login(c *gin.Context) {
 
 	user, err := h.users.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to read user")
+		response.InternalError(c, "failed to read user", err)
 		return
 	}
 
@@ -262,7 +262,7 @@ func (h *SMSOTPHandler) login(c *gin.Context) {
 	ua := c.Request.UserAgent()
 	sess, err := h.sessionMgr.Create(c.Request.Context(), session.NamespacePortal, userID, tenantID, ip, ua, "sms_otp")
 	if err != nil {
-		response.InternalError(c, "failed to create session")
+		response.InternalError(c, "failed to create session", err)
 		return
 	}
 	c.SetSameSite(http.SameSiteLaxMode)

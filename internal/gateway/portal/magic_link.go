@@ -170,13 +170,13 @@ func (h *MagicLinkHandler) send(c *gin.Context) {
 
 	token, err := generateToken()
 	if err != nil {
-		response.InternalError(c, "failed to generate token")
+		response.InternalError(c, "failed to generate token", err)
 		return
 	}
 	// Encode (user_id|tenant_id) so the callback doesn't need a second lookup.
 	val := fmt.Sprintf("%d:%d", userID, tenantID)
 	if err := h.rdb.Set(c.Request.Context(), magicLinkKeyPrefix+token, val, magicLinkTTL*1e9).Err(); err != nil {
-		response.InternalError(c, "failed to persist token")
+		response.InternalError(c, "failed to persist token", err)
 		return
 	}
 
@@ -235,7 +235,7 @@ func (h *MagicLinkHandler) callback(c *gin.Context) {
 	ua := c.Request.UserAgent()
 	sess, err := h.sessionMgr.Create(c.Request.Context(), session.NamespacePortal, userID, tenantID, ip, ua, "magic_link")
 	if err != nil {
-		response.InternalError(c, "failed to create session")
+		response.InternalError(c, "failed to create session", err)
 		return
 	}
 	// 24h cookie — magic-link callers don't get remember-me; they re-auth

@@ -114,7 +114,7 @@ func (h *Handler) userID(c *gin.Context) *int64 {
 func (h *Handler) getMailSMTP(c *gin.Context) {
 	cfg, err := h.service.MailSMTP(c.Request.Context(), h.tenantID(c))
 	if err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	// Don't leak password to UI; surface a sentinel so admin can tell
@@ -137,7 +137,7 @@ func (h *Handler) putMailSMTP(c *gin.Context) {
 		body.Password = existing.Password
 	}
 	if err := h.service.Set(c.Request.Context(), setting.KeyMailSMTP, h.tenantID(c), body, h.userID(c)); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, gin.H{"saved": true})
@@ -165,7 +165,7 @@ func (h *Handler) testMailSMTP(c *gin.Context) {
 
 func (h *Handler) genericGet(c *gin.Context, key string, defaultVal any) {
 	if err := h.service.Get(c.Request.Context(), key, h.tenantID(c), defaultVal); err != nil && err != setting.ErrNotFound {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, defaultVal)
@@ -177,7 +177,7 @@ func (h *Handler) genericPut(c *gin.Context, key string, body any) {
 		return
 	}
 	if err := h.service.Set(c.Request.Context(), key, h.tenantID(c), body, h.userID(c)); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, gin.H{"saved": true})
@@ -233,7 +233,7 @@ func (h *Handler) putProtocolDefaults(c *gin.Context) {
 func (h *Handler) getSMS(c *gin.Context) {
 	v := setting.DefaultSMS()
 	if err := h.service.Get(c.Request.Context(), setting.KeySMS, h.tenantID(c), &v); err != nil && err != setting.ErrNotFound {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	hadSecret := v.Secret != ""
@@ -252,7 +252,7 @@ func (h *Handler) putSMS(c *gin.Context) {
 		v.Secret = existing.Secret
 	}
 	if err := h.service.Set(c.Request.Context(), setting.KeySMS, h.tenantID(c), v, h.userID(c)); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, gin.H{"saved": true})
@@ -270,7 +270,7 @@ func (h *Handler) putAuditPolicy(c *gin.Context) {
 func (h *Handler) getOffboardingWebhook(c *gin.Context) {
 	v := setting.DefaultOffboardingWebhook()
 	if err := h.service.Get(c.Request.Context(), setting.KeyOffboardingWebhook, h.tenantID(c), &v); err != nil && err != setting.ErrNotFound {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	hadSecret := v.Secret != ""
@@ -297,7 +297,7 @@ func (h *Handler) putOffboardingWebhook(c *gin.Context) {
 		v.Secret = existing.Secret
 	}
 	if err := h.service.Set(c.Request.Context(), setting.KeyOffboardingWebhook, h.tenantID(c), v, h.userID(c)); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, gin.H{"saved": true})
@@ -323,7 +323,7 @@ func (h *Handler) putMFA(c *gin.Context) {
 		v.StepUpWindowSeconds = 0
 	}
 	if err := h.service.Set(c.Request.Context(), setting.KeyMFAPolicy, h.tenantID(c), &v, h.userID(c)); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, gin.H{"saved": true})
@@ -343,7 +343,7 @@ func (h *Handler) putConditionalAccess(c *gin.Context) {
 		v.ImpossibleTravelWindowMinutes = 0
 	}
 	if err := h.service.Set(c.Request.Context(), setting.KeyConditionalAccess, h.tenantID(c), &v, h.userID(c)); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	response.OK(c, gin.H{"saved": true})
@@ -361,7 +361,7 @@ func (h *Handler) putLocalization(c *gin.Context) {
 func (h *Handler) getLicense(c *gin.Context) {
 	v := setting.DefaultLicense()
 	if err := h.platform.Get(c.Request.Context(), platformconfig.KeyLicense, &v); err != nil && err != platformconfig.ErrNotFound {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	// Never leak the signed token back to the UI — it's a secret (anyone who
@@ -406,7 +406,7 @@ func (h *Handler) putLicense(c *gin.Context) {
 		derived.ExpiresAt = exp.Format("2006-01-02")
 	}
 	if err := h.platform.Set(c.Request.Context(), platformconfig.KeyLicense, derived); err != nil {
-		response.InternalError(c, "")
+		response.InternalError(c, "", err)
 		return
 	}
 	license.SetCurrent(mgr)

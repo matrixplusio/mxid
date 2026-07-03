@@ -129,7 +129,7 @@ func (h *SecurityHandler) listAPITokens(c *gin.Context) {
 	}
 	items, err := h.apiTokenQuerier.List(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to list tokens")
+		response.InternalError(c, "failed to list tokens", err)
 		return
 	}
 	response.OK(c, items)
@@ -156,7 +156,7 @@ func (h *SecurityHandler) createAPIToken(c *gin.Context) {
 	}
 	info, err := h.apiTokenQuerier.Create(c.Request.Context(), userID, tid, req.Name, req.Scopes, req.ExpiresInDays)
 	if err != nil {
-		response.InternalError(c, "failed to create token")
+		response.InternalError(c, "failed to create token", err)
 		return
 	}
 	h.publish(c, event.APITokenCreated, map[string]any{
@@ -205,7 +205,7 @@ func (h *SecurityHandler) countBackupCodes(c *gin.Context) {
 	}
 	n, err := h.mfaQuerier.CountBackupCodes(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to count backup codes")
+		response.InternalError(c, "failed to count backup codes", err)
 		return
 	}
 	response.OK(c, gin.H{"remaining": n})
@@ -273,7 +273,7 @@ func (h *SecurityHandler) regenerateBackupCodes(c *gin.Context) {
 
 	codes, err := h.mfaQuerier.GenerateBackupCodes(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to generate backup codes")
+		response.InternalError(c, "failed to generate backup codes", err)
 		return
 	}
 	response.OK(c, gin.H{"codes": codes})
@@ -309,7 +309,7 @@ func (h *SecurityHandler) listLoginHistory(c *gin.Context) {
 	}
 	items, err := h.historyQuerier.ListLoginHistory(c.Request.Context(), tid, userID, limit)
 	if err != nil {
-		response.InternalError(c, "failed to load login history")
+		response.InternalError(c, "failed to load login history", err)
 		return
 	}
 	response.OK(c, items)
@@ -388,7 +388,7 @@ func (h *SecurityHandler) listMFA(c *gin.Context) {
 
 	items, err := h.mfaQuerier.ListMFA(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to list mfa")
+		response.InternalError(c, "failed to list mfa", err)
 		return
 	}
 
@@ -468,7 +468,7 @@ func (h *SecurityHandler) deleteTOTP(c *gin.Context) {
 	}
 
 	if err := h.mfaQuerier.DeleteTOTP(c.Request.Context(), userID); err != nil {
-		response.InternalError(c, "failed to delete totp")
+		response.InternalError(c, "failed to delete totp", err)
 		return
 	}
 
@@ -489,7 +489,7 @@ func (h *SecurityHandler) listIdentities(c *gin.Context) {
 
 	items, err := h.identityQuerier.ListIdentities(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to list identities")
+		response.InternalError(c, "failed to list identities", err)
 		return
 	}
 
@@ -506,7 +506,7 @@ func (h *SecurityHandler) listSessions(c *gin.Context) {
 
 	items, err := h.sessionQuerier.ListSessions(c.Request.Context(), h.namespace, userID)
 	if err != nil {
-		response.InternalError(c, "failed to list sessions")
+		response.InternalError(c, "failed to list sessions", err)
 		return
 	}
 
@@ -528,7 +528,7 @@ func (h *SecurityHandler) deleteSession(c *gin.Context) {
 	}
 
 	if err := h.sessionQuerier.DeleteSession(c.Request.Context(), h.namespace, sid); err != nil {
-		response.InternalError(c, "failed to delete session")
+		response.InternalError(c, "failed to delete session", err)
 		return
 	}
 

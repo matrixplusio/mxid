@@ -54,7 +54,7 @@ func (h *appsHandler) listApps(c *gin.Context) {
 
 	apps, err := h.appQuerier.ListAuthorizedApps(c.Request.Context(), userID, tenantID, c.Query("q"))
 	if err != nil {
-		response.InternalError(c, "failed to list apps")
+		response.InternalError(c, "failed to list apps", err)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *appsHandler) listAppGroups(c *gin.Context) {
 
 	groups, err := h.appQuerier.ListAuthorizedAppGroups(c.Request.Context(), userID, tenantID)
 	if err != nil {
-		response.InternalError(c, "failed to list app groups")
+		response.InternalError(c, "failed to list app groups", err)
 		return
 	}
 	response.OK(c, groups)
@@ -89,7 +89,7 @@ func (h *appsHandler) listFavorites(c *gin.Context) {
 	}
 	ids, err := h.appQuerier.ListFavoriteAppIDs(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to list favorites")
+		response.InternalError(c, "failed to list favorites", err)
 		return
 	}
 	response.OK(c, gin.H{"app_ids": idsToStrings(ids)})
@@ -112,7 +112,7 @@ func (h *appsHandler) listRecent(c *gin.Context) {
 	}
 	ids, err := h.appQuerier.ListRecentAppIDs(c.Request.Context(), userID, tenantID, limit)
 	if err != nil {
-		response.InternalError(c, "failed to list recent")
+		response.InternalError(c, "failed to list recent", err)
 		return
 	}
 	response.OK(c, gin.H{"app_ids": idsToStrings(ids)})
@@ -133,7 +133,7 @@ func (h *appsHandler) addFavorite(c *gin.Context) {
 		return
 	}
 	if err := h.appQuerier.AddFavorite(c.Request.Context(), userID, tenantID, appID); err != nil {
-		response.InternalError(c, "failed to add favorite")
+		response.InternalError(c, "failed to add favorite", err)
 		return
 	}
 	response.OK(c, gin.H{"ok": true})
@@ -167,7 +167,7 @@ func (h *appsHandler) reorderFavorites(c *gin.Context) {
 		parsedIDs = append(parsedIDs, id)
 	}
 	if err := h.appQuerier.ReorderFavorites(c.Request.Context(), userID, parsedIDs); err != nil {
-		response.InternalError(c, "failed to reorder favorites")
+		response.InternalError(c, "failed to reorder favorites", err)
 		return
 	}
 	response.OK(c, gin.H{"ok": true})
@@ -186,7 +186,7 @@ func (h *appsHandler) removeFavorite(c *gin.Context) {
 		return
 	}
 	if err := h.appQuerier.RemoveFavorite(c.Request.Context(), userID, appID); err != nil {
-		response.InternalError(c, "failed to remove favorite")
+		response.InternalError(c, "failed to remove favorite", err)
 		return
 	}
 	response.OK(c, gin.H{"ok": true})

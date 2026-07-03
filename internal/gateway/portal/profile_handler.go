@@ -77,7 +77,7 @@ func (h *ProfileHandler) getProfile(c *gin.Context) {
 
 	user, err := h.userQuerier.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "failed to get profile")
+		response.InternalError(c, "failed to get profile", err)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *ProfileHandler) updateProfile(c *gin.Context) {
 	}
 
 	if err := h.userQuerier.UpdateProfile(c.Request.Context(), userID, req.DisplayName, req.Phone, req.Email); err != nil {
-		response.InternalError(c, "failed to update profile")
+		response.InternalError(c, "failed to update profile", err)
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *ProfileHandler) updateAvatar(c *gin.Context) {
 	}
 
 	if err := h.userQuerier.UpdateAvatar(c.Request.Context(), userID, req.Avatar); err != nil {
-		response.InternalError(c, "failed to update avatar")
+		response.InternalError(c, "failed to update avatar", err)
 		return
 	}
 
