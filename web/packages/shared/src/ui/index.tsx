@@ -2,8 +2,8 @@
 // hand-rolling button / modal / form classes. Keeps the look consistent
 // without us having to police it in code review.
 import { motion } from 'framer-motion'
-import { Loader2, X } from 'lucide-react'
-import { cn } from '@mxid/shared'
+import { Loader2, Moon, Sun, X } from 'lucide-react'
+import { cn, useTheme } from '@mxid/shared'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes } from 'react'
 
 /* ──────────────── Motion presets ──────────────── */
@@ -27,7 +27,7 @@ export const dialogMotion = {
 /* ──────────────── Input / Textarea / Select base classes ──────────────── */
 
 export const INPUT_CLASS =
-  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500'
+  'w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-ink outline-none placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-faint'
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(INPUT_CLASS, props.className)} />
@@ -56,12 +56,12 @@ export function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">
+      <label className="mb-1 block text-sm font-medium text-ink">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-faint">{hint}</p>}
     </div>
   )
 }
@@ -72,11 +72,11 @@ type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'warning' | 
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary:   'bg-primary text-white hover:bg-primary-hover disabled:opacity-60',
-  secondary: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60',
-  danger:    'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60',
-  warning:   'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-60',
-  success:   'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60',
-  ghost:     'text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-60',
+  secondary: 'border border-border bg-surface text-ink hover:bg-surface-muted disabled:opacity-60',
+  danger:    'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 disabled:opacity-60',
+  warning:   'border border-warning/30 bg-warning/10 text-warning hover:bg-warning/20 disabled:opacity-60',
+  success:   'border border-success/30 bg-success/10 text-success hover:bg-success/20 disabled:opacity-60',
+  ghost:     'text-muted hover:bg-surface-muted hover:text-ink disabled:opacity-60',
 }
 
 const SIZE_CLASS = {
@@ -149,13 +149,13 @@ export function Modal({
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'w-full max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl',
+          'w-full max-h-[90vh] overflow-y-auto rounded-card bg-surface p-6 shadow-float',
           widths[size],
         )}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+          <h3 className="text-lg font-semibold text-ink">{title}</h3>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-muted">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -168,20 +168,20 @@ export function Modal({
 /* ──────────────── Status helpers ──────────────── */
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return <div className="py-16 text-center text-sm text-gray-400">{children}</div>
+  return <div className="py-16 text-center text-sm text-faint">{children}</div>
 }
 
 export function LoadingState() {
   return (
     <div className="flex items-center justify-center py-12">
-      <Loader2 className="h-5 w-5 animate-spin text-gray-300" />
+      <Loader2 className="h-5 w-5 animate-spin text-faint" />
     </div>
   )
 }
 
 export function CodeBadge({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{children}</code>
+    <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-muted">{children}</code>
   )
 }
 
@@ -191,12 +191,12 @@ type TagVariant = 'primary' | 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'g
 
 const TAG_CLASS: Record<TagVariant, string> = {
   primary: 'bg-primary/10 text-primary',
-  green:   'bg-emerald-100 text-emerald-700',
-  amber:   'bg-amber-100 text-amber-700',
-  red:     'bg-red-100 text-red-700',
-  blue:    'bg-blue-100 text-blue-700',
-  purple:  'bg-purple-100 text-purple-700',
-  gray:    'bg-gray-100 text-gray-600',
+  green:   'bg-success/10 text-success',
+  amber:   'bg-warning/10 text-warning',
+  red:     'bg-danger/10 text-danger',
+  blue:    'bg-info/10 text-info',
+  purple:  'bg-purple-500/10 text-purple-500',
+  gray:    'bg-muted/10 text-muted',
 }
 
 export function Tag({ variant = 'gray', children }: { variant?: TagVariant; children: ReactNode }) {
@@ -204,6 +204,41 @@ export function Tag({ variant = 'gray', children }: { variant?: TagVariant; chil
     <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', TAG_CLASS[variant])}>
       {children}
     </span>
+  )
+}
+
+/* ──────────────── ThemeToggle (light/dark switch) ──────────────── */
+
+// ThemeToggle is a self-contained light/dark switch. Drop it anywhere (sidebar,
+// header) — it reads/writes the shared useTheme store, so every instance stays
+// in sync and persists to localStorage. `variant="ghost"` suits dark surfaces
+// (sidebar); default suits light surfaces (header).
+export function ThemeToggle({
+  variant = 'default',
+  className,
+}: {
+  variant?: 'default' | 'ghost'
+  className?: string
+}) {
+  const mode = useTheme((s) => s.mode)
+  const toggle = useTheme((s) => s.toggle)
+  const isDark = mode === 'dark'
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      title={isDark ? '切换到浅色' : '切换到深色'}
+      aria-label={isDark ? '切换到浅色' : '切换到深色'}
+      className={cn(
+        'inline-flex h-8 w-8 items-center justify-center rounded-control transition-colors',
+        variant === 'ghost'
+          ? 'text-gray-400 hover:bg-white/10 hover:text-white'
+          : 'text-muted hover:bg-surface-muted hover:text-ink',
+        className,
+      )}
+    >
+      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
   )
 }
 
@@ -281,7 +316,7 @@ export function CodeField({
         onClick={() => canSlug && onChange(slugCandidate)}
         disabled={disabled || !canSlug}
         title={canSlug ? `生成：${slugCandidate}` : '名称不含英文字符，无法生成 slug'}
-        className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="shrink-0 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
         按名称
       </button>
@@ -290,10 +325,21 @@ export function CodeField({
         onClick={() => onChange(randomCode(prefix ?? 'g'))}
         disabled={disabled}
         title="生成随机编码"
-        className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="shrink-0 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
         随机
       </button>
     </div>
   )
 }
+
+/* ──────────────── Kit re-exports (P1) ────────────────
+   Split into topic files to keep this module manageable; the barrel keeps a
+   single import surface so pages still do `from '@mxid/shared/ui'`. Placed at
+   the bottom so the primitives above are defined before the kit modules
+   (which import Button/Input/Modal/EmptyState from here) evaluate. */
+export * from './tone'
+export * from './data'
+export * from './overlay'
+export * from './layout'
+export * from './form'

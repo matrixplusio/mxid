@@ -5,6 +5,13 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MXID - 用户门户</title>
+    <script>
+      // FOUC guard: apply persisted theme before React mounts. Key must match
+      // STORAGE_KEY in packages/shared/src/hooks/useTheme.ts.
+      try {
+        if (localStorage.getItem('mxid.theme') === 'dark') document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -13,7 +13,7 @@ export default function MainLayout() {
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-bg">
       <Toaster />
       <Navbar />
       <main className="mx-auto mt-16 max-w-6xl px-4 py-8">

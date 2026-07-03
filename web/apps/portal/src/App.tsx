@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { authApi, useAuthStore, useBootstrap } from '@mxid/shared'
+import { authApi, useAuthStore, useBootstrap, useTheme } from '@mxid/shared'
 import MainLayout from './components/layout/MainLayout'
 import LoginPage from './pages/login'
 import MagicLinkLoginPage from './pages/login/magic-link'
@@ -125,6 +125,11 @@ export default function App() {
   // document.title / primary color / favicon reflect admin settings
   // before the login page paints.
   useBootstrap()
+  // Sync the theme store to the class the FOUC script already applied.
+  const initTheme = useTheme((s) => s.init)
+  useEffect(() => {
+    initTheme()
+  }, [initTheme])
   return (
     <Routes>
       <Route

@@ -4,24 +4,92 @@
    Toaster, IconPicker 等共享 UI 的 className 编译进 console bundle. */
 @source "../../../packages/shared/src/**/*.{ts,tsx}";
 
+/* 暗色走 class 策略(.dark on <html>),不跟随系统. Tailwind v4 默认 dark:
+   绑 prefers-color-scheme, 这里重定义为类选择器. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 语义色映射: token = rgb(var(--x)). 三元组变量在 :root/.dark
+   里定义, @theme 只做 "语义名 → 工具类" 映射, 于是 bg-surface / text-muted /
+   bg-primary/10 全部随 .dark 自动切换, 组件里不再写死 hex. */
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
+  --color-bg: rgb(var(--bg));
+  --color-surface: rgb(var(--surface));
+  --color-surface-muted: rgb(var(--surface-muted));
+  --color-border: rgb(var(--border));
+  --color-border-strong: rgb(var(--border-strong));
+  --color-primary: rgb(var(--primary));
+  --color-primary-hover: rgb(var(--primary-hover));
+  --color-accent: rgb(var(--accent));
+  --color-success: rgb(var(--success));
+  --color-warning: rgb(var(--warning));
+  --color-danger: rgb(var(--danger));
+  --color-info: rgb(var(--info));
+  --color-ink: rgb(var(--ink));
+  --color-muted: rgb(var(--muted));
+  --color-faint: rgb(var(--faint));
+
+  /* 存量兼容: 旧代码用到的 primary-light / danger-hover / sidebar-*.
+     P2 浮动面板改造时再收敛. */
   --color-primary-light: #dbeafe;
-  --color-danger: #dc2626;
   --color-danger-hover: #b91c1c;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
   --color-sidebar: #0f172a;
   --color-sidebar-hover: #1e293b;
   --color-sidebar-active: #1e40af;
+
+  --radius-panel: 20px;
+  --radius-card: 16px;
+  --radius-control: 10px;
+
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px -14px rgba(15, 23, 42, 0.1);
+  --shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.06), 0 16px 40px -18px rgba(15, 23, 42, 0.16);
+  --shadow-float: 0 24px 64px -24px rgba(15, 23, 42, 0.2);
+
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── 语义色三元组(亮) ── */
+:root {
+  --bg: 246 248 251;
+  --surface: 255 255 255;
+  --surface-muted: 248 250 252;
+  --border: 233 237 243;
+  --border-strong: 220 226 234;
+  --primary: 37 99 235;
+  --primary-hover: 29 78 216;
+  --accent: 79 125 249;
+  --success: 22 163 74;
+  --warning: 217 119 6;
+  --danger: 220 38 38;
+  --info: 14 165 233;
+  --ink: 15 23 42;
+  --muted: 100 116 139;
+  --faint: 148 163 184;
+}
+
+/* ── 语义色三元组(暗) ── 覆盖同名, cascade 进 @theme 映射与所有工具类 ──
+   border 值较亮版提高, 保证暗色下卡片描边看得清. */
+.dark {
+  --bg: 11 15 23;
+  --surface: 19 25 39;
+  --surface-muted: 26 33 50;
+  --border: 42 52 72;
+  --border-strong: 64 77 105;
+  --primary: 59 130 246;
+  --primary-hover: 96 165 250;
+  --accent: 96 165 250;
+  --success: 34 197 94;
+  --warning: 245 158 11;
+  --danger: 248 113 113;
+  --info: 14 165 233;
+  --ink: 226 232 240;
+  --muted: 148 163 184;
+  --faint: 100 116 139;
 }
 
 body {
   margin: 0;
-  background: #f8fafc;
-  color: #0f172a;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -30,3 +98,83 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* ── 暗色兼容层 ──
+   存量页仍写死 bg-white / text-gray-* / border-gray-*(约 1000+ 处). 在页面
+   内容区(<main>)下把这些字面工具类重映射到语义 token, 暗色一次覆盖全站, 无需
+   逐页改 className. 侧栏(<aside>) / 顶栏(<nav>)在 <main> 外, 保持深色设计.
+
+   关键: 用属性选择器 [class~="bg-white"] 而非 .bg-white. Tailwind v4 的插件会
+   把对已知 utility 类的裸类选择器重定义(.bg-white{...})当成 utility 候选而
+   静默剥离, 导致 remap 规则根本不进最终样式表; 属性选择器对其不透明, 得以保留,
+   且 [class~=] 内可直接写 : 和 / 无需转义. 加 !important 兜底胜过 utilities 层.
+   bg-gray-900/800(代码块等刻意深色元素)不 remap. 过渡桥: P3 逐页换 token 后删. */
+
+/* 面层背景 */
+.dark main [class~="bg-white"] { background-color: rgb(var(--surface)) !important; }
+.dark main [class~="bg-gray-50"],
+.dark main [class~="bg-gray-100"] { background-color: rgb(var(--surface-muted)) !important; }
+.dark main [class~="bg-gray-50/40"],
+.dark main [class~="bg-gray-50/50"],
+.dark main [class~="bg-gray-50/60"] { background-color: rgb(var(--surface-muted) / 0.6) !important; }
+.dark main [class~="bg-gray-200"] { background-color: rgb(var(--border-strong)) !important; }
+
+/* hover 背景 —— 存量 opacity/shade 变体全覆盖, 杜绝 hover 变亮导致文字看不清 */
+.dark main [class~="hover:bg-white"]:hover { background-color: rgb(var(--surface-muted)) !important; }
+.dark main [class~="hover:bg-gray-50"]:hover { background-color: rgb(var(--surface-muted)) !important; }
+.dark main [class~="hover:bg-gray-50/50"]:hover,
+.dark main [class~="hover:bg-gray-50/60"]:hover { background-color: rgb(var(--surface-muted) / 0.7) !important; }
+.dark main [class~="hover:bg-gray-100"]:hover { background-color: rgb(var(--border)) !important; }
+.dark main [class~="hover:bg-gray-200"]:hover { background-color: rgb(var(--border-strong)) !important; }
+.dark main [class~="hover:bg-blue-50"]:hover { background-color: rgb(var(--primary) / 0.12) !important; }
+.dark main [class~="hover:bg-red-50"]:hover { background-color: rgb(var(--danger) / 0.12) !important; }
+.dark main [class~="hover:bg-emerald-50"]:hover { background-color: rgb(var(--success) / 0.12) !important; }
+
+/* 文字 */
+.dark main [class~="text-gray-900"],
+.dark main [class~="text-gray-800"],
+.dark main [class~="text-gray-700"] { color: rgb(var(--ink)) !important; }
+.dark main [class~="text-gray-600"],
+.dark main [class~="text-gray-500"] { color: rgb(var(--muted)) !important; }
+.dark main [class~="text-gray-400"],
+.dark main [class~="text-gray-300"] { color: rgb(var(--faint)) !important; }
+.dark main [class~="hover:text-gray-900"]:hover,
+.dark main [class~="hover:text-gray-700"]:hover,
+.dark main [class~="hover:text-gray-600"]:hover { color: rgb(var(--ink)) !important; }
+.dark main [class~="hover:text-gray-400"]:hover { color: rgb(var(--faint)) !important; }
+.dark main [class~="placeholder:text-gray-400"]::placeholder { color: rgb(var(--faint)) !important; }
+
+/* 边框 / 分隔 —— 卡片描边用 border-strong 保证可见 */
+.dark main [class~="border-gray-50"] { border-color: rgb(var(--border)) !important; }
+.dark main [class~="border-gray-100"],
+.dark main [class~="border-gray-200"],
+.dark main [class~="border-gray-300"] { border-color: rgb(var(--border-strong)) !important; }
+.dark main [class~="ring-gray-100"] { --tw-ring-color: rgb(var(--border-strong)) !important; }
+.dark main [class~="divide-gray-50"] > :not([hidden]) ~ :not([hidden]),
+.dark main [class~="divide-gray-100"] > :not([hidden]) ~ :not([hidden]) { border-color: rgb(var(--border)) !important; }
+
+/* 存量硬编码状态 pill(bg-*-100 text-*-700 之类)在暗色下过亮, 压成 tint. */
+.dark main [class~="bg-emerald-100"],
+.dark main [class~="bg-green-100"] { background-color: rgb(var(--success) / 0.15) !important; }
+.dark main [class~="bg-red-100"],
+.dark main [class~="bg-rose-100"] { background-color: rgb(var(--danger) / 0.15) !important; }
+.dark main [class~="bg-amber-100"],
+.dark main [class~="bg-yellow-100"] { background-color: rgb(var(--warning) / 0.15) !important; }
+.dark main [class~="bg-blue-100"],
+.dark main [class~="bg-sky-100"] { background-color: rgb(var(--info) / 0.15) !important; }
+.dark main [class~="bg-purple-100"] { background-color: rgb(147 51 234 / 0.18) !important; }
+.dark main [class~="text-emerald-700"],
+.dark main [class~="text-emerald-600"],
+.dark main [class~="text-green-700"] { color: rgb(var(--success)) !important; }
+.dark main [class~="text-red-700"],
+.dark main [class~="text-red-600"],
+.dark main [class~="text-red-500"],
+.dark main [class~="text-rose-700"] { color: rgb(var(--danger)) !important; }
+.dark main [class~="text-amber-700"],
+.dark main [class~="text-amber-600"],
+.dark main [class~="text-yellow-700"] { color: rgb(var(--warning)) !important; }
+.dark main [class~="text-blue-700"],
+.dark main [class~="text-blue-600"],
+.dark main [class~="text-sky-700"] { color: rgb(var(--info)) !important; }
+.dark main [class~="text-purple-700"],
+.dark main [class~="text-purple-600"] { color: rgb(168 85 247) !important; }

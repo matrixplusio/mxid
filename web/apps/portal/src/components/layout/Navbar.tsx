@@ -11,6 +11,7 @@ import {
   X,
   Settings,
 } from 'lucide-react'
+import { ThemeToggle } from '@mxid/shared/ui'
 import logo from '../../assets/logo.png'
 
 const buildNavItems = (t: (k: string) => string, hasConditionalAccess: boolean) => [
@@ -89,6 +90,7 @@ export default function Navbar() {
               </button>
             ))}
           </div>
+          <ThemeToggle />
           {user?.is_admin && (
             <a
               href="/admin/"

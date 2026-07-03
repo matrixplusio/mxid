@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { useAuthStore, authApi, useBootstrap } from '@mxid/shared'
+import { useAuthStore, authApi, useBootstrap, useTheme } from '@mxid/shared'
 import MainLayout from './components/layout/MainLayout'
 import StepUpModal from './components/StepUpModal'
 import LoginPage from './pages/login'
@@ -87,6 +87,11 @@ export default function App() {
   const location = useLocation()
   // Apply branding (title, primary color, custom CSS) before anything paints.
   useBootstrap()
+  // Sync the theme store to the class the FOUC script already applied.
+  const initTheme = useTheme((s) => s.init)
+  useEffect(() => {
+    initTheme()
+  }, [initTheme])
 
   return (
     <Routes location={location} key={location.pathname}>
