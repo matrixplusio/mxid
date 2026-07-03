@@ -1757,6 +1757,8 @@ export default {
     roleIdRequired: '请选择角色',
     appId: '应用',
     appIdRequired: '请选择应用',
+    requesterRequired: '请选择申请人',
+    approverRequired: '请选择审批人',
     pleaseSelect: '请选择...',
     selectAppFirst: '请先选择应用',
     noOptions: '暂无可选项',

@@ -1754,6 +1754,8 @@ export default {
     roleIdRequired: 'Please select a role',
     appId: 'App',
     appIdRequired: 'Please select an app',
+    requesterRequired: 'Please select a requester',
+    approverRequired: 'Please select an approver',
     pleaseSelect: 'Please select...',
     selectAppFirst: 'Select an app first',
     noOptions: 'No options available',

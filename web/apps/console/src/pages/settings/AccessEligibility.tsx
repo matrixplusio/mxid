@@ -235,11 +235,26 @@ export default function AccessEligibilityPage() {
       toast.error(t('eligibility.createFailed'), t('eligibility.roleIdRequired'))
       return
     }
+    // A concrete requester/approver subject is required unless the subject type
+    // is "any" (requester) or "auto" (approver) — otherwise the backend gets an
+    // empty ,string int64 and rejects with a raw unmarshal error.
+    if (form.requester_subject_type !== 'any' && !(form.requester_subject_id ?? '').trim()) {
+      toast.error(t('eligibility.createFailed'), t('eligibility.requesterRequired'))
+      return
+    }
+    if (form.approver_subject_type !== 'auto' && !(form.approver_subject_id ?? '').trim()) {
+      toast.error(t('eligibility.createFailed'), t('eligibility.approverRequired'))
+      return
+    }
     try {
       const body: CreateEligibilityBody = {
         ...form,
         // omit app_id when target is console
         app_id: form.target_kind === 'app' ? form.app_id : undefined,
+        // omit the id fields when there's no concrete subject, so we never send
+        // an empty string into a ,string-tagged int64 on the backend.
+        requester_subject_id: form.requester_subject_type === 'any' ? undefined : form.requester_subject_id,
+        approver_subject_id: form.approver_subject_type === 'auto' ? undefined : form.approver_subject_id,
       }
       if (editingId) {
         await accessApprovalApi.updateEligibility(editingId, body)
