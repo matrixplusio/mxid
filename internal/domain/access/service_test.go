@@ -245,21 +245,24 @@ type fakeTerminator struct {
 }
 
 type terminateCall struct {
-	userID int64
-	appID  int64
+	tenantID int64
+	userID   int64
+	appID    int64
 }
 
-func (f *fakeTerminator) TerminateAppSession(_ context.Context, _, userID, appID int64) {
+func (f *fakeTerminator) TerminateAppSession(_ context.Context, tenantID, userID, appID int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, terminateCall{userID: userID, appID: appID})
+	f.calls = append(f.calls, terminateCall{tenantID: tenantID, userID: userID, appID: appID})
 }
 
-func (f *fakeTerminator) calledFor(userID, appID int64) bool {
+// calledFor reports whether TerminateAppSession was invoked with the exact
+// (tenantID, userID, appID) triple.
+func (f *fakeTerminator) calledFor(tenantID, userID, appID int64) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, c := range f.calls {
-		if c.userID == userID && c.appID == appID {
+		if c.tenantID == tenantID && c.userID == userID && c.appID == appID {
 			return true
 		}
 	}
@@ -537,7 +540,7 @@ func TestRevoke_AppGrant_TerminatesDownstream(t *testing.T) {
 	if err := s.Revoke(testCtx, testTenant, req.ID, testApprover); err != nil {
 		t.Fatal(err)
 	}
-	if !fakes.terminator.calledFor(req.RequesterID, 7777) {
+	if !fakes.terminator.calledFor(testTenant, req.RequesterID, 7777) {
 		t.Fatal("expected downstream terminate for the app grant")
 	}
 }
@@ -550,5 +553,34 @@ func TestExpire_ConsoleGrant_DoesNotTerminate(t *testing.T) {
 	}
 	if fakes.terminator.anyCalled() {
 		t.Fatal("console grant must not trigger downstream terminate")
+	}
+}
+
+// TestExpire_AppGrant_TerminatesDownstream is the positive counterpart to
+// TestExpire_ConsoleGrant_DoesNotTerminate: an approved app-target grant
+// expiring via the sweeper path must still fire the downstream terminator,
+// with the correct tenantID (not just requester + app).
+func TestExpire_AppGrant_TerminatesDownstream(t *testing.T) {
+	s, fakes := newServiceWithFakes(t)
+	req := mustApprovedAppRequest(t, s, fakes, 8888)
+	if err := s.Expire(testCtx, req); err != nil {
+		t.Fatal(err)
+	}
+	if !fakes.terminator.calledFor(testTenant, req.RequesterID, 8888) {
+		t.Fatal("expected downstream terminate for the app grant on expire")
+	}
+}
+
+// TestReject_DoesNotInvalidateCache locks in that Reject never busts the
+// authz cache: a pending request has no live binding yet, so there is
+// nothing for the cache to evict. Only approve/revoke/expire touch it.
+func TestReject_DoesNotInvalidateCache(t *testing.T) {
+	s, fakes := newServiceWithFakes(t)
+	req := mustCreateRequest(t, s, 3600)
+	if err := s.Reject(testCtx, testTenant, req.ID, testApprover, "denied"); err != nil {
+		t.Fatal(err)
+	}
+	if fakes.cache.invalidatedFor(req.RequesterID) {
+		t.Fatal("reject must not invalidate the authz cache")
 	}
 }

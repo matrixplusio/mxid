@@ -155,15 +155,68 @@ func TestSweepOnce_ExpiresDueGrants(t *testing.T) {
 	}
 }
 
-// TestStartSweeper_StopsOnCtxCancel verifies that StartSweeper goroutine
-// respects context cancellation and doesn't leak.
+// signalingRepo wraps a Repository and rendezvous-blocks each ListDueGrants
+// call on a channel pair: it reports the call arrived (called), then waits
+// for the test to say "go" (release). This lets a test deterministically
+// synchronize with the sweeper's background goroutine instead of guessing
+// timing with time.Sleep.
+type signalingRepo struct {
+	Repository
+	called  chan struct{}
+	release chan struct{}
+}
+
+func (r *signalingRepo) ListDueGrants(ctx context.Context) ([]*Request, error) {
+	r.called <- struct{}{}
+	<-r.release
+	return r.Repository.ListDueGrants(ctx)
+}
+
+// TestStartSweeper_StopsOnCtxCancel deterministically proves the sweeper
+// goroutine both runs its loop body and actually exits after ctx is
+// cancelled — not just "doesn't deadlock".
+//
+// Strategy: the ticker interval is set generously long (200ms) relative to
+// the microseconds it takes the test to react to a signal, so once the test
+// observes the first ListDueGrants call, cancels the context, and releases
+// the call, the for-loop's next select is guaranteed to see ctx.Done()
+// ready and t.C NOT yet ready (the next real tick is ~200ms away) — so it
+// deterministically takes the return path. We then confirm the goroutine
+// truly stopped by asserting no further ListDueGrants calls arrive even
+// after waiting past where the next tick would have fired.
 func TestStartSweeper_StopsOnCtxCancel(t *testing.T) {
 	svc, fakes := newServiceWithFakes(t)
 
+	repo := &signalingRepo{
+		Repository: fakes.repo,
+		called:     make(chan struct{}),
+		release:    make(chan struct{}),
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
-	// Use a short interval but cancel before it fires.
-	StartSweeper(ctx, svc, fakes.repo, 10*time.Second, zap.NewNop())
-	// Immediately cancel — the goroutine should stop.
+	StartSweeper(ctx, svc, repo, 200*time.Millisecond, zap.NewNop())
+
+	// Wait for the sweeper's first tick to prove the loop actually ran.
+	select {
+	case <-repo.called:
+	case <-time.After(5 * time.Second):
+		t.Fatal("sweeper never called ListDueGrants; loop did not run")
+	}
+
+	// Cancel while the goroutine is parked inside ListDueGrants, then let it
+	// proceed: sweepOnce will return promptly and the for-loop's next select
+	// must observe ctx.Done() already closed.
 	cancel()
-	// No assertion needed beyond "test exits cleanly without deadlock".
+	repo.release <- struct{}{}
+
+	// Prove the goroutine actually exited (not just idle): if it were still
+	// alive, the next tick (~200ms out) would drive another ListDueGrants
+	// call, which would block trying to send on `called` since nothing
+	// receives after this point except this failure path.
+	select {
+	case <-repo.called:
+		t.Fatal("sweeper called ListDueGrants again after ctx cancellation; goroutine did not exit")
+	case <-time.After(500 * time.Millisecond):
+		// No further calls past two tick intervals — the goroutine returned.
+	}
 }
