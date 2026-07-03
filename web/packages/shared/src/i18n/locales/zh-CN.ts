@@ -1778,6 +1778,13 @@ export default {
     rejected: '申请已拒绝',
     rejectFailed: '拒绝申请失败',
     rejectReason: '拒绝原因（可选）',
+    rejectModal: {
+      title: '拒绝申请',
+      reasonLabel: '拒绝原因',
+      reasonPlaceholder: '请填写拒绝原因（可选）',
+      confirm: '确认拒绝',
+      cancel: '取消',
+    },
     revoke: '撤回授权',
     revoked: '授权已撤回',
     revokeFailed: '撤回授权失败',

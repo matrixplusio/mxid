@@ -1775,6 +1775,13 @@ export default {
     rejected: 'Request rejected',
     rejectFailed: 'Failed to reject request',
     rejectReason: 'Reason for rejection (optional)',
+    rejectModal: {
+      title: 'Reject Request',
+      reasonLabel: 'Reason for rejection',
+      reasonPlaceholder: 'Reason for rejection (optional)',
+      confirm: 'Confirm Reject',
+      cancel: 'Cancel',
+    },
     revoke: 'Revoke',
     revoked: 'Grant revoked',
     revokeFailed: 'Failed to revoke grant',

@@ -139,7 +139,7 @@ export default function AccessRequestsPage() {
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_VARIANT[r.status] ?? 'bg-gray-100 text-gray-600'}`}
                   >
-                    {t(`access.status.${r.status}`)}
+                    {t(`access.status.${r.status}`, { defaultValue: r.status })}
                   </span>
                 </div>
                 <div className="mt-0.5 text-xs text-gray-500 flex items-center gap-2">
