@@ -18,7 +18,7 @@ import type { Group, User, PaginatedData, GroupMember, RuleExpr, GroupRule } fro
 import axios from 'axios'
 import PageHeader from '../../components/layout/PageHeader'
 import RuleEditor from './RuleEditor'
-import { CodeField, pageMotion, Button } from '../../components/ui'
+import { CodeField, pageMotion, Button, ConfirmDialog } from '../../components/ui'
 import AppRolesReverseTab from './AppRolesReverseTab'
 import { toast, extractMessage } from '../../components/ui/toast'
 
@@ -51,6 +51,10 @@ export default function GroupsPage() {
 
   // Member management drawer
   const [memberGroup, setMemberGroup] = useState<Group | null>(null)
+  const [delGroup, setDelGroup] = useState<Group | null>(null)
+  const [deletingGroup, setDeletingGroup] = useState(false)
+  const [cascadeGroup, setCascadeGroup] = useState<Group | null>(null)
+  const [cascadingGroup, setCascadingGroup] = useState(false)
   const [memberModalTab, setMemberModalTab] = useState<'members' | 'app-roles'>('members')
   const [members, setMembers] = useState<PaginatedData<GroupMember>>({ items: [], total: 0, page: 1, page_size: 20 })
   const [membersLoading, setMembersLoading] = useState(false)
@@ -176,36 +180,45 @@ export default function GroupsPage() {
 
   // ─── Delete ────────────────────────────────────────────────────
 
-  const handleDelete = async (group: Group) => {
-    if (!confirm(t("groups.confirmDelete", { name: group.name }))) return
+  // Delete flow is two-stage: a plain delete, and — if the API 409s because the
+  // group still has members — a follow-up cascade confirm.
+  const confirmDelete = async () => {
+    const group = delGroup
+    if (!group) return
+    setDeletingGroup(true)
     try {
       await groupApi.delete(group.id)
-      if (memberGroup?.id === group.id) {
-        setMemberGroup(null)
-      }
+      if (memberGroup?.id === group.id) setMemberGroup(null)
+      setDelGroup(null)
       loadData()
       toast.success(t("common.success"))
     } catch (err) {
-      // 409 means the group still has members; offer to cascade.
       if (axios.isAxiosError(err) && err.response?.status === 409) {
-        const cascade = confirm(
-          t("groups.confirmCascade", { name: group.name, count: group.member_count }),
-        )
-        if (cascade) {
-          try {
-            await groupApi.delete(group.id, true)
-            if (memberGroup?.id === group.id) {
-              setMemberGroup(null)
-            }
-            loadData()
-            toast.success(t("common.success"))
-          } catch (e) {
-            toast.error(t("common.failed"), extractMessage(e))
-          }
-        }
+        // Still has members → escalate to the cascade confirm.
+        setDelGroup(null)
+        setCascadeGroup(group)
       } else {
         toast.error(t("common.failed"), extractMessage(err))
       }
+    } finally {
+      setDeletingGroup(false)
+    }
+  }
+
+  const confirmCascade = async () => {
+    const group = cascadeGroup
+    if (!group) return
+    setCascadingGroup(true)
+    try {
+      await groupApi.delete(group.id, true)
+      if (memberGroup?.id === group.id) setMemberGroup(null)
+      setCascadeGroup(null)
+      loadData()
+      toast.success(t("common.success"))
+    } catch (e) {
+      toast.error(t("common.failed"), extractMessage(e))
+    } finally {
+      setCascadingGroup(false)
     }
   }
 
@@ -450,7 +463,7 @@ export default function GroupsPage() {
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDelete(group)}
+                          onClick={() => setDelGroup(group)}
                           className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
                           title={t('common.delete')}
                         >
@@ -937,6 +950,23 @@ export default function GroupsPage() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!delGroup}
+        title={t('groups.confirmDelete', { name: delGroup?.name ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deletingGroup}
+        onConfirm={confirmDelete}
+        onCancel={() => setDelGroup(null)}
+      />
+      <ConfirmDialog
+        open={!!cascadeGroup}
+        title={t('groups.confirmCascade', { name: cascadeGroup?.name ?? '', count: cascadeGroup?.member_count ?? 0 })}
+        desc={t('common.cantUndo')}
+        loading={cascadingGroup}
+        onConfirm={confirmCascade}
+        onCancel={() => setCascadeGroup(null)}
+      />
     </motion.div>
   )
 }

@@ -16,7 +16,7 @@ import {
   UserMinus,
 } from 'lucide-react'
 import { orgApi, userApi, cn, statusLabel, statusColor, useTranslation } from '@mxid/shared'
-import { pageMotion, Button } from '@mxid/shared/ui'
+import { pageMotion, Button, ConfirmDialog } from '@mxid/shared/ui'
 import type { OrgNode, User, PaginatedData } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { useTabParam } from '../../hooks/useTabParam'
@@ -201,6 +201,10 @@ export default function OrgsPage() {
   const [showMove, setShowMove] = useState(false)
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
+  const [showDeleteOrg, setShowDeleteOrg] = useState(false)
+  const [deletingOrg, setDeletingOrg] = useState(false)
+  const [delMemberId, setDelMemberId] = useState<string | null>(null)
+  const [removingMember, setRemovingMember] = useState(false)
 
   // Members state
   const [members, setMembers] = useState<PaginatedData<string>>({ items: [], total: 0, page: 1, page_size: 20 })
@@ -373,16 +377,19 @@ export default function OrgsPage() {
     }
   }
 
-  const handleDelete = async () => {
+  const confirmDeleteOrg = async () => {
     if (!selected) return
-    if (!confirm(t('orgs.confirmDeleteOrg', { name: selected.name }))) return
+    setDeletingOrg(true)
     try {
       await orgApi.delete(selected.id)
+      setShowDeleteOrg(false)
       setSelected(null)
       loadTree()
       toast.success(t("common.success"))
     } catch (e) {
       toast.error(t("common.failed"), extractMessage(e))
+    } finally {
+      setDeletingOrg(false)
     }
   }
 
@@ -419,19 +426,26 @@ export default function OrgsPage() {
     }
   }
 
-  const handleRemoveMember = async (userId: string) => {
-    if (!selected) return
-    const user = memberUsers.get(userId)
-    const label = user ? user.display_name || user.username : `ID ${userId}`
-    if (!confirm(t('orgs.confirmRemoveMember', { label }))) return
+  const confirmRemoveMember = async () => {
+    if (!selected || !delMemberId) return
+    setRemovingMember(true)
     try {
-      await orgApi.removeMember(selected.id, userId)
+      await orgApi.removeMember(selected.id, delMemberId)
+      setDelMemberId(null)
       loadMembers(selected.id, memberPage)
       toast.success(t("common.success"))
     } catch (e) {
       toast.error(t("common.failed"), extractMessage(e))
+    } finally {
+      setRemovingMember(false)
     }
   }
+
+  const delMemberLabel = (() => {
+    if (!delMemberId) return ''
+    const u = memberUsers.get(delMemberId)
+    return u ? u.display_name || u.username : `ID ${delMemberId}`
+  })()
 
   const memberTotalPages = Math.ceil(members.total / members.page_size) || 1
 
@@ -506,7 +520,7 @@ export default function OrgsPage() {
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={handleDelete}
+                    onClick={() => setShowDeleteOrg(true)}
                     className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-red-50 hover:text-red-500"
                     title={t('orgs.delete')}
                   >
@@ -637,7 +651,7 @@ export default function OrgsPage() {
                                   </td>
                                   <td className="px-4 py-3 text-right">
                                     <button
-                                      onClick={() => handleRemoveMember(userId)}
+                                      onClick={() => setDelMemberId(userId)}
                                       className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
                                       title={t('orgs.removeMember')}
                                     >
@@ -949,6 +963,22 @@ export default function OrgsPage() {
           </motion.div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteOrg}
+        title={t('orgs.confirmDeleteOrg', { name: selected?.name ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deletingOrg}
+        onConfirm={confirmDeleteOrg}
+        onCancel={() => setShowDeleteOrg(false)}
+      />
+      <ConfirmDialog
+        open={!!delMemberId}
+        title={t('orgs.confirmRemoveMember', { label: delMemberLabel })}
+        loading={removingMember}
+        onConfirm={confirmRemoveMember}
+        onCancel={() => setDelMemberId(null)}
+      />
     </motion.div>
   )
 }

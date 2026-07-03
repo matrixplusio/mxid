@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Shield, Check, Loader2, Trash2, Users, X, UserPlus } from 'lucide-react'
+import { Plus, Shield, Check, Loader2, Trash2, Users, UserPlus } from 'lucide-react'
 import { permissionApi, formatDate, cn, useTranslation } from '@mxid/shared'
-import { pageMotion, Button } from '@mxid/shared/ui'
+import { pageMotion, Button, Modal, ConfirmDialog } from '@mxid/shared/ui'
 import type { Role, Permission, PaginatedData, RoleBinding } from '@mxid/shared'
 import { RoleType } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -37,6 +37,9 @@ export default function PermissionsPage() {
   const [members, setMembers] = useState<PaginatedData<RoleBinding>>({ items: [], total: 0, page: 1, page_size: 20 })
   const [membersLoading, setMembersLoading] = useState(false)
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null)
+  const [delRole, setDelRole] = useState<Role | null>(null)
+  const [deletingRole, setDeletingRole] = useState(false)
+  const [delBinding, setDelBinding] = useState<RoleBinding | null>(null)
 
   // Add member modal
   const [showAddMember, setShowAddMember] = useState(false)
@@ -148,9 +151,10 @@ export default function PermissionsPage() {
     }
   }
 
-  const handleDeleteRole = async (role: Role) => {
-    if (role.type === RoleType.System) return
-    if (!confirm(t('permissions.confirmDeleteRole', { name: role.name }))) return
+  const confirmDeleteRole = async () => {
+    const role = delRole
+    if (!role || role.type === RoleType.System) return
+    setDeletingRole(true)
     try {
       await permissionApi.deleteRole(role.id)
       if (selectedRole?.id === role.id) {
@@ -158,10 +162,13 @@ export default function PermissionsPage() {
         setRolePermissions([])
         setMembers({ items: [], total: 0, page: 1, page_size: 20 })
       }
+      setDelRole(null)
       loadRoles()
       toast.success(t("common.success"))
     } catch (e) {
       toast.error(t("common.failed"), extractMessage(e))
+    } finally {
+      setDeletingRole(false)
     }
   }
 
@@ -197,12 +204,13 @@ export default function PermissionsPage() {
     }
   }
 
-  const handleRemoveMember = async (binding: RoleBinding) => {
-    if (!selectedRole) return
-    if (!confirm(t('permissions.confirmRemoveBinding'))) return
+  const confirmRemoveMember = async () => {
+    const binding = delBinding
+    if (!selectedRole || !binding) return
     setRemovingMemberId(binding.id)
     try {
       await permissionApi.removeMember(selectedRole.id, binding.id)
+      setDelBinding(null)
       loadMembers(selectedRole.id, members.page)
       loadRoles()
       toast.success(t("common.success"))
@@ -303,7 +311,7 @@ export default function PermissionsPage() {
                 <div className="flex items-center gap-2">
                   {selectedRole.type !== RoleType.System && (
                     <button
-                      onClick={() => handleDeleteRole(selectedRole)}
+                      onClick={() => setDelRole(selectedRole)}
                       className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
                     >
                       {t('permissions.deleteRole')}
@@ -495,7 +503,7 @@ export default function PermissionsPage() {
                               </td>
                               <td className="py-3 w-16">
                                 <button
-                                  onClick={() => handleRemoveMember(binding)}
+                                  onClick={() => setDelBinding(binding)}
                                   disabled={removingMemberId === binding.id}
                                   className="inline-flex items-center rounded-md p-1 text-gray-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 disabled:opacity-50"
                                   title={t('permissions.removeMember')}
@@ -554,13 +562,7 @@ export default function PermissionsPage() {
 
       {/* Create Role Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-          >
-            <h3 className="mb-4 text-lg font-semibold">{t('permissions.createRoleModal.title')}</h3>
+        <Modal open title={t('permissions.createRoleModal.title')} onClose={() => setShowCreate(false)} size="md">
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('permissions.createRoleModal.nameRequired')}</label>
@@ -600,28 +602,13 @@ export default function PermissionsPage() {
                 </Button>
               </div>
             </form>
-          </motion.div>
-        </div>
+        </Modal>
       )}
 
       {/* Add Member Modal */}
       {showAddMember && selectedRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{t('permissions.addMemberModal.title')}</h3>
-              <button
-                onClick={() => setShowAddMember(false)}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="mb-4 text-sm text-gray-500">
+        <Modal open title={t('permissions.addMemberModal.title')} onClose={() => setShowAddMember(false)} size="md">
+            <p className="mb-4 text-sm text-muted">
               {t('permissions.addMemberModal.subtitle', { name: selectedRole.name })}
             </p>
             <form onSubmit={handleAddMember} className="space-y-4">
@@ -713,9 +700,24 @@ export default function PermissionsPage() {
                 </Button>
               </div>
             </form>
-          </motion.div>
-        </div>
+        </Modal>
       )}
+
+      <ConfirmDialog
+        open={!!delRole}
+        title={t('permissions.confirmDeleteRole', { name: delRole?.name ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deletingRole}
+        onConfirm={confirmDeleteRole}
+        onCancel={() => setDelRole(null)}
+      />
+      <ConfirmDialog
+        open={!!delBinding}
+        title={t('permissions.confirmRemoveBinding')}
+        loading={removingMemberId === delBinding?.id}
+        onConfirm={confirmRemoveMember}
+        onCancel={() => setDelBinding(null)}
+      />
     </motion.div>
   )
 }
