@@ -3,6 +3,7 @@ package access
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"go.uber.org/zap"
@@ -398,9 +399,7 @@ func (s *Service) publish(ctx context.Context, eventType string, req *Request, e
 		"app_id":        req.AppID,
 		"expires_at":    req.ExpiresAt,
 	}
-	for k, v := range extra {
-		payload[k] = v
-	}
+	maps.Copy(payload, extra)
 	s.busAdp.Publish(ctx, event.Event{
 		Type:    eventType,
 		Payload: payload,

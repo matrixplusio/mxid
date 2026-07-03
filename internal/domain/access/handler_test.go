@@ -329,7 +329,7 @@ func TestConsoleApprove_RequireStepUp_NotFresh_Returns403AndDoesNotGrant(t *test
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("want 403, got %d: %s", w.Code, w.Body.String())
 	}
-	if !bytes.Contains(w.Body.Bytes(), []byte(fmt.Sprintf(`"code":%d`, authn.CodeStepUpRequired))) {
+	if !bytes.Contains(w.Body.Bytes(), fmt.Appendf(nil, `"code":%d`, authn.CodeStepUpRequired)) {
 		t.Fatalf("want code=%d (CodeStepUpRequired), got body=%s", authn.CodeStepUpRequired, w.Body.String())
 	}
 
@@ -404,7 +404,7 @@ func TestConsoleApprove_RequireStepUp_NoMFA_Returns403MFAEnrollRequired(t *testi
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("want 403, got %d: %s", w.Code, w.Body.String())
 	}
-	if !bytes.Contains(w.Body.Bytes(), []byte(fmt.Sprintf(`"code":%d`, authn.CodeMFAEnrollRequired))) {
+	if !bytes.Contains(w.Body.Bytes(), fmt.Appendf(nil, `"code":%d`, authn.CodeMFAEnrollRequired)) {
 		t.Fatalf("want code=%d (CodeMFAEnrollRequired), got body=%s", authn.CodeMFAEnrollRequired, w.Body.String())
 	}
 

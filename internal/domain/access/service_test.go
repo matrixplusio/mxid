@@ -3,6 +3,7 @@ package access
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -181,12 +182,7 @@ func (c *fakeCache) Invalidate(_ context.Context, _, userID int64) error {
 func (c *fakeCache) invalidatedFor(userID int64) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, id := range c.userIDs {
-		if id == userID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.userIDs, userID)
 }
 
 // fakePublisher records published event types and payloads; satisfies EventPublisher.
@@ -210,12 +206,7 @@ func (p *fakePublisher) Publish(_ context.Context, evt event.Event) {
 func (p *fakePublisher) published(eventType string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, e := range p.events {
-		if e == eventType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(p.events, eventType)
 }
 
 // payloadFor returns the payload of the last published event matching

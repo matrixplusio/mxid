@@ -1774,7 +1774,6 @@ export default {
     reject: 'Reject',
     rejected: 'Request rejected',
     rejectFailed: 'Failed to reject request',
-    rejectReason: 'Reason for rejection (optional)',
     rejectModal: {
       title: 'Reject Request',
       reasonLabel: 'Reason for rejection',

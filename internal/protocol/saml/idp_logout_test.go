@@ -47,13 +47,13 @@ func decodeSAMLRedirectParam(t *testing.T, v string) string {
 // including the most recent one for convenience.
 type recordingSP struct {
 	srv      *httptest.Server
-	count    int64
+	count    atomic.Int64
 	mu       sync.Mutex
 	all      []url.Values
 	lastQuer url.Values
 }
 
-func (r *recordingSP) hits() int { return int(atomic.LoadInt64(&r.count)) }
+func (r *recordingSP) hits() int { return int(r.count.Load()) }
 
 func (r *recordingSP) lastHadParam(name string) bool {
 	r.mu.Lock()
@@ -82,7 +82,7 @@ func newRecordingSP(t *testing.T) *recordingSP {
 	t.Helper()
 	sp := &recordingSP{}
 	sp.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		atomic.AddInt64(&sp.count, 1)
+		sp.count.Add(1)
 		sp.mu.Lock()
 		sp.lastQuer = req.URL.Query()
 		sp.all = append(sp.all, req.URL.Query())

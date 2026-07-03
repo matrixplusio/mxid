@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1249,11 +1250,8 @@ func (h *Handler) LogoutUserAppBackchannel(ctx context.Context, userID, appID in
 		// remain intact so a subsequent full logout (LogoutUserBackchannel /
 		// endSession) can still fan out to all other participating RPs.
 		appIDs, _ := h.store.PeekSSOApps(ctx, s.ID)
-		for _, a := range appIDs {
-			if a == appID {
-				targets = append(targets, target{sid: s.ID})
-				break
-			}
+		if slices.Contains(appIDs, appID) {
+			targets = append(targets, target{sid: s.ID})
 		}
 	}
 

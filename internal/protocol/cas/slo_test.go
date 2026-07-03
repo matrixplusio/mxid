@@ -49,16 +49,15 @@ func extractLogoutRequestID(rawBody string) string {
 	xml := vals.Get("logoutRequest")
 	// ID attribute appears as: ... ID="LR-..." ...
 	const prefix = ` ID="`
-	idx := strings.Index(xml, prefix)
-	if idx < 0 {
+	_, rest, ok := strings.Cut(xml, prefix)
+	if !ok {
 		return ""
 	}
-	rest := xml[idx+len(prefix):]
-	end := strings.Index(rest, `"`)
-	if end < 0 {
+	id, _, ok := strings.Cut(rest, `"`)
+	if !ok {
 		return ""
 	}
-	return rest[:end]
+	return id
 }
 
 // waitAsync gives the goroutines spawned by SingleLogout time to complete.

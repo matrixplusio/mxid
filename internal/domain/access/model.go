@@ -1,6 +1,9 @@
 package access
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // Target kinds — which role system the grant lands in.
 const (
@@ -77,12 +80,7 @@ func (Eligibility) TenantScoped()     {}
 
 // DurationAllowed reports whether seconds is in the configured set.
 func (e *Eligibility) DurationAllowed(seconds int) bool {
-	for _, d := range e.AllowedDurations {
-		if d == seconds {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(e.AllowedDurations, seconds)
 }
 
 // ClampDuration caps seconds at MaxDurationSeconds.

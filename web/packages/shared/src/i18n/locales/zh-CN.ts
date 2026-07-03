@@ -1777,7 +1777,6 @@ export default {
     reject: '拒绝',
     rejected: '申请已拒绝',
     rejectFailed: '拒绝申请失败',
-    rejectReason: '拒绝原因（可选）',
     rejectModal: {
       title: '拒绝申请',
       reasonLabel: '拒绝原因',
