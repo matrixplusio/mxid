@@ -262,7 +262,11 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	}
 
 	if err := h.service.RemoveMember(c.Request.Context(), groupID, userID); err != nil {
-		response.InternalError(c, "failed to remove member")
+		if errors.Is(err, ErrGroupIsDynamic) {
+			response.Error(c, http.StatusConflict, 40902, err.Error(), "")
+			return
+		}
+		response.InternalError(c, "failed to remove member", err)
 		return
 	}
 

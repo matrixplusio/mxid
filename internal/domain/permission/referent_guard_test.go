@@ -120,6 +120,24 @@ func TestService_AddMember_CrossTenantScopeRejected(t *testing.T) {
 	}
 }
 
+// A half-set scope (only ScopeType, no ScopeID) is ambiguous and must be
+// rejected with the ErrScopeIncomplete sentinel — the handler needs a
+// distinguishable error to map to 400 instead of falling through to 500.
+func TestService_AddMember_HalfSetScopeRejected(t *testing.T) {
+	db := newPermissionReferentDB(t)
+	seedRole(t, db)
+	svc := newPermSvc(t, db)
+	ctxA := tenantscope.WithTenant(context.Background(), 100)
+
+	scopeType := ScopeTypeOrg
+	if _, err := svc.AddMember(ctxA, 1, &AddMemberRequest{
+		SubjectType: SubjectTypeUser, SubjectID: 500,
+		ScopeType: &scopeType, ScopeID: nil,
+	}); !errors.Is(err, ErrScopeIncomplete) {
+		t.Fatalf("AddMember half-set scope: got %v want ErrScopeIncomplete", err)
+	}
+}
+
 // Same-tenant subject (+ scope) still binds successfully.
 func TestService_AddMember_SameTenantAllowed(t *testing.T) {
 	db := newPermissionReferentDB(t)

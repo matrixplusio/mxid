@@ -407,7 +407,9 @@ func (h *Handler) handleServiceError(c *gin.Context, err error) {
 		response.NotFound(c, 40403, err.Error())
 	case errors.Is(err, ErrScopeNotInTenant):
 		response.NotFound(c, 40404, err.Error())
+	case errors.Is(err, ErrScopeIncomplete):
+		response.BadRequest(c, 40003, err.Error())
 	default:
-		response.InternalError(c, "internal server error")
+		response.InternalError(c, "internal server error", err)
 	}
 }

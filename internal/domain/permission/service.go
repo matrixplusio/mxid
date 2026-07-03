@@ -27,6 +27,10 @@ var (
 	// ErrScopeNotInTenant is the same guard for the optional binding scope
 	// (org/group) target.
 	ErrScopeNotInTenant = errors.New("scope not found in tenant")
+	// ErrScopeIncomplete is returned when only one of ScopeType/ScopeID is
+	// set on an AddMember request — a half-set scope is ambiguous and must
+	// be rejected as a client error, not silently accepted.
+	ErrScopeIncomplete = errors.New("scope_type and scope_id must be set together")
 )
 
 // EntityValidator reports whether a referenced entity id exists within the
@@ -317,7 +321,7 @@ func (s *Service) AddMember(ctx context.Context, roleID int64, req *AddMemberReq
 
 	// scope_type and scope_id must come together.
 	if (req.ScopeType != nil) != (req.ScopeID != nil) {
-		return nil, fmt.Errorf("scope_type and scope_id must be set together")
+		return nil, ErrScopeIncomplete
 	}
 
 	// Referenced-entity guard: the subject (and optional scope) ids come from

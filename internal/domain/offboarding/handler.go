@@ -1,10 +1,12 @@
 package offboarding
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/imkerbos/mxid/internal/domain/user"
 	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
@@ -47,7 +49,11 @@ func (h *Handler) Offboard(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Offboard(c.Request.Context(), id, actorID(c)); err != nil {
-		response.InternalError(c, "offboard failed")
+		if errors.Is(err, user.ErrUserNotFound) {
+			response.NotFound(c, 40401, err.Error())
+			return
+		}
+		response.InternalError(c, "offboard failed", err)
 		return
 	}
 	response.OK(c, gin.H{"offboarded": true})

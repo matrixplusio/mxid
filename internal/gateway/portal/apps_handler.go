@@ -1,9 +1,12 @@
 package portal
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
 	"github.com/imkerbos/mxid/internal/domain/authn"
 	"github.com/imkerbos/mxid/pkg/event"
 	"github.com/imkerbos/mxid/pkg/response"
@@ -209,7 +212,11 @@ func (h *appsHandler) launchApp(c *gin.Context) {
 
 	url, err := h.appQuerier.GetAppLaunchURL(c.Request.Context(), appID, userID)
 	if err != nil {
-		response.InternalError(c, "failed to get launch url")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(c, 40401, "app not found")
+			return
+		}
+		response.InternalError(c, "failed to get launch url", err)
 		return
 	}
 	// Adapter builds launch_url against the cached issuer config (usually
