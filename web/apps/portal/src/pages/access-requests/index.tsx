@@ -110,9 +110,16 @@ export default function AccessRequestsPage() {
           <h1 className="text-xl font-semibold text-gray-900">{t('access.title')}</h1>
           <p className="mt-0.5 text-sm text-gray-500">{t('access.subtitle')}</p>
         </div>
-        <Button onClick={() => setModalOpen(true)} disabled={eligibilities.length === 0 && !loading}>
-          {t('access.newRequest')}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button onClick={() => setModalOpen(true)} disabled={eligibilities.length === 0 && !loading}>
+            {t('access.newRequest')}
+          </Button>
+          {!loading && eligibilities.length === 0 && (
+            <p className="max-w-[220px] text-right text-xs text-gray-400">
+              {t('access.noEligibilitiesHint')}
+            </p>
+          )}
+        </div>
       </div>
 
       {loading ? (

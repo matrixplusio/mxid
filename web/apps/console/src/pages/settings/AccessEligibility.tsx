@@ -5,9 +5,28 @@
 // so this is defence-in-depth.
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { accessApprovalApi, useTranslation, useEdition } from '@mxid/shared'
-import type { Eligibility, CreateEligibilityBody } from '@mxid/shared'
-import { pageMotion, Button, Field, Input } from '@mxid/shared/ui'
+import {
+  accessApprovalApi,
+  appApi,
+  appRoleApi,
+  groupApi,
+  orgApi,
+  permissionApi,
+  userApi,
+  useTranslation,
+  useEdition,
+} from '@mxid/shared'
+import type {
+  Eligibility,
+  CreateEligibilityBody,
+  App,
+  AppRole,
+  Group,
+  OrgNode,
+  Role,
+  User,
+} from '@mxid/shared'
+import { pageMotion, Button, Field, Select } from '@mxid/shared/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
 
 const ALL_DURATIONS = [3600, 14400, 86400, 259200, 604800] as const
@@ -40,6 +59,21 @@ export default function AccessEligibilityPage() {
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<CreateEligibilityBody>(DEFAULT_FORM)
 
+  // Option lists for the dropdown pickers below. Each is fetched lazily,
+  // only once the form actually needs it, and cached for the session.
+  const [consoleRoles, setConsoleRoles] = useState<Role[]>([])
+  const [consoleRolesLoading, setConsoleRolesLoading] = useState(false)
+  const [apps, setApps] = useState<App[]>([])
+  const [appsLoading, setAppsLoading] = useState(false)
+  const [appRoles, setAppRoles] = useState<AppRole[]>([])
+  const [appRolesLoading, setAppRolesLoading] = useState(false)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [orgs, setOrgs] = useState<OrgNode[]>([])
+  const [orgsLoading, setOrgsLoading] = useState(false)
+  const [users, setUsers] = useState<User[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -55,6 +89,103 @@ export default function AccessEligibilityPage() {
     void load()
   }, [load])
 
+  // Console RBAC roles — needed for the `console` target's role_id picker
+  // AND for the approver picker when approver_subject_type === 'role'.
+  useEffect(() => {
+    const need = form.target_kind === 'console' || form.approver_subject_type === 'role'
+    if (!need || consoleRoles.length > 0 || consoleRolesLoading) return
+    setConsoleRolesLoading(true)
+    permissionApi
+      .listRoles({ page: 1, page_size: 200 })
+      .then((d) => setConsoleRoles(d.items))
+      .catch(() => toast.error(t('eligibility.loadOptionsFailed')))
+      .finally(() => setConsoleRolesLoading(false))
+  }, [form.target_kind, form.approver_subject_type, consoleRoles.length, consoleRolesLoading, t])
+
+  // Apps — needed for the `app` target's app_id picker.
+  useEffect(() => {
+    if (form.target_kind !== 'app' || apps.length > 0 || appsLoading) return
+    setAppsLoading(true)
+    appApi
+      .list({ page: 1, page_size: 200 })
+      .then((d) => setApps(d.items))
+      .catch(() => toast.error(t('eligibility.loadOptionsFailed')))
+      .finally(() => setAppsLoading(false))
+  }, [form.target_kind, apps.length, appsLoading, t])
+
+  // App roles — cascades off the selected app_id. Re-fetched whenever
+  // app_id changes; cleared when no app is selected.
+  useEffect(() => {
+    if (form.target_kind !== 'app' || !form.app_id) {
+      setAppRoles([])
+      return
+    }
+    let cancelled = false
+    setAppRolesLoading(true)
+    appRoleApi
+      .listRoles('app', form.app_id)
+      .then((d) => {
+        if (!cancelled) setAppRoles(d)
+      })
+      .catch(() => {
+        if (!cancelled) toast.error(t('eligibility.loadOptionsFailed'))
+      })
+      .finally(() => {
+        if (!cancelled) setAppRolesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [form.target_kind, form.app_id, t])
+
+  // User groups — needed when requester or approver subject type is `group`.
+  useEffect(() => {
+    const need = form.requester_subject_type === 'group' || form.approver_subject_type === 'group'
+    if (!need || groups.length > 0 || groupsLoading) return
+    setGroupsLoading(true)
+    groupApi
+      .list({ page: 1, page_size: 200 })
+      .then((d) => setGroups(d.items))
+      .catch(() => toast.error(t('eligibility.loadOptionsFailed')))
+      .finally(() => setGroupsLoading(false))
+  }, [form.requester_subject_type, form.approver_subject_type, groups.length, groupsLoading, t])
+
+  // Orgs — needed when requester subject type is `org`. Flatten the tree
+  // since the picker just needs a flat name/id list.
+  useEffect(() => {
+    if (form.requester_subject_type !== 'org' || orgs.length > 0 || orgsLoading) return
+    setOrgsLoading(true)
+    orgApi
+      .tree()
+      .then((tree) => {
+        const flat: OrgNode[] = []
+        const walk = (nodes: OrgNode[]) => {
+          for (const n of nodes) {
+            flat.push(n)
+            if (n.children) walk(n.children)
+          }
+        }
+        walk(tree)
+        setOrgs(flat)
+      })
+      .catch(() => toast.error(t('eligibility.loadOptionsFailed')))
+      .finally(() => setOrgsLoading(false))
+  }, [form.requester_subject_type, orgs.length, orgsLoading, t])
+
+  // Users — needed when requester or approver subject type is `user`.
+  // Note: this loads a single page of up to 200 users; for tenants with
+  // more users than that, a real search-select would be needed.
+  useEffect(() => {
+    const need = form.requester_subject_type === 'user' || form.approver_subject_type === 'user'
+    if (!need || users.length > 0 || usersLoading) return
+    setUsersLoading(true)
+    userApi
+      .list({ page: 1, page_size: 200 })
+      .then((d) => setUsers(d.items))
+      .catch(() => toast.error(t('eligibility.loadOptionsFailed')))
+      .finally(() => setUsersLoading(false))
+  }, [form.requester_subject_type, form.approver_subject_type, users.length, usersLoading, t])
+
   const toggleDuration = (d: number) =>
     setForm((f) => ({
       ...f,
@@ -64,6 +195,10 @@ export default function AccessEligibilityPage() {
     }))
 
   const create = async () => {
+    if (form.target_kind === 'app' && !form.app_id) {
+      toast.error(t('eligibility.createFailed'), t('eligibility.appIdRequired'))
+      return
+    }
     if (!form.role_id.trim()) {
       toast.error(t('eligibility.createFailed'), t('eligibility.roleIdRequired'))
       return
@@ -116,54 +251,202 @@ export default function AccessEligibilityPage() {
             <select
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
               value={form.target_kind}
-              onChange={(e) =>
+              onChange={(e) => {
+                const value = e.target.value as 'console' | 'app'
                 setForm((f) => ({
                   ...f,
-                  target_kind: e.target.value as 'console' | 'app',
+                  target_kind: value,
+                  role_id: '',
+                  app_id: value === 'app' ? (f.app_id ?? '') : undefined,
                 }))
-              }
+              }}
             >
               <option value="app">{t('access.targetApp')}</option>
               <option value="console">{t('access.targetConsole')}</option>
             </select>
           </Field>
 
-          <Field label={t('eligibility.roleId')}>
-            <Input
-              placeholder={t('eligibility.roleIdPlaceholder')}
-              value={form.role_id}
-              onChange={(e) => setForm((f) => ({ ...f, role_id: e.target.value }))}
-            />
-          </Field>
-
-          {form.target_kind === 'app' && (
+          {form.target_kind === 'console' ? (
+            <Field label={t('eligibility.roleId')}>
+              <Select
+                value={form.role_id}
+                disabled={consoleRolesLoading}
+                onChange={(e) => setForm((f) => ({ ...f, role_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {consoleRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.code})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : (
             <Field label={t('eligibility.appId')}>
-              <Input
-                placeholder={t('eligibility.appIdPlaceholder')}
+              <Select
                 value={form.app_id ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, app_id: e.target.value }))}
-              />
+                disabled={appsLoading}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, app_id: e.target.value, role_id: '' }))
+                }
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {apps.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.code})
+                  </option>
+                ))}
+              </Select>
             </Field>
           )}
 
-          <Field label={t('eligibility.requesterGroupId')}>
-            <Input
-              placeholder={t('eligibility.requesterGroupIdPlaceholder')}
-              value={form.requester_subject_id ?? ''}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, requester_subject_id: e.target.value }))
-              }
-            />
+          {form.target_kind === 'app' && (
+            <Field label={t('eligibility.roleId')}>
+              <Select
+                value={form.role_id}
+                disabled={!form.app_id || appRolesLoading}
+                onChange={(e) => setForm((f) => ({ ...f, role_id: e.target.value }))}
+              >
+                <option value="">
+                  {form.app_id ? t('eligibility.pleaseSelect') : t('eligibility.selectAppFirst')}
+                </option>
+                {appRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.code})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+
+          <Field label={t('eligibility.requesterSubjectType')}>
+            <Select
+              value={form.requester_subject_type}
+              onChange={(e) => {
+                const value = e.target.value as CreateEligibilityBody['requester_subject_type']
+                setForm((f) => ({ ...f, requester_subject_type: value, requester_subject_id: '' }))
+              }}
+            >
+              <option value="any">{t('eligibility.requesterSubjectTypes.any')}</option>
+              <option value="user">{t('eligibility.requesterSubjectTypes.user')}</option>
+              <option value="group">{t('eligibility.requesterSubjectTypes.group')}</option>
+              <option value="org">{t('eligibility.requesterSubjectTypes.org')}</option>
+            </Select>
           </Field>
 
-          <Field label={t('eligibility.approverRoleId')}>
-            <Input
-              placeholder={t('eligibility.approverRoleIdPlaceholder')}
-              value={form.approver_subject_id ?? ''}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, approver_subject_id: e.target.value }))
-              }
-            />
+          <Field
+            label={t('eligibility.requesterSubjectId')}
+            hint={form.requester_subject_type === 'any' ? t('eligibility.requesterAnyHint') : undefined}
+          >
+            {form.requester_subject_type === 'any' ? (
+              <Select value="" disabled>
+                <option value="">{t('eligibility.requesterAnyHint')}</option>
+              </Select>
+            ) : form.requester_subject_type === 'group' ? (
+              <Select
+                value={form.requester_subject_id ?? ''}
+                disabled={groupsLoading}
+                onChange={(e) => setForm((f) => ({ ...f, requester_subject_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} ({g.code})
+                  </option>
+                ))}
+              </Select>
+            ) : form.requester_subject_type === 'org' ? (
+              <Select
+                value={form.requester_subject_id ?? ''}
+                disabled={orgsLoading}
+                onChange={(e) => setForm((f) => ({ ...f, requester_subject_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name} ({o.code})
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Select
+                value={form.requester_subject_id ?? ''}
+                disabled={usersLoading}
+                onChange={(e) => setForm((f) => ({ ...f, requester_subject_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.display_name || u.username} ({u.username})
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          <Field label={t('eligibility.approverSubjectType')}>
+            <Select
+              value={form.approver_subject_type}
+              onChange={(e) => {
+                const value = e.target.value as CreateEligibilityBody['approver_subject_type']
+                setForm((f) => ({ ...f, approver_subject_type: value, approver_subject_id: '' }))
+              }}
+            >
+              <option value="role">{t('eligibility.approverSubjectTypes.role')}</option>
+              <option value="group">{t('eligibility.approverSubjectTypes.group')}</option>
+              <option value="user">{t('eligibility.approverSubjectTypes.user')}</option>
+              <option value="auto">{t('eligibility.approverSubjectTypes.auto')}</option>
+            </Select>
+          </Field>
+
+          <Field
+            label={t('eligibility.approverSubjectId')}
+            hint={form.approver_subject_type === 'auto' ? t('eligibility.approverAutoHint') : undefined}
+          >
+            {form.approver_subject_type === 'auto' ? (
+              <Select value="" disabled>
+                <option value="">{t('eligibility.approverAutoHint')}</option>
+              </Select>
+            ) : form.approver_subject_type === 'role' ? (
+              <Select
+                value={form.approver_subject_id ?? ''}
+                disabled={consoleRolesLoading}
+                onChange={(e) => setForm((f) => ({ ...f, approver_subject_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {consoleRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.code})
+                  </option>
+                ))}
+              </Select>
+            ) : form.approver_subject_type === 'group' ? (
+              <Select
+                value={form.approver_subject_id ?? ''}
+                disabled={groupsLoading}
+                onChange={(e) => setForm((f) => ({ ...f, approver_subject_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} ({g.code})
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Select
+                value={form.approver_subject_id ?? ''}
+                disabled={usersLoading}
+                onChange={(e) => setForm((f) => ({ ...f, approver_subject_id: e.target.value }))}
+              >
+                <option value="">{t('eligibility.pleaseSelect')}</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.display_name || u.username} ({u.username})
+                  </option>
+                ))}
+              </Select>
+            )}
           </Field>
 
           <Field label={t('eligibility.maxDuration')}>
