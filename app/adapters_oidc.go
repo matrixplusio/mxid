@@ -133,7 +133,7 @@ func (r *accessSubjectResolver) Resolve(_ *gin.Context, subjectType string, id i
 		return row.Name, row.Code
 	case appaccess.SubjectOrg:
 		var row struct{ Name, Code string }
-		_ = r.app.DB.Table("mxid_org").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
+		_ = r.app.DB.Table("mxid_organization").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
 		return row.Name, row.Code
 	case appaccess.SubjectRole:
 		var row struct{ Name, Code string }
