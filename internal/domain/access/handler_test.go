@@ -2,19 +2,38 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/imkerbos/mxid/internal/domain/authn"
 	"github.com/imkerbos/mxid/pkg/snowflake"
 )
+
+// fakeStepUp is an in-memory StepUpEnforcer. fresh/hasMFA are mutated
+// directly by tests to simulate the approver's session state.
+type fakeStepUp struct {
+	fresh  bool
+	hasMFA bool
+	mfaErr error
+}
+
+func (f *fakeStepUp) Fresh(_ *gin.Context, _ int64) bool { return f.fresh }
+
+func (f *fakeStepUp) HasMFA(_ context.Context, _ int64) (bool, error) {
+	return f.hasMFA, f.mfaErr
+}
 
 // ── handler-test helpers ──────────────────────────────────────────────────────
 
 // newHandlerWithFakeSvc constructs a Handler backed by in-memory fakes (no DB).
-// It reuses the fakes from service_test.go (same package).
+// It reuses the fakes from service_test.go (same package). The default
+// fakeStepUp reports a fresh, MFA-enrolled approver so existing tests (none
+// of which exercise require_stepup=true eligibilities) are unaffected; tests
+// that care about step-up enforcement mutate fakes.stepUp directly.
 func newHandlerWithFakeSvc(t *testing.T) (*Handler, *testFakes) {
 	t.Helper()
 	idGen, err := snowflake.New(3)
@@ -27,9 +46,10 @@ func newHandlerWithFakeSvc(t *testing.T) (*Handler, *testFakes) {
 		bus:        &fakePublisher{},
 		matcher:    fakeMatcher{},
 		terminator: &fakeTerminator{},
+		stepUp:     &fakeStepUp{fresh: true, hasMFA: true},
 	}
 	svc := NewService(fakes.repo, idGen, fakes.bus, fakes.cache, fakes.matcher, fakes.terminator)
-	h := NewHandler(svc, testTenant)
+	h := NewHandler(svc, testTenant, fakes.stepUp)
 	return h, fakes
 }
 
@@ -129,6 +149,43 @@ func seedElig(t *testing.T, fakes *testFakes, idGen *snowflake.Generator) *Eligi
 		t.Fatalf("seedElig: %v", err)
 	}
 	return elig
+}
+
+// seedEligWithStepUp is seedElig but with RequireStepUp set explicitly —
+// used by the approve step-up-enforcement tests below.
+func seedEligWithStepUp(t *testing.T, fakes *testFakes, idGen *snowflake.Generator, requireStepUp bool) *Eligibility {
+	t.Helper()
+	elig := &Eligibility{
+		ID:                   idGen.Generate(),
+		TenantID:             testTenant,
+		TargetKind:           TargetConsole,
+		RoleID:               42,
+		RequesterSubjectType: "any",
+		AllowedDurations:     IntSlice{3600},
+		MaxDurationSeconds:   3600,
+		ApproverSubjectType:  ApproverRole,
+		RequireJustification: false,
+		RequireStepUp:        requireStepUp,
+		Status:               1,
+	}
+	if err := fakes.repo.CreateEligibility(testCtx, elig); err != nil {
+		t.Fatalf("seedEligWithStepUp: %v", err)
+	}
+	return elig
+}
+
+// seedPendingRequest creates a pending request against elig via the service
+// (bypassing HTTP), so approve tests exercise only the approve handler.
+func seedPendingRequest(t *testing.T, h *Handler, elig *Eligibility) *Request {
+	t.Helper()
+	req, err := h.svc.CreateRequest(testCtx, testTenant, testRequester, CreateAccessRequest{
+		EligibilityID:    elig.ID,
+		RequestedSeconds: 3600,
+	})
+	if err != nil {
+		t.Fatalf("seedPendingRequest: %v", err)
+	}
+	return req
 }
 
 // ── tests ──────────────────────────────────────────────────────────────────────
@@ -243,5 +300,119 @@ func TestConsoleListRequests_Returns200(t *testing.T) {
 	w := doGET(r, "/api/v1/console/access-requests")
 	if w.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// ── require_stepup enforcement ────────────────────────────────────────────────
+//
+// These prove the PAM guarantee: an eligibility with require_stepup=true
+// forces a fresh step-up MFA on the approver regardless of the ambient
+// StepUpEnforcer state, using the SAME response codes the platform's global
+// StepUpMiddleware already returns (authn.CodeStepUpRequired /
+// authn.CodeMFAEnrollRequired) so the console SPA's existing step-up modal
+// handles it unchanged.
+
+// TestConsoleApprove_RequireStepUp_NotFresh_Returns403AndDoesNotGrant proves
+// that a stale (non-fresh) approver session is rejected with 403
+// step_up_required and the request is left pending — no grant is created.
+func TestConsoleApprove_RequireStepUp_NotFresh_Returns403AndDoesNotGrant(t *testing.T) {
+	h, fakes := newHandlerWithFakeSvc(t)
+	idGen, _ := snowflake.New(50)
+	elig := seedEligWithStepUp(t, fakes, idGen, true)
+	req := seedPendingRequest(t, h, elig)
+
+	fakes.stepUp.hasMFA = true // has MFA, but NOT fresh
+	fakes.stepUp.fresh = false
+
+	r := consoleEngine(h)
+	w := doPOST(r, fmt.Sprintf("/api/v1/console/access-requests/%d/approve", req.ID), "")
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("want 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte(fmt.Sprintf(`"code":%d`, authn.CodeStepUpRequired))) {
+		t.Fatalf("want code=%d (CodeStepUpRequired), got body=%s", authn.CodeStepUpRequired, w.Body.String())
+	}
+
+	stored, err := fakes.repo.GetRequest(testCtx, req.ID, testTenant)
+	if err != nil {
+		t.Fatalf("GetRequest: %v", err)
+	}
+	if stored.Status != StatusPending {
+		t.Fatalf("request must remain pending (no grant created), got status=%s", stored.Status)
+	}
+}
+
+// TestConsoleApprove_RequireStepUp_Fresh_Succeeds proves that a fresh
+// step-up session lets the approval proceed.
+func TestConsoleApprove_RequireStepUp_Fresh_Succeeds(t *testing.T) {
+	h, fakes := newHandlerWithFakeSvc(t)
+	idGen, _ := snowflake.New(51)
+	elig := seedEligWithStepUp(t, fakes, idGen, true)
+	req := seedPendingRequest(t, h, elig)
+
+	fakes.stepUp.fresh = true
+	fakes.stepUp.hasMFA = true
+
+	r := consoleEngine(h)
+	w := doPOST(r, fmt.Sprintf("/api/v1/console/access-requests/%d/approve", req.ID), "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	stored, err := fakes.repo.GetRequest(testCtx, req.ID, testTenant)
+	if err != nil {
+		t.Fatalf("GetRequest: %v", err)
+	}
+	if stored.Status != StatusApproved {
+		t.Fatalf("want approved, got status=%s", stored.Status)
+	}
+}
+
+// TestConsoleApprove_NoStepUpRequired_ApprovesRegardlessOfFreshness proves
+// require_stepup=false leaves behavior unchanged: approval proceeds even
+// though the approver's session is stale.
+func TestConsoleApprove_NoStepUpRequired_ApprovesRegardlessOfFreshness(t *testing.T) {
+	h, fakes := newHandlerWithFakeSvc(t)
+	idGen, _ := snowflake.New(52)
+	elig := seedEligWithStepUp(t, fakes, idGen, false)
+	req := seedPendingRequest(t, h, elig)
+
+	fakes.stepUp.fresh = false
+	fakes.stepUp.hasMFA = false
+
+	r := consoleEngine(h)
+	w := doPOST(r, fmt.Sprintf("/api/v1/console/access-requests/%d/approve", req.ID), "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestConsoleApprove_RequireStepUp_NoMFA_Returns403MFAEnrollRequired proves
+// that an approver with no MFA factor enrolled gets the enrollment code
+// (40331), not the step-up-challenge code (40330).
+func TestConsoleApprove_RequireStepUp_NoMFA_Returns403MFAEnrollRequired(t *testing.T) {
+	h, fakes := newHandlerWithFakeSvc(t)
+	idGen, _ := snowflake.New(53)
+	elig := seedEligWithStepUp(t, fakes, idGen, true)
+	req := seedPendingRequest(t, h, elig)
+
+	fakes.stepUp.fresh = false
+	fakes.stepUp.hasMFA = false
+
+	r := consoleEngine(h)
+	w := doPOST(r, fmt.Sprintf("/api/v1/console/access-requests/%d/approve", req.ID), "")
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("want 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte(fmt.Sprintf(`"code":%d`, authn.CodeMFAEnrollRequired))) {
+		t.Fatalf("want code=%d (CodeMFAEnrollRequired), got body=%s", authn.CodeMFAEnrollRequired, w.Body.String())
+	}
+
+	stored, err := fakes.repo.GetRequest(testCtx, req.ID, testTenant)
+	if err != nil {
+		t.Fatalf("GetRequest: %v", err)
+	}
+	if stored.Status != StatusPending {
+		t.Fatalf("request must remain pending (no grant created), got status=%s", stored.Status)
 	}
 }

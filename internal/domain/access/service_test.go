@@ -260,6 +260,9 @@ type testFakes struct {
 	bus        *fakePublisher
 	matcher    SubjectMatcher
 	terminator *fakeTerminator
+	// stepUp is only populated by handler tests (newHandlerWithFakeSvc);
+	// service-level tests don't go through the handler's step-up gate.
+	stepUp *fakeStepUp
 }
 
 // ── setup helpers ──────────────────────────────────────────────────────────────

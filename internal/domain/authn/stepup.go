@@ -141,3 +141,42 @@ func audit(d StepUpDeps, c *gin.Context, userID, tenantID int64, allowed bool, r
 		d.Audit(c, userID, tenantID, allowed, reason)
 	}
 }
+
+// StepUpChecker exposes the same freshness/enrollment primitives
+// StepUpMiddleware uses, for callers that must force a step-up challenge
+// unconditionally (i.e. regardless of whether the tenant's ambient MFA
+// policy mode would otherwise apply to this actor). The JIT access-approval
+// flow is the motivating case: an eligibility marked require_stepup=true must
+// demand a fresh MFA even when the global policy mode is "off".
+//
+// StepUpChecker has no dependency on any specific consumer package — Go's
+// structural typing lets it satisfy a narrower interface declared elsewhere
+// (e.g. access.StepUpEnforcer) without either package importing the other.
+type StepUpChecker struct {
+	deps StepUpDeps
+}
+
+// NewStepUpChecker builds a StepUpChecker from the same StepUpDeps used to
+// construct StepUpMiddleware, so both mechanisms agree on session lookup,
+// the step-up window, and MFA enrollment status.
+func NewStepUpChecker(d StepUpDeps) *StepUpChecker {
+	return &StepUpChecker{deps: d}
+}
+
+// Fresh reports whether the current console session (resolved from c exactly
+// like StepUpMiddleware does — via CtxSessionID) passed MFA within the
+// tenant's configured step-up window. The MFA policy *mode* is irrelevant
+// here on purpose: only the window matters, because the caller is enforcing
+// step-up unconditionally.
+func (s *StepUpChecker) Fresh(c *gin.Context, tenantID int64) bool {
+	ctx := c.Request.Context()
+	sessionID := c.GetString(CtxSessionID)
+	_, window := s.deps.Policy(ctx, tenantID)
+	sess, _ := s.deps.SessionMgr.Get(ctx, session.NamespaceConsole, sessionID)
+	return sess != nil && sess.StepUpFresh(time.Now(), window)
+}
+
+// HasMFA reports whether userID has any MFA factor enrolled.
+func (s *StepUpChecker) HasMFA(ctx context.Context, userID int64) (bool, error) {
+	return s.deps.HasMFA(ctx, userID)
+}

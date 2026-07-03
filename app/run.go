@@ -450,7 +450,12 @@ func registerModules(a *bootstrap.App) {
 	// No dedicated Audit hook — every high-risk operation already emits its
 	// own domain audit event downstream, so the action is on the trail
 	// regardless of whether step-up was enforced or skipped (MFA off).
-	a.ConsoleGroup.Use(authn.StepUpMiddleware(authn.StepUpDeps{
+	//
+	// stepUpDeps is also reused (unchanged) to build a StepUpChecker for the
+	// JIT access-approval handler below (§7), so both mechanisms resolve the
+	// session and the step-up window identically — the JIT path just forces
+	// the check unconditionally instead of gating on the policy mode.
+	stepUpDeps := authn.StepUpDeps{
 		SessionMgr: sessionMgr,
 		Policy: func(ctx context.Context, tenantID int64) (string, time.Duration) {
 			p, err := settingService.MFAPolicy(ctx, tenantID)
@@ -469,7 +474,8 @@ func registerModules(a *bootstrap.App) {
 		HasMFA: func(ctx context.Context, userID int64) (bool, error) {
 			return authnModule.Engine.HasMFA(ctx, userID)
 		},
-	}))
+	}
+	a.ConsoleGroup.Use(authn.StepUpMiddleware(stepUpDeps))
 
 	// 4e. Deny-by-default authz gateway. Mounted AFTER AuthMiddleware + authz
 	// install (so c has user/tenant + the Service) and BEFORE the module routes,
@@ -947,7 +953,7 @@ func registerModules(a *bootstrap.App) {
 		accessTerminator,
 		a.Logger,
 	)
-	accessJITHandler := access.NewHandler(accessJITSvc, a.Config.Tenant.DefaultID)
+	accessJITHandler := access.NewHandler(accessJITSvc, a.Config.Tenant.DefaultID, authn.NewStepUpChecker(stepUpDeps))
 	accessJITHandler.RegisterConsole(a.ConsoleGroup)
 	accessJITHandler.RegisterPortal(a.PortalGroup)
 
