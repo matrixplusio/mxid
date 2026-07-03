@@ -22,6 +22,7 @@ export interface AccessRequest {
   id: string
   tenant_id: string
   requester_id: string
+  requester_name?: string
   eligibility_id: string
   target_kind: 'console' | 'app'
   role_id: string

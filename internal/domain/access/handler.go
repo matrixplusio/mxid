@@ -92,6 +92,20 @@ func (h *Handler) RegisterPortal(rg *gin.RouterGroup) {
 	}
 }
 
+// Error codes used by this handler. Each operation gets its own code so a
+// client can distinguish failure causes without parsing the message string.
+// Keep these distinct — don't reuse a code across two different operations.
+//
+//	40002 — createEligibility: bad request body
+//	40003 — createEligibility: service/validation error
+//	40004 — approve: service error
+//	40005 — reject: service error
+//	40006 — cancel: service error
+//	40007 — revoke: service error
+//	40008 — createRequest (portal): bad request body
+//	40009 — createRequest (portal): service/validation error
+//	40101 — createRequest (portal): no authenticated user in context
+
 // ─── console handlers ─────────────────────────────────────────────────────────
 
 func (h *Handler) createEligibility(c *gin.Context) {
@@ -164,7 +178,7 @@ func (h *Handler) reject(c *gin.Context) {
 func (h *Handler) revoke(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.svc.Revoke(c.Request.Context(), h.tenantID(c), id, h.userID(c)); err != nil {
-		response.BadRequest(c, 40006, err.Error())
+		response.BadRequest(c, 40007, err.Error())
 		return
 	}
 	response.OK(c, gin.H{"status": StatusRevoked})
@@ -193,15 +207,22 @@ func (h *Handler) myRequests(c *gin.Context) {
 func (h *Handler) createRequest(c *gin.Context) {
 	var body CreateAccessRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		response.BadRequest(c, 40002, err.Error())
+		response.BadRequest(c, 40008, err.Error())
 		return
 	}
-	out, err := h.svc.CreateRequest(c.Request.Context(), h.tenantID(c), h.userID(c), body)
+	uid := h.userID(c)
+	if uid == 0 {
+		// Auth middleware normally guarantees a caller identity; defend here so
+		// a misconfigured route never creates a request with requester_id=0.
+		response.Unauthorized(c, 40101, "authentication required")
+		return
+	}
+	out, err := h.svc.CreateRequest(c.Request.Context(), h.tenantID(c), uid, body)
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.BadRequest(c, 40009, err.Error())
 		return
 	}
-	response.OK(c, out)
+	response.Created(c, out)
 }
 
 func (h *Handler) cancel(c *gin.Context) {

@@ -331,6 +331,148 @@ func TestListRequestsByStatus(t *testing.T) {
 	}
 }
 
+// seedUser inserts a minimal mxid_user row and returns its id.
+func seedUser(t *testing.T, db *gorm.DB, tenantID int64, username string, displayName *string) int64 {
+	t.Helper()
+	id := accessNextID()
+	if err := db.Exec(`
+		INSERT INTO mxid_user (id, tenant_id, username, display_name, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 1, NOW(), NOW())`,
+		id, tenantID, username, displayName).Error; err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	return id
+}
+
+// TestListRequestsByStatus_PopulatesRequesterName verifies the console
+// approvals list resolves the requester's display_name (fixes the raw
+// snowflake-id-only display).
+func TestListRequestsByStatus_PopulatesRequesterName(t *testing.T) {
+	repo, db, idGen, tenantID := setupAccessRepo(t)
+	roleID := seedConsoleRole(t, db, tenantID)
+	eligID := seedEligibility(t, db, tenantID, roleID)
+
+	displayName := "Alice Requester"
+	userID := seedUser(t, db, tenantID, fmt.Sprintf("alice-%d", accessNextID()), &displayName)
+
+	req := &Request{
+		ID: idGen.Generate(), TenantID: tenantID, RequesterID: userID,
+		EligibilityID: eligID, TargetKind: TargetConsole, RoleID: roleID,
+		RequestedSeconds: 3600, Status: StatusPending,
+	}
+	if err := repo.CreateRequest(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := repo.ListRequestsByStatus(context.Background(), tenantID, StatusPending)
+	if err != nil {
+		t.Fatalf("ListRequestsByStatus: %v", err)
+	}
+	var found *Request
+	for _, r := range rows {
+		if r.ID == req.ID {
+			found = r
+		}
+	}
+	if found == nil {
+		t.Fatal("created request not found in ListRequestsByStatus")
+	}
+	if found.RequesterName != displayName {
+		t.Fatalf("want requester_name=%q, got %q", displayName, found.RequesterName)
+	}
+}
+
+// TestListRequestsByStatus_RequesterNameFallsBackToUsername verifies the
+// username fallback when the user has no display_name set.
+func TestListRequestsByStatus_RequesterNameFallsBackToUsername(t *testing.T) {
+	repo, db, idGen, tenantID := setupAccessRepo(t)
+	roleID := seedConsoleRole(t, db, tenantID)
+	eligID := seedEligibility(t, db, tenantID, roleID)
+
+	username := fmt.Sprintf("bob-%d", accessNextID())
+	userID := seedUser(t, db, tenantID, username, nil)
+
+	req := &Request{
+		ID: idGen.Generate(), TenantID: tenantID, RequesterID: userID,
+		EligibilityID: eligID, TargetKind: TargetConsole, RoleID: roleID,
+		RequestedSeconds: 3600, Status: StatusPending,
+	}
+	if err := repo.CreateRequest(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := repo.ListRequestsByStatus(context.Background(), tenantID, StatusPending)
+	if err != nil {
+		t.Fatalf("ListRequestsByStatus: %v", err)
+	}
+	var found *Request
+	for _, r := range rows {
+		if r.ID == req.ID {
+			found = r
+		}
+	}
+	if found == nil {
+		t.Fatal("created request not found in ListRequestsByStatus")
+	}
+	if found.RequesterName != username {
+		t.Fatalf("want requester_name to fall back to username=%q, got %q", username, found.RequesterName)
+	}
+}
+
+// TestCreateEligibility_RequireStepUpZeroValueHonored reproduces and proves
+// fixed a GORM footgun: Create() treats a Go zero value (false) on a field
+// carrying a gorm "default" tag as "not set" and lets the DB column default
+// (TRUE) apply instead, silently turning an explicit require_stepup:false
+// into true. Exercises the real Service (not the in-memory fakeRepo, which
+// doesn't touch GORM and can't reproduce this) end-to-end: DTO -> the
+// service's boolOrDefault -> repo.CreateEligibility (real GORM INSERT) -> a
+// fresh SELECT via GetEligibility.
+func TestCreateEligibility_RequireStepUpZeroValueHonored(t *testing.T) {
+	repo, db, idGen, tenantID := setupAccessRepo(t)
+	roleID := seedConsoleRole(t, db, tenantID)
+	svc := NewService(repo, idGen, nil, &fakeCache{}, fakeMatcher{}, nil)
+
+	falseVal := false
+	e, err := svc.CreateEligibility(context.Background(), tenantID, nil, CreateEligibilityRequest{
+		TargetKind:           TargetConsole,
+		RoleID:               roleID,
+		RequesterSubjectType: "any",
+		AllowedDurations:     []int{3600},
+		MaxDurationSeconds:   3600,
+		RequireStepUp:        &falseVal,
+	})
+	if err != nil {
+		t.Fatalf("CreateEligibility (explicit false): %v", err)
+	}
+	got, err := repo.GetEligibility(context.Background(), e.ID, tenantID)
+	if err != nil {
+		t.Fatalf("GetEligibility: %v", err)
+	}
+	if got.RequireStepUp != false {
+		t.Fatalf("explicit require_stepup:false must persist as false, got %v", got.RequireStepUp)
+	}
+
+	// Omitted (nil) must still default to true.
+	e2, err := svc.CreateEligibility(context.Background(), tenantID, nil, CreateEligibilityRequest{
+		TargetKind:           TargetConsole,
+		RoleID:               roleID,
+		RequesterSubjectType: "any",
+		AllowedDurations:     []int{3600},
+		MaxDurationSeconds:   3600,
+		RequireStepUp:        nil,
+	})
+	if err != nil {
+		t.Fatalf("CreateEligibility (omitted): %v", err)
+	}
+	got2, err := repo.GetEligibility(context.Background(), e2.ID, tenantID)
+	if err != nil {
+		t.Fatalf("GetEligibility (omitted): %v", err)
+	}
+	if got2.RequireStepUp != true {
+		t.Fatalf("omitted require_stepup must default to true, got %v", got2.RequireStepUp)
+	}
+}
+
 // ─── App-target helpers ───────────────────────────────────────────────────────
 
 // seedApp inserts a minimal mxid_app row (protocol='saml' satisfies the

@@ -107,7 +107,65 @@ func (r *repo) ListRequestsByStatus(ctx context.Context, tenantID int64, status 
 		Where("tenant_id = ? AND status = ?", tenantID, status).
 		Order("created_at DESC").
 		Find(&rows).Error
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	// Console approvals list shows the requester by name, not a raw snowflake
+	// id. Best-effort: a lookup failure must not fail the list — the name is
+	// cosmetic display only, the id remains authoritative in requester_id.
+	r.populateRequesterNames(ctx, rows)
+	return rows, nil
+}
+
+// populateRequesterNames looks up each row's requester display_name
+// (falling back to username when unset) and fills Request.RequesterName.
+//
+// This is a single extra batched lookup rather than a literal SQL LEFT JOIN
+// on mxid_access_request, deliberately: Request.RequesterName is fully
+// ignored by GORM (gorm:"-") so every other query against this model stays a
+// plain, unaffected `SELECT <request columns>`. Making GORM populate an
+// ignored field from a joined column would require either abandoning the
+// shared Request model for this one query (a parallel struct to keep in sync
+// with every future request-table migration) or hand-writing the full
+// request column list in raw SQL (the same brittleness). A second indexed
+// query by primary key is simpler and safe at console list sizes.
+func (r *repo) populateRequesterNames(ctx context.Context, rows []*Request) {
+	if len(rows) == 0 {
+		return
+	}
+	seen := make(map[int64]bool, len(rows))
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		if !seen[row.RequesterID] {
+			seen[row.RequesterID] = true
+			ids = append(ids, row.RequesterID)
+		}
+	}
+
+	var users []struct {
+		ID          int64
+		DisplayName *string
+		Username    string
+	}
+	if err := r.db.WithContext(ctx).
+		Table("mxid_user").
+		Select("id, display_name, username").
+		Where("id IN ?", ids).
+		Find(&users).Error; err != nil {
+		return
+	}
+
+	names := make(map[int64]string, len(users))
+	for _, u := range users {
+		if u.DisplayName != nil && *u.DisplayName != "" {
+			names[u.ID] = *u.DisplayName
+		} else {
+			names[u.ID] = u.Username
+		}
+	}
+	for _, row := range rows {
+		row.RequesterName = names[row.RequesterID]
+	}
 }
 
 func (r *repo) ListRequestsByRequester(ctx context.Context, requesterID, tenantID int64) ([]*Request, error) {
@@ -186,6 +244,11 @@ VALUES (?, ?, ?, 'user', ?, ?, ?, ?, ?, NOW())`,
 // ApproveAndGrant runs in ONE transaction:
 //  1. INSERT the time-bound binding row.
 //  2. UPDATE the request to approved with binding_id/expires_at/activated_at/decided_at.
+//
+// All three request-row timestamps (decided_at, activated_at, updated_at) use
+// the same Go-side `now` instant rather than mixing it with a DB-side NOW() —
+// under DB clock skew or a slow-running transaction the two could otherwise
+// disagree within the same row.
 func (r *repo) ApproveAndGrant(ctx context.Context, req *Request, approverID int64, expiresAt time.Time, newBindingID int64) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -194,7 +257,7 @@ func (r *repo) ApproveAndGrant(ctx context.Context, req *Request, approverID int
 		}
 		return tx.Exec(`
 UPDATE mxid_access_request
-SET status = ?, approver_id = ?, decided_at = ?, activated_at = ?, expires_at = ?, binding_id = ?, updated_at = NOW()
+SET status = ?, approver_id = ?, decided_at = ?, activated_at = ?, expires_at = ?, binding_id = ?, updated_at = ?
 WHERE id = ? AND tenant_id = ? AND status = ?`,
 			StatusApproved,
 			approverID,
@@ -202,6 +265,7 @@ WHERE id = ? AND tenant_id = ? AND status = ?`,
 			now,
 			expiresAt,
 			newBindingID,
+			now,
 			req.ID,
 			req.TenantID,
 			StatusPending,

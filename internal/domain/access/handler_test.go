@@ -133,7 +133,7 @@ func seedElig(t *testing.T, fakes *testFakes, idGen *snowflake.Generator) *Eligi
 
 // ── tests ──────────────────────────────────────────────────────────────────────
 
-func TestPortalCreateRequest_Returns200(t *testing.T) {
+func TestPortalCreateRequest_Returns201(t *testing.T) {
 	h, fakes := newHandlerWithFakeSvc(t)
 	idGen, _ := snowflake.New(4)
 	elig := seedElig(t, fakes, idGen)
@@ -141,8 +141,32 @@ func TestPortalCreateRequest_Returns200(t *testing.T) {
 	r := portalEngine(h)
 	body := fmt.Sprintf(`{"eligibility_id":"%d","requested_seconds":3600,"justification":"oncall"}`, elig.ID)
 	w := doPOST(r, "/api/v1/portal/access-requests", body)
-	if w.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestPortalCreateRequest_NoUserID_Returns401 proves createRequest defends
+// against a missing/zero user_id in context (auth middleware normally
+// prevents this) instead of creating a request with requester_id=0.
+func TestPortalCreateRequest_NoUserID_Returns401(t *testing.T) {
+	h, fakes := newHandlerWithFakeSvc(t)
+	idGen, _ := snowflake.New(40)
+	elig := seedElig(t, fakes, idGen)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	grp := r.Group("/api/v1/portal")
+	// No injectAuth here — user_id is absent from context, so h.userID(c) returns 0.
+	rq := grp.Group("/access-requests")
+	{
+		rq.POST("", h.createRequest)
+	}
+
+	body := fmt.Sprintf(`{"eligibility_id":"%d","requested_seconds":3600,"justification":"oncall"}`, elig.ID)
+	w := doPOST(r, "/api/v1/portal/access-requests", body)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

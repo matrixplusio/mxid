@@ -55,8 +55,17 @@ type Eligibility struct {
 	MaxDurationSeconds   int       `gorm:"column:max_duration_seconds;not null" json:"max_duration_seconds"`
 	ApproverSubjectType  string    `gorm:"column:approver_subject_type;size:16;not null;default:role" json:"approver_subject_type"`
 	ApproverSubjectID    int64     `gorm:"column:approver_subject_id;not null;default:0" json:"approver_subject_id,string"`
-	RequireJustification bool      `gorm:"column:require_justification;not null;default:true" json:"require_justification"`
-	RequireStepUp        bool      `gorm:"column:require_stepup;not null;default:true" json:"require_stepup"`
+	// NOTE: no gorm "default:..." tag on these two booleans. GORM's Create()
+	// treats a Go zero value (false) on a field that carries a "default" tag
+	// as "not set" and omits the column from the INSERT, letting the DB's
+	// column default (TRUE, per migration 000045) apply instead — silently
+	// turning an explicit false into true. The desired default is already
+	// computed in the service layer (boolOrDefault) before the struct reaches
+	// the repository, so the struct tag's default is redundant and actively
+	// harmful here. The DB column keeps its own DEFAULT TRUE for any INSERT
+	// that bypasses the service (e.g. raw SQL / migrations backfill).
+	RequireJustification bool      `gorm:"column:require_justification;not null" json:"require_justification"`
+	RequireStepUp        bool      `gorm:"column:require_stepup;not null" json:"require_stepup"`
 	Status               int       `gorm:"column:status;not null;default:1" json:"status"`
 	CreatedAt            time.Time `gorm:"column:created_at;not null" json:"created_at"`
 	CreatedBy            *int64    `gorm:"column:created_by" json:"created_by,omitempty,string"`
@@ -106,6 +115,13 @@ type Request struct {
 	BindingID        *int64     `gorm:"column:binding_id" json:"binding_id,omitempty,string"`
 	CreatedAt        time.Time  `gorm:"column:created_at;not null" json:"created_at"`
 	UpdatedAt        time.Time  `gorm:"column:updated_at;not null" json:"updated_at"`
+
+	// RequesterName is the requester's display_name (falling back to
+	// username), populated only by ListRequestsByStatus (console approvals
+	// list) via a lookup against mxid_user. It is not a real column — fully
+	// ignored by GORM (gorm:"-") so every other Request query path (CreateRequest,
+	// GetRequest, ListRequestsByRequester, ListDueGrants, ...) is unaffected.
+	RequesterName string `gorm:"-" json:"requester_name,omitempty"`
 }
 
 func (Request) TableName() string { return "mxid_access_request" }

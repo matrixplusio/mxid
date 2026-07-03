@@ -126,7 +126,7 @@ export default function AccessApprovalsPage() {
                 rows.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50/50">
                     <td className="px-6 py-3 text-sm font-medium text-gray-700">
-                      {r.requester_id}
+                      {r.requester_name || r.requester_id}
                     </td>
                     <td className="px-6 py-3 text-sm text-gray-600">
                       {r.target_kind === 'console'
