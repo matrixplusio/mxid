@@ -63,10 +63,10 @@ var allowedCalls = map[string]string{
 	// mxid_role_binding console insert: table has no tenant_id column; tenant is
 	// carried via the joined mxid_role; the parent access_request was already
 	// loaded tenant-scoped before the grant.
-	"internal/domain/access/repository.go:149": "mxid_role_binding has no tenant_id column; tenant carried via joined mxid_role; parent request loaded tenant-scoped before insert",
+	"internal/domain/access/repository.go:207": "mxid_role_binding has no tenant_id column; tenant carried via joined mxid_role; parent request loaded tenant-scoped before insert",
 	// mxid_app_role_binding app insert: tenant_id is explicitly set as an INSERT
 	// value (from the tenant-scoped request); it is a value not a WHERE predicate.
-	"internal/domain/access/repository.go:167": "mxid_app_role_binding INSERT sets tenant_id explicitly from the tenant-scoped request; value not predicate",
+	"internal/domain/access/repository.go:225": "mxid_app_role_binding INSERT sets tenant_id explicitly from the tenant-scoped request; value not predicate",
 }
 
 // windowRadius is how many source lines on each side of a Raw/Exec marker the
