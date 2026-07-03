@@ -6,7 +6,7 @@ import type { App, PaginatedData, AppTemplate, AppTemplateListItem } from '@mxid
 import PageHeader from '../../components/layout/PageHeader'
 import AppGroupsTab from './AppGroupsTab'
 import { useTabParam } from '../../hooks/useTabParam'
-import { CodeField, pageMotion, Button } from '../../components/ui'
+import { CodeField, pageMotion, Button, ConfirmDialog } from '../../components/ui'
 import { IconPicker } from '../../components/icon-picker/IconPicker'
 import { toast, extractMessage } from '../../components/ui/toast'
 import AccessPolicyTab from './AccessPolicyTab'
@@ -360,6 +360,10 @@ export default function AppsPage() {
 
   // Detail drawer state
   const [detailApp, setDetailApp] = useState<App | null>(null)
+  const [delApp, setDelApp] = useState<App | null>(null)
+  const [deletingApp, setDeletingApp] = useState(false)
+  const [rotateApp, setRotateApp] = useState<App | null>(null)
+  const [rotating, setRotating] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailTab, setDetailTab] = useTabParam<DetailTab>('detail_tab', 'basic', DETAIL_TAB_VALUES)
 
@@ -566,15 +570,20 @@ export default function AppsPage() {
     }
   }
 
-  const handleDelete = async (app: App) => {
-    if (!confirm(t('apps.list.confirmDelete', { name: app.name }))) return
+  const confirmDeleteApp = async () => {
+    const app = delApp
+    if (!app) return
+    setDeletingApp(true)
     try {
       await appApi.delete(app.id)
       toast.success(t('common.success'))
+      setDelApp(null)
       if (detailApp?.id === app.id) closeDetail()
       loadData()
     } catch (e) {
       toast.error(t('common.failed'), extractMessage(e))
+    } finally {
+      setDeletingApp(false)
     }
   }
 
@@ -712,17 +721,22 @@ export default function AppsPage() {
   // Rotate client_secret
   // -------------------------------------------------------------------------
 
-  const handleRotateSecret = async (app: App) => {
-    if (!confirm(t('apps.detail.credentials.confirmRotate', { name: app.name }))) return
+  const confirmRotateSecret = async () => {
+    const app = rotateApp
+    if (!app) return
+    setRotating(true)
     try {
       const result = await appApi.regenerateSecret(app.id)
       setRevealedSecret({
         clientId: app.client_id || '',
         clientSecret: result.client_secret,
       })
+      setRotateApp(null)
       toast.success(t('apps.detail.credentials.rotated'))
     } catch (e) {
       toast.error(t('common.failed'), extractMessage(e))
+    } finally {
+      setRotating(false)
     }
   }
 
@@ -861,7 +875,7 @@ export default function AppsPage() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleDelete(app)
+                    setDelApp(app)
                   }}
                   className="rounded px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
                 >
@@ -1408,7 +1422,7 @@ export default function AppsPage() {
                         CAS  → CAS server URL + validate URL
                     */}
                     {detailTab === 'credentials' && (
-                      <CredentialsTab app={detailApp} onRotateSecret={() => handleRotateSecret(detailApp)} />
+                      <CredentialsTab app={detailApp} onRotateSecret={() => setRotateApp(detailApp)} />
                     )}
 
                     {/* ---- Access policy tab ---- */}
@@ -1461,6 +1475,22 @@ export default function AppsPage() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!delApp}
+        title={t('apps.list.confirmDelete', { name: delApp?.name ?? '' })}
+        desc={t('common.cantUndo')}
+        loading={deletingApp}
+        onConfirm={confirmDeleteApp}
+        onCancel={() => setDelApp(null)}
+      />
+      <ConfirmDialog
+        open={!!rotateApp}
+        title={t('apps.detail.credentials.confirmRotate', { name: rotateApp?.name ?? '' })}
+        loading={rotating}
+        onConfirm={confirmRotateSecret}
+        onCancel={() => setRotateApp(null)}
+      />
     </motion.div>
   )
 }

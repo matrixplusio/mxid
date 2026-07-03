@@ -23,7 +23,7 @@ import {
   type ConsoleUserInfo,
   type APITokenRow,
 } from '@mxid/shared'
-import { Button } from '../../components/ui'
+import { Button, ConfirmDialog } from '../../components/ui'
 import { toast } from '@mxid/shared/ui/toast'
 import type { MFAInfo, SessionInfo } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -535,8 +535,11 @@ function MFASection({
     consoleSecurityApi.countBackupCodes().then(setBackupRemaining).catch(() => setBackupRemaining(null))
   }, [totpActive, mfaList])
 
+  const [showRegen, setShowRegen] = useState(false)
+  const [showDisable, setShowDisable] = useState(false)
+
   const handleRegenerate = async () => {
-    if (!confirm(t('account.mfa.backupRegenConfirm'))) return
+    setShowRegen(false)
     let totpCode: string | undefined
     if (totpActive) {
       const code = window.prompt(t('account.mfa.backupNeedTotp')) ?? ''
@@ -561,7 +564,7 @@ function MFASection({
   }
 
   const handleDisable = async () => {
-    if (!confirm(t('account.mfa.disableConfirm'))) return
+    setShowDisable(false)
     try {
       await consoleSecurityApi.deleteTOTP()
       toast.success(t('account.mfa.disabled'))
@@ -623,7 +626,7 @@ function MFASection({
                 </span>
                 {mfa.type === 'totp' && mfa.verified && (
                   <button
-                    onClick={handleDisable}
+                    onClick={() => setShowDisable(true)}
                     className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> {t('account.mfa.disable')}
@@ -654,7 +657,7 @@ function MFASection({
               </p>
             </div>
             <button
-              onClick={handleRegenerate}
+              onClick={() => setShowRegen(true)}
               disabled={regenerating}
               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
             >
@@ -678,6 +681,20 @@ function MFASection({
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={showRegen}
+        title={t('account.mfa.backupRegenConfirm')}
+        loading={regenerating}
+        onConfirm={handleRegenerate}
+        onCancel={() => setShowRegen(false)}
+      />
+      <ConfirmDialog
+        open={showDisable}
+        title={t('account.mfa.disableConfirm')}
+        onConfirm={handleDisable}
+        onCancel={() => setShowDisable(false)}
+      />
     </SectionCard>
   )
 }
@@ -895,6 +912,7 @@ function SessionsSection() {
   const [error, setError] = useState('')
   const [revoking, setRevoking] = useState<string | null>(null)
   const [currentSID, setCurrentSID] = useState<string>('')
+  const [delSid, setDelSid] = useState<string | null>(null)
 
   const fetchAll = useCallback(() => {
     setLoading(true)
@@ -921,12 +939,13 @@ function SessionsSection() {
     fetchAll()
   }, [fetchAll])
 
-  const handleRevoke = async (sid: string) => {
-    if (sid === currentSID) return
-    if (!confirm(t('account.sessions.kickConfirm'))) return
+  const confirmRevoke = async () => {
+    const sid = delSid
+    if (!sid || sid === currentSID) return
     setRevoking(sid)
     try {
       await consoleSecurityApi.deleteSession(sid)
+      setDelSid(null)
       toast.success(t('account.sessions.kicked'))
       fetchAll()
     } catch (e) {
@@ -975,7 +994,7 @@ function SessionsSection() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleRevoke(s.id)}
+                    onClick={() => setDelSid(s.id)}
                     disabled={isCurrent || revoking === s.id}
                     title={isCurrent ? t('account.sessions.cantKickSelf') : t('account.sessions.kickTitle')}
                     className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
@@ -992,6 +1011,14 @@ function SessionsSection() {
             })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!delSid}
+        title={t('account.sessions.kickConfirm')}
+        loading={revoking === delSid}
+        onConfirm={confirmRevoke}
+        onCancel={() => setDelSid(null)}
+      />
     </SectionCard>
   )
 }
@@ -1079,6 +1106,8 @@ function APITokensSection() {
   const [creating, setCreating] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [newPlaintext, setNewPlaintext] = useState<{ name: string; token: string } | null>(null)
+  const [delTok, setDelTok] = useState<APITokenRow | null>(null)
+  const [revokingTok, setRevokingTok] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -1107,14 +1136,19 @@ function APITokensSection() {
     }
   }
 
-  const handleRevoke = async (tok: APITokenRow) => {
-    if (!confirm(t('account.apiTokens.revokeConfirm', { name: tok.name }))) return
+  const confirmRevoke = async () => {
+    const tok = delTok
+    if (!tok) return
+    setRevokingTok(true)
     try {
       await consoleSecurityApi.revokeAPIToken(tok.id)
+      setDelTok(null)
       toast.success(t('account.apiTokens.revokeOk'))
       load()
     } catch (e) {
       toast.error(t('account.apiTokens.revokeFailed'), e instanceof Error ? e.message : '')
+    } finally {
+      setRevokingTok(false)
     }
   }
 
@@ -1180,7 +1214,7 @@ function APITokensSection() {
                   <td className="px-3 py-2 text-right">
                     {!tok.revoked_at && (
                       <button
-                        onClick={() => handleRevoke(tok)}
+                        onClick={() => setDelTok(tok)}
                         className="rounded-lg px-2 py-1 text-red-600 hover:bg-red-50"
                         title={t('account.apiTokens.cols.status')}
                       >
@@ -1210,6 +1244,14 @@ function APITokensSection() {
           onClose={() => setNewPlaintext(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!delTok}
+        title={t('account.apiTokens.revokeConfirm', { name: delTok?.name ?? '' })}
+        loading={revokingTok}
+        onConfirm={confirmRevoke}
+        onCancel={() => setDelTok(null)}
+      />
     </SectionCard>
   )
 }
