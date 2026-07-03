@@ -60,7 +60,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar text-white">
+    <aside className="flex h-full w-60 shrink-0 flex-col bg-sidebar text-white">
       {/* Logo */}
       <div className="flex h-16 items-center justify-center border-b border-white/10">
         <img src={branding.logo_url || logo} alt={branding.product_name || 'MXID'} className="h-10 w-auto" />
