@@ -3,9 +3,9 @@ package group
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/idstr"
 	"github.com/imkerbos/mxid/pkg/pagination"
 	"github.com/imkerbos/mxid/pkg/response"
@@ -45,9 +45,8 @@ func (h *Handler) List(c *gin.Context) {
 // callers don't need to know which domain owns the join. The frontend uses
 // this on the user detail page.
 func (h *Handler) ListByUser(c *gin.Context) {
-	userID, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid user id")
+	userID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -79,9 +78,8 @@ func (h *Handler) Create(c *gin.Context) {
 
 // Get retrieves a single user group by ID.
 func (h *Handler) Get(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -102,9 +100,8 @@ func (h *Handler) Get(c *gin.Context) {
 
 // Update updates a user group.
 func (h *Handler) Update(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -132,9 +129,8 @@ func (h *Handler) Update(c *gin.Context) {
 // Delete soft-deletes a user group. Pass ?force=true to delete a group that
 // still has members (members are cascaded via the FK ON DELETE CASCADE).
 func (h *Handler) Delete(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -150,9 +146,8 @@ func (h *Handler) Delete(c *gin.Context) {
 
 // GetMembers returns paginated members of a group with enriched user info.
 func (h *Handler) GetMembers(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -168,9 +163,8 @@ func (h *Handler) GetMembers(c *gin.Context) {
 
 // AddMember adds a user to a group.
 func (h *Handler) AddMember(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -191,9 +185,8 @@ func (h *Handler) AddMember(c *gin.Context) {
 // BatchAddMembers adds many users to a group in one call. Users that already
 // belong appear in `skipped`, not as failures.
 func (h *Handler) BatchAddMembers(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -219,15 +212,13 @@ func (h *Handler) BatchAddMembers(c *gin.Context) {
 
 // RemoveMember removes a user from a group.
 func (h *Handler) RemoveMember(c *gin.Context) {
-	groupID, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
-	userID, err := parseID(c, "uid")
-	if err != nil {
-		response.BadRequest(c, 40003, "invalid user id")
+	userID, ok := ginutil.ParseInt64Param(c, "uid")
+	if !ok {
 		return
 	}
 
@@ -242,9 +233,8 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 // BatchRemoveMembers removes many users from a group in one call. Users that
 // were not members appear in `skipped`.
 func (h *Handler) BatchRemoveMembers(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -268,17 +258,11 @@ func (h *Handler) BatchRemoveMembers(c *gin.Context) {
 	response.OK(c, res)
 }
 
-// parseID parses an int64 ID from a URL parameter.
-func parseID(c *gin.Context, param string) (int64, error) {
-	return strconv.ParseInt(c.Param(param), 10, 64)
-}
-
 // GetRule handles GET /groups/:id/rule. 404 when the group has no rule
 // (a static group, or a dynamic group whose rule was just removed).
 func (h *Handler) GetRule(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	rule, err := h.service.GetRule(c.Request.Context(), id)
@@ -297,9 +281,8 @@ func (h *Handler) GetRule(c *gin.Context) {
 // UpsertRule handles PUT /groups/:id/rule. Validates the rule, persists it,
 // flips the group to dynamic, and runs an initial sync.
 func (h *Handler) UpsertRule(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body json.RawMessage
@@ -328,9 +311,8 @@ func (h *Handler) UpsertRule(c *gin.Context) {
 // DeleteRule handles DELETE /groups/:id/rule. Removes the rule and flips
 // the group back to static. Existing members are preserved.
 func (h *Handler) DeleteRule(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	if err := h.service.DeleteRule(c.Request.Context(), id); err != nil {
@@ -343,9 +325,8 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 // SyncRule handles POST /groups/:id/sync. Recomputes membership from the
 // attached rule. Returns a report with how many users were added/removed.
 func (h *Handler) SyncRule(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid group id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	report, err := h.service.SyncRule(c.Request.Context(), id)

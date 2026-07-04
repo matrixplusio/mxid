@@ -3,10 +3,10 @@ package permission
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/idstr"
 	"github.com/imkerbos/mxid/pkg/pagination"
 	"github.com/imkerbos/mxid/pkg/response"
@@ -130,17 +130,6 @@ func errAssignBlocked(msg string) error {
 	return fmt.Errorf("privilege escalation blocked: %s", msg)
 }
 
-// parseID parses the :id path parameter as int64.
-func parseID(c *gin.Context, param string) (int64, bool) {
-	idStr := c.Param(param)
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id: "+param)
-		return 0, false
-	}
-	return id, true
-}
-
 // ListRoles handles GET /roles.
 func (h *Handler) ListRoles(c *gin.Context) {
 	p := pagination.Parse(c)
@@ -188,7 +177,7 @@ func (h *Handler) CreateRole(c *gin.Context) {
 
 // GetRole handles GET /roles/:id.
 func (h *Handler) GetRole(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -214,7 +203,7 @@ func (h *Handler) GetRole(c *gin.Context) {
 
 // UpdateRole handles PUT /roles/:id.
 func (h *Handler) UpdateRole(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -236,7 +225,7 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 
 // DeleteRole handles DELETE /roles/:id.
 func (h *Handler) DeleteRole(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -251,7 +240,7 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 
 // GetPermissions handles GET /roles/:id/permissions.
 func (h *Handler) GetPermissions(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -272,7 +261,7 @@ func (h *Handler) GetPermissions(c *gin.Context) {
 
 // SetPermissions handles PUT /roles/:id/permissions.
 func (h *Handler) SetPermissions(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -298,7 +287,7 @@ func (h *Handler) SetPermissions(c *gin.Context) {
 
 // ListMembers handles GET /roles/:id/members.
 func (h *Handler) ListMembers(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -325,7 +314,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 // aren't one). If the binding carries a scope, the caller must also already
 // have the role's permissions covering that scope.
 func (h *Handler) AddMember(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -353,12 +342,12 @@ func (h *Handler) AddMember(c *gin.Context) {
 
 // RemoveMember handles DELETE /roles/:id/members/:mid.
 func (h *Handler) RemoveMember(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
 
-	mid, ok := parseID(c, "mid")
+	mid, ok := ginutil.ParseInt64Param(c, "mid")
 	if !ok {
 		return
 	}

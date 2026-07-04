@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/domain/authn"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/idstr"
 	"github.com/imkerbos/mxid/pkg/pagination"
 	"github.com/imkerbos/mxid/pkg/response"
@@ -68,7 +69,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 // ListLoginHistory handles GET /users/:id/login-history. Paginated, newest first.
 func (h *Handler) ListLoginHistory(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -88,17 +89,6 @@ func (h *Handler) ListLoginHistory(c *gin.Context) {
 // Hardcoded to 1 for MVP.
 func getTenantID(c *gin.Context) int64 {
 	return tenantctx.FromContext(c, 1)
-}
-
-// parseID parses the :id path parameter as int64.
-func parseID(c *gin.Context) (int64, bool) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid user id")
-		return 0, false
-	}
-	return id, true
 }
 
 // Create handles POST /users.
@@ -129,7 +119,7 @@ func (h *Handler) Create(c *gin.Context) {
 // will see their own row in normal navigation and we don't want to flood
 // the audit log.
 func (h *Handler) Get(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -166,7 +156,7 @@ type SetSuperAdminRequest struct {
 // Service emits a grant/revoke audit event and the wired authz cache
 // invalidator drops the user's effective bindings.
 func (h *Handler) SetSuperAdmin(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -185,7 +175,7 @@ func (h *Handler) SetSuperAdmin(c *gin.Context) {
 
 // Update handles PUT /users/:id.
 func (h *Handler) Update(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -209,7 +199,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 // Delete handles DELETE /users/:id.
 func (h *Handler) Delete(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -259,7 +249,7 @@ func (h *Handler) List(c *gin.Context) {
 
 // UpdateStatus handles PUT /users/:id/status.
 func (h *Handler) UpdateStatus(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -280,7 +270,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 // ResetPassword handles PUT /users/:id/password.
 func (h *Handler) ResetPassword(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -324,7 +314,7 @@ func (h *Handler) BatchAction(c *gin.Context) {
 // LockUser handles POST /users/:id/lock. Admin operation; reason is required
 // for audit purposes.
 func (h *Handler) LockUser(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -343,7 +333,7 @@ func (h *Handler) LockUser(c *gin.Context) {
 
 // UnlockUser handles POST /users/:id/unlock. Admin operation.
 func (h *Handler) UnlockUser(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -371,7 +361,7 @@ func actorIDFromCtx(c *gin.Context) int64 {
 
 // ListIdentities handles GET /users/:id/identities.
 func (h *Handler) ListIdentities(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -401,7 +391,7 @@ func (h *Handler) ListIdentities(c *gin.Context) {
 // UnbindIdentity handles DELETE /users/:id/identities/:iid. Admin operation;
 // removes the third-party binding so the user must re-link from the portal.
 func (h *Handler) UnbindIdentity(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -421,7 +411,7 @@ func (h *Handler) UnbindIdentity(c *gin.Context) {
 
 // GetDetail handles GET /users/:id/detail.
 func (h *Handler) GetDetail(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -450,7 +440,7 @@ func (h *Handler) GetDetail(c *gin.Context) {
 // UpdateDetail handles PUT /users/:id/detail. Upserts the detail row using
 // patch semantics — only fields present in the request body are touched.
 func (h *Handler) UpdateDetail(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -478,7 +468,7 @@ func (h *Handler) UpdateDetail(c *gin.Context) {
 // ListMFA handles GET /users/:id/mfa. Returns metadata about each enrolled
 // factor; secret material is never serialised.
 func (h *Handler) ListMFA(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -504,7 +494,7 @@ func (h *Handler) ListMFA(c *gin.Context) {
 // specific factor (e.g. "totp"). The next login will skip the MFA challenge
 // if no other verified factor remains.
 func (h *Handler) DeleteMFA(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -524,7 +514,7 @@ func (h *Handler) DeleteMFA(c *gin.Context) {
 // that wipes the per-user MFA fail counters + lock keys so the user can
 // retry immediately (e.g. after a fat-fingering streak hit the threshold).
 func (h *Handler) ClearMFALockout(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}

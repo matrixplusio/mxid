@@ -1,9 +1,8 @@
 package org
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/pagination"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
@@ -52,9 +51,8 @@ func (h *Handler) Create(c *gin.Context) {
 
 // Get retrieves a single organization by ID.
 func (h *Handler) Get(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -69,9 +67,8 @@ func (h *Handler) Get(c *gin.Context) {
 
 // Update updates an organization.
 func (h *Handler) Update(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -92,9 +89,8 @@ func (h *Handler) Update(c *gin.Context) {
 
 // Delete soft-deletes an organization.
 func (h *Handler) Delete(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -108,9 +104,8 @@ func (h *Handler) Delete(c *gin.Context) {
 
 // Move moves an organization to a new parent.
 func (h *Handler) Move(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -130,9 +125,8 @@ func (h *Handler) Move(c *gin.Context) {
 
 // GetMembers returns paginated members of an organization.
 func (h *Handler) GetMembers(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -148,9 +142,8 @@ func (h *Handler) GetMembers(c *gin.Context) {
 
 // AddMember adds a user to an organization.
 func (h *Handler) AddMember(c *gin.Context) {
-	id, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -170,15 +163,13 @@ func (h *Handler) AddMember(c *gin.Context) {
 
 // RemoveMember removes a user from an organization.
 func (h *Handler) RemoveMember(c *gin.Context) {
-	orgID, err := parseID(c, "id")
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid organization id")
+	orgID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
-	userID, err := parseID(c, "uid")
-	if err != nil {
-		response.BadRequest(c, 40003, "invalid user id")
+	userID, ok := ginutil.ParseInt64Param(c, "uid")
+	if !ok {
 		return
 	}
 
@@ -188,9 +179,4 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	}
 
 	response.OK(c, nil)
-}
-
-// parseID parses an int64 ID from a URL parameter.
-func parseID(c *gin.Context, param string) (int64, error) {
-	return strconv.ParseInt(c.Param(param), 10, 64)
 }

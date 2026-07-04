@@ -11,19 +11,19 @@ import (
 	"github.com/imkerbos/mxid/pkg/response"
 )
 
-// ParseInt64Param reads a path parameter as int64. On failure it writes
-// a 400 response and returns ok=false so the caller can early-return:
+// ParseInt64Param reads a path parameter as int64. On failure it writes a 400
+// response (code 40001, message "invalid <name>" — the raw value is NOT echoed
+// back) and returns ok=false so the caller can early-return:
 //
 //	id, ok := ginutil.ParseInt64Param(c, "id")
 //	if !ok { return }
 //
-// errorCode is the 5-digit response code used in the failure body —
-// distinct per caller so audit logs disambiguate which param parse failed.
+// This is the single shared implementation; the per-domain parseID clones were
+// consolidated onto it.
 func ParseInt64Param(c *gin.Context, name string) (int64, bool) {
-	raw := c.Param(name)
-	id, err := strconv.ParseInt(raw, 10, 64)
+	id, err := strconv.ParseInt(c.Param(name), 10, 64)
 	if err != nil {
-		response.BadRequest(c, 40001, "invalid "+name+": "+raw)
+		response.BadRequest(c, 40001, "invalid "+name)
 		return 0, false
 	}
 	return id, true

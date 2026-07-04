@@ -4,11 +4,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/protocol/saml"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/pagination"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
@@ -71,7 +71,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 // ListAppsInGroup handles GET /app-groups/:id/apps — returns the apps
 // currently linked to this group (joined from mxid_app_group_rel).
 func (h *Handler) ListAppsInGroup(c *gin.Context) {
-	groupID, ok := parseID(c, "id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -98,17 +98,6 @@ func (h *Handler) ListAppsInGroup(c *gin.Context) {
 		resp[i] = ToAppResponse(a)
 	}
 	response.OK(c, resp)
-}
-
-// parseID parses the :id path parameter as int64.
-func parseID(c *gin.Context, param string) (int64, bool) {
-	idStr := c.Param(param)
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id: "+param)
-		return 0, false
-	}
-	return id, true
 }
 
 // ListAppsRequest holds query parameters for listing apps.
@@ -176,7 +165,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 // Get handles GET /apps/:id.
 func (h *Handler) Get(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -192,7 +181,7 @@ func (h *Handler) Get(c *gin.Context) {
 
 // Update handles PUT /apps/:id.
 func (h *Handler) Update(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -214,7 +203,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 // Delete handles DELETE /apps/:id.
 func (h *Handler) Delete(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -229,7 +218,7 @@ func (h *Handler) Delete(c *gin.Context) {
 
 // UpdateStatus handles PUT /apps/:id/status.
 func (h *Handler) UpdateStatus(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -250,7 +239,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 // GetProtocolConfig handles GET /apps/:id/config.
 func (h *Handler) GetProtocolConfig(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -266,7 +255,7 @@ func (h *Handler) GetProtocolConfig(c *gin.Context) {
 
 // UpdateProtocolConfig handles PUT /apps/:id/config.
 func (h *Handler) UpdateProtocolConfig(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -289,7 +278,7 @@ func (h *Handler) UpdateProtocolConfig(c *gin.Context) {
 
 // ListAccess handles GET /apps/:id/access.
 func (h *Handler) ListAccess(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -310,7 +299,7 @@ func (h *Handler) ListAccess(c *gin.Context) {
 
 // AddAccess handles POST /apps/:id/access.
 func (h *Handler) AddAccess(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -332,7 +321,7 @@ func (h *Handler) AddAccess(c *gin.Context) {
 
 // RemoveAccess handles DELETE /apps/:id/access/:aid.
 func (h *Handler) RemoveAccess(c *gin.Context) {
-	aid, ok := parseID(c, "aid")
+	aid, ok := ginutil.ParseInt64Param(c, "aid")
 	if !ok {
 		return
 	}
@@ -349,7 +338,7 @@ func (h *Handler) RemoveAccess(c *gin.Context) {
 
 // ListCerts handles GET /apps/:id/certs.
 func (h *Handler) ListCerts(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -370,7 +359,7 @@ func (h *Handler) ListCerts(c *gin.Context) {
 
 // CreateCert handles POST /apps/:id/certs (stub for now).
 func (h *Handler) CreateCert(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -386,7 +375,7 @@ func (h *Handler) CreateCert(c *gin.Context) {
 
 // DeleteCert handles DELETE /apps/:id/certs/:cid.
 func (h *Handler) DeleteCert(c *gin.Context) {
-	cid, ok := parseID(c, "cid")
+	cid, ok := ginutil.ParseInt64Param(c, "cid")
 	if !ok {
 		return
 	}
@@ -436,7 +425,7 @@ func (h *Handler) CreateGroup(c *gin.Context) {
 
 // UpdateGroup handles PUT /app-groups/:id.
 func (h *Handler) UpdateGroup(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -458,7 +447,7 @@ func (h *Handler) UpdateGroup(c *gin.Context) {
 
 // DeleteGroup handles DELETE /app-groups/:id.
 func (h *Handler) DeleteGroup(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -473,7 +462,7 @@ func (h *Handler) DeleteGroup(c *gin.Context) {
 
 // AddAppToGroup handles POST /app-groups/:id/apps.
 func (h *Handler) AddAppToGroup(c *gin.Context) {
-	groupID, ok := parseID(c, "id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -494,12 +483,12 @@ func (h *Handler) AddAppToGroup(c *gin.Context) {
 
 // RemoveAppFromGroup handles DELETE /app-groups/:id/apps/:aid.
 func (h *Handler) RemoveAppFromGroup(c *gin.Context) {
-	groupID, ok := parseID(c, "id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
 
-	appID, ok := parseID(c, "aid")
+	appID, ok := ginutil.ParseInt64Param(c, "aid")
 	if !ok {
 		return
 	}
@@ -545,7 +534,7 @@ func (h *Handler) handleServiceError(c *gin.Context, err error) {
 // expires so RPs that cached the old public material can still verify
 // in-flight id_tokens.
 func (h *Handler) RotateSigningKey(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -565,7 +554,7 @@ func (h *Handler) RotateSigningKey(c *gin.Context) {
 // Returns the resulting protocol_config map so the SPA can immediately
 // refresh the form without re-fetching.
 func (h *Handler) ImportSAMLMetadata(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -599,7 +588,7 @@ func (h *Handler) ImportSAMLMetadata(c *gin.Context) {
 // The plaintext client_secret is returned exactly once. Subsequent reads
 // expose only the bcrypt hash (in fact never echoed in any response).
 func (h *Handler) RegenerateClientSecret(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
@@ -617,7 +606,7 @@ func (h *Handler) RegenerateClientSecret(c *gin.Context) {
 // copy-pasteable code sample for integrating the app's OIDC client
 // in the requested language. lang ∈ {curl, go, node, python}.
 func (h *Handler) Quickstart(c *gin.Context) {
-	id, ok := parseID(c, "id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
 	if !ok {
 		return
 	}
