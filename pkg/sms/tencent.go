@@ -115,7 +115,7 @@ func (tencentSender) SendCode(ctx context.Context, cfg setting.SMS, phone, code 
 		return fmt.Errorf("tencent send: %w", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 
 	var parsed struct {
 		Response struct {

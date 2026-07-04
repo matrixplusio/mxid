@@ -62,9 +62,7 @@ func (aliyunSender) SendCode(ctx context.Context, cfg setting.SMS, phone, code s
 	signature := aliyunSign(params, cfg.Secret)
 	params.Set("Signature", signature)
 
-	region := regionOrDefault(cfg.Region)
 	endpoint := fmt.Sprintf("https://dysmsapi.aliyuncs.com/?%s", params.Encode())
-	_ = region
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -75,7 +73,7 @@ func (aliyunSender) SendCode(ctx context.Context, cfg setting.SMS, phone, code s
 		return fmt.Errorf("aliyun send: %w", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 
 	// Aliyun returns 200 with a JSON body that carries Code = "OK" on
 	// success. Any other Code is a logical failure (Throttling, BlackList,
