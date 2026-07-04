@@ -30,3 +30,9 @@ type Config struct {
 
 // TableName maps Config to its table.
 func (Config) TableName() string { return "mxid_app_provisioning" }
+
+// TenantScoped marks Config for the fail-closed tenantscope GORM plugin, so
+// every read/write is auto-filtered by the caller's tenant. Without it the
+// repo keyed on app_id alone, letting a tenant admin read or hijack another
+// tenant's per-app SCIM provisioning config (base_url/token) by app id.
+func (Config) TenantScoped() {}
