@@ -1495,8 +1495,15 @@ func (h *Handler) authenticateClient(c *gin.Context) (*resolver.AppConfig, bool,
 	}
 
 	// Public clients (token_endpoint_auth_method=none) may omit a secret.
-	if isPublicClient(app) || clientSecret == "" && app.ClientSecret == "" {
+	if isPublicClient(app) {
 		return app, true, ""
+	}
+	// Confidential client: a stored secret is mandatory. A blank stored secret
+	// (mis-provisioning / cleared secret) must NOT be inferred as a public
+	// client — that would let anyone redeem an auth code with neither a secret
+	// nor PKCE. Fail closed.
+	if app.ClientSecret == "" {
+		return nil, false, "client secret not configured"
 	}
 	if !verifyClientSecret(app.ClientSecret, clientSecret) {
 		return nil, false, "invalid client credentials"

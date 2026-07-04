@@ -137,7 +137,10 @@ type AppQuerier interface {
 // SessionQuerier provides session management for portal handlers.
 type SessionQuerier interface {
 	ListSessions(ctx context.Context, namespace string, userID int64) ([]*SessionInfo, error)
-	DeleteSession(ctx context.Context, namespace, sessionID string) error
+	// DeleteSession removes a single session, but ONLY if it belongs to userID
+	// — the id is opaque, so without the owner check any portal user could
+	// revoke another user's session by id. Not-owned is a secure no-op.
+	DeleteSession(ctx context.Context, namespace, sessionID string, userID int64) error
 	// DeleteAllByUserExcept invalidates every session for `userID` in the
 	// given namespace except `exceptSID`. Used by change-password so the
 	// caller's own session survives the global purge.

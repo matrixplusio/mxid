@@ -251,6 +251,27 @@ func registerModules(a *bootstrap.App) {
 	authnModule := authn.Register(a, sessionMgr, authQuerier, userQuerier, mfaVerifier)
 	authnModule.Engine.SetLoginRecorder(newUserLoginRecorderAdapter(userModule, a.Logger))
 
+	// SECURITY: revoke every session for a user whose password was reset (admin
+	// reset or forgot-password recovery — both flagged admin_reset). Otherwise a
+	// stolen live session survives the canonical compromise-recovery action. The
+	// self-service change path revokes-except-current itself and is NOT flagged
+	// admin_reset, so it is intentionally skipped here.
+	a.EventBus.Subscribe(event.UserPasswordChanged, func(ctx context.Context, ev event.Event) {
+		p, ok := ev.Payload.(map[string]any)
+		if !ok {
+			return
+		}
+		if adminReset, _ := p["admin_reset"].(bool); !adminReset {
+			return
+		}
+		uid, _ := p["user_id"].(int64)
+		if uid == 0 {
+			return
+		}
+		_ = sessionMgr.DeleteAllByUser(ctx, session.NamespacePortal, uid)
+		_ = sessionMgr.DeleteAllByUser(ctx, session.NamespaceConsole, uid)
+	})
+
 	// Brute-force limiter for the password login path (per-IP + per-user).
 	// Replaces the old permanent mxid_user.status auto-lock with an
 	// auto-expiring Redis lock; admin LockUser stays the only permanent lock.

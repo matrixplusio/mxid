@@ -502,7 +502,15 @@ func (a *portalSessionQuerierAdapter) ListSessions(ctx context.Context, namespac
 	return result, nil
 }
 
-func (a *portalSessionQuerierAdapter) DeleteSession(ctx context.Context, namespace, sessionID string) error {
+func (a *portalSessionQuerierAdapter) DeleteSession(ctx context.Context, namespace, sessionID string, userID int64) error {
+	// Ownership guard: only delete the session if it belongs to the caller.
+	// The id is opaque, so without this a portal user could revoke another
+	// user's session by id. Not-found / not-owned is a secure no-op (no delete,
+	// no info leak about whether the id exists).
+	sess, err := a.sessionMgr.Get(ctx, namespace, sessionID)
+	if err != nil || sess == nil || sess.UserID != userID {
+		return nil
+	}
 	return a.sessionMgr.Delete(ctx, namespace, sessionID)
 }
 

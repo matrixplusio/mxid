@@ -527,7 +527,7 @@ func (h *SecurityHandler) deleteSession(c *gin.Context) {
 		return
 	}
 
-	if err := h.sessionQuerier.DeleteSession(c.Request.Context(), h.namespace, sid); err != nil {
+	if err := h.sessionQuerier.DeleteSession(c.Request.Context(), h.namespace, sid, userID); err != nil {
 		response.InternalError(c, "failed to delete session", err)
 		return
 	}
