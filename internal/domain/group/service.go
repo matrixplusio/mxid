@@ -112,13 +112,10 @@ func (s *Service) publishGroup(ctx context.Context, eventType string, g *UserGro
 	})
 }
 
-// GetByID retrieves a user group by ID.
+// GetByID retrieves a user group by ID, surfacing a missing/cross-tenant id as
+// ErrGroupNotFound (via requireGroup) so the handler maps it to a 404 not a 500.
 func (s *Service) GetByID(ctx context.Context, id int64) (*UserGroup, error) {
-	g, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("get user group: %w", err)
-	}
-	return g, nil
+	return s.requireGroup(ctx, id)
 }
 
 // requireGroup fetches the parent group via the tenant-scoped repo so the

@@ -2,9 +2,7 @@ package group
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -89,7 +87,7 @@ func (h *Handler) Get(c *gin.Context) {
 
 	g, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, 40401, "user group not found")
+		response.MapError(c, err)
 		return
 	}
 
@@ -118,11 +116,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 	g, err := h.service.Update(c.Request.Context(), id, &req)
 	if err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		response.InternalError(c, "failed to update user group", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -147,11 +141,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	force := c.Query("force") == "true"
 
 	if err := h.service.Delete(c.Request.Context(), id, force); err != nil {
-		if errors.Is(err, ErrGroupHasMembers) {
-			response.Error(c, http.StatusConflict, 40901, err.Error(), "")
-			return
-		}
-		response.InternalError(c, "failed to delete user group", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -169,11 +159,7 @@ func (h *Handler) GetMembers(c *gin.Context) {
 	p := pagination.Parse(c)
 	members, total, err := h.service.GetMembers(c.Request.Context(), id, p.Page, p.PageSize)
 	if err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		response.InternalError(c, "failed to get group members", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -195,19 +181,7 @@ func (h *Handler) AddMember(c *gin.Context) {
 	}
 
 	if err := h.service.AddMember(c.Request.Context(), id, &req); err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		if errors.Is(err, ErrGroupIsDynamic) {
-			response.Error(c, http.StatusConflict, 40902, err.Error(), "")
-			return
-		}
-		if errors.Is(err, ErrUserNotInTenant) {
-			response.NotFound(c, 40402, "user not found")
-			return
-		}
-		response.InternalError(c, "failed to add member", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -236,19 +210,7 @@ func (h *Handler) BatchAddMembers(c *gin.Context) {
 
 	res, err := h.service.AddMembers(c.Request.Context(), id, userIDs)
 	if err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		if errors.Is(err, ErrGroupIsDynamic) {
-			response.Error(c, http.StatusConflict, 40902, err.Error(), "")
-			return
-		}
-		if errors.Is(err, ErrUserNotInTenant) {
-			response.NotFound(c, 40402, "user not found")
-			return
-		}
-		response.InternalError(c, "failed to add members", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -270,15 +232,7 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	}
 
 	if err := h.service.RemoveMember(c.Request.Context(), groupID, userID); err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		if errors.Is(err, ErrGroupIsDynamic) {
-			response.Error(c, http.StatusConflict, 40902, err.Error(), "")
-			return
-		}
-		response.InternalError(c, "failed to remove member", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -307,11 +261,7 @@ func (h *Handler) BatchRemoveMembers(c *gin.Context) {
 
 	res, err := h.service.RemoveMembers(c.Request.Context(), id, userIDs)
 	if err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		response.InternalError(c, "failed to remove members", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -333,15 +283,7 @@ func (h *Handler) GetRule(c *gin.Context) {
 	}
 	rule, err := h.service.GetRule(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, ErrRuleNotFound) {
-			response.NotFound(c, 40401, "no rule attached")
-			return
-		}
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		response.InternalError(c, "failed to get rule", err)
+		response.MapError(c, err)
 		return
 	}
 	resp, err := toRuleResponse(rule)
@@ -372,12 +314,7 @@ func (h *Handler) UpsertRule(c *gin.Context) {
 	}
 	rule, err := h.service.UpsertRule(c.Request.Context(), id, expr)
 	if err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		// Initial sync failures still saved the rule; return 207-ish payload.
-		response.InternalError(c, "", err)
+		response.MapError(c, err)
 		return
 	}
 	resp, derr := toRuleResponse(rule)
@@ -397,11 +334,7 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 		return
 	}
 	if err := h.service.DeleteRule(c.Request.Context(), id); err != nil {
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		response.InternalError(c, "failed to delete rule", err)
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, nil)
@@ -417,15 +350,7 @@ func (h *Handler) SyncRule(c *gin.Context) {
 	}
 	report, err := h.service.SyncRule(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, ErrRuleNotFound) {
-			response.NotFound(c, 40401, "no rule attached")
-			return
-		}
-		if errors.Is(err, ErrGroupNotFound) {
-			response.NotFound(c, 40401, "user group not found")
-			return
-		}
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, report)
