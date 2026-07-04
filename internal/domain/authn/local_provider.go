@@ -5,27 +5,27 @@ import (
 	"time"
 
 	"github.com/imkerbos/mxid/pkg/crypto"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const LocalProviderType = "local"
 
-// dummyPasswordHash is a real bcrypt hash (DefaultCost, matching production
-// password hashes) burned on every credential-rejecting branch that doesn't
-// otherwise run bcrypt — unknown username, disabled/locked/unknown status —
-// so those paths take ~the same wall-clock time as a genuine password
-// compare. Without it, an unknown username returns AuthFailed in microseconds
-// while a valid one spends tens of ms in bcrypt, a measurable user-enumeration
-// oracle (OWASP A07). Generated once at package init from a random string;
-// the value it hashes is irrelevant — only its cost matters.
+// dummyPasswordHash is a real bcrypt hash burned on every credential-rejecting
+// branch that doesn't otherwise run bcrypt — unknown username, disabled/locked/
+// unknown status — so those paths take ~the same wall-clock time as a genuine
+// password compare. Without it, an unknown username returns AuthFailed in
+// microseconds while a valid one spends tens of ms in bcrypt, a measurable
+// user-enumeration oracle (OWASP A07).
+//
+// It is generated via crypto.HashPassword so its cost ALWAYS tracks production
+// password hashes: raising the password work factor must not desync this
+// equalizer, or the timing oracle reopens (the fallback is a precomputed hash at
+// the SAME cost for exactly that reason).
 var dummyPasswordHash = func() string {
-	h, err := bcrypt.GenerateFromPassword([]byte("mxid-enumeration-equalizer"), bcrypt.DefaultCost)
+	h, err := crypto.HashPassword("mxid-enumeration-equalizer")
 	if err != nil {
-		// Should never happen; fall back to a precomputed DefaultCost hash so
-		// the equalizer is still a real bcrypt compare rather than a no-op.
-		return "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+		return "$2a$12$5DCDajeTw8u.sNQn/.WLVOqZwu1HueIB0JWn61YNqHUiU9YfH3ida"
 	}
-	return string(h)
+	return h
 }()
 
 // burnDummyCompare runs a constant-cost bcrypt compare against a fixed hash
