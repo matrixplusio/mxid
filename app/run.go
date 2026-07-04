@@ -498,22 +498,20 @@ func registerModules(a *bootstrap.App) {
 	}
 	a.ConsoleGroup.Use(authn.StepUpMiddleware(stepUpDeps))
 
-	// 4e. Deny-by-default authz gateway. Mounted AFTER AuthMiddleware + authz
-	// install (so c has user/tenant + the Service) and BEFORE the module routes,
-	// so it sits on every console request post-routing. A matched console route
-	// that declared NO permission (no authz.Require / authz.Protect) and is not
-	// on the public allow-list is flagged — root-cause guard against shipping an
-	// open admin endpoint. Runs in AUDIT-ONLY mode for now: it LOGS the offending
-	// route loudly but does not 403, so the portal-on-console self-service
-	// surfaces (profile / security / MFA / uploads / SSE) that carry their own
-	// session auth keep working until they are AllowPublic'd and the app/idp/
-	// audit modules grow their authz.Require + authz.Protect (sibling backfill).
-	// Flip AuditOnly to false once those land and the allow-list is vetted to
-	// turn on hard deny-by-default (hard mode needs mount-time authz.Protect for
-	// gated routes, since the gateway runs before each route's own Require).
+	// 4e. Deny-by-default authz gateway (HARD MODE). Mounted AFTER AuthMiddleware
+	// + authz install (so c has user/tenant + the Service) and BEFORE the module
+	// routes, so it sits on every console request post-routing. A matched console
+	// route that is neither Protect'd nor AllowPublic'd is 403'd — root-cause
+	// guard against shipping an open admin endpoint (a route that simply forgot
+	// its authz.Require). The registry is populated by registerConsoleAuthz(a)
+	// AFTER all routes mount (hard mode needs mount-time Protect, since the
+	// gateway runs before each route's own Require self-registers). That call
+	// also audits coverage and loudly logs any governed route missing an authz
+	// declaration. Self-service surfaces (profile / security) are AllowPublic'd
+	// there.
 	a.ConsoleGroup.Use(authz.Gateway(authz.GatewayConfig{
 		Logger:    a.Logger,
-		AuditOnly: true,
+		AuditOnly: false,
 	}))
 
 	userModule.RegisterRoutes(a)
@@ -1158,6 +1156,12 @@ func registerModules(a *bootstrap.App) {
 	)
 	emailVerifyHandler.SetDevFallback(devFallback)
 	portal.RegisterEmailVerifyRoutes(a.ConsoleGroup, emailVerifyHandler)
+
+	// Populate the deny-by-default gateway registry now that every console route
+	// is mounted: Protect the admin surface, allow-list self-service + public
+	// routes, and audit coverage. Hard mode (AuditOnly:false at the gateway
+	// above) relies on this map being complete before the first request.
+	registerConsoleAuthz(a)
 }
 
 // buildPortalConsentQuerier surfaces a thin app-domain projection to the

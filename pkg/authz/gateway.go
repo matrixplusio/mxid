@@ -141,6 +141,15 @@ func (r *routeRegistry) isProtected(method, fullPath string) bool {
 	return ok
 }
 
+// IsRegistered reports whether (method, fullPath) is known to the gateway —
+// either allow-listed or registered as protected. A boot-time coverage audit
+// uses it to flag any governed console route that would 403 under hard mode
+// because nobody declared it (Protect / AllowPublic). Exported for that audit;
+// the gateway's own decision path uses isAllowed/isProtected directly.
+func IsRegistered(method, fullPath string) bool {
+	return registry.isAllowed(method, fullPath) || registry.isProtected(method, fullPath)
+}
+
 // GatewayConfig configures the deny-by-default gateway.
 type GatewayConfig struct {
 	// Logger receives the loud "unprotected route" warnings. nil drops them
