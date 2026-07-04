@@ -16,6 +16,7 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/imkerbos/mxid/internal/domain/platformconfig"
+	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/internal/domain/setting"
 	"github.com/imkerbos/mxid/internal/middleware"
 	"github.com/imkerbos/mxid/pkg/ee/license"
@@ -36,7 +37,13 @@ func NewHandler(svc *setting.Service, platform *platformconfig.Service, mailer *
 }
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
-	g := rg.Group("/settings")
+	// settings.manage gates the whole group — reads expose secrets (SMTP, etc)
+	// and writes tamper security-critical config. Previously ungated (behind
+	// only AuthMiddleware), so any authenticated console user could repoint
+	// SMTP, weaken MFA, or downgrade the license. globalGuard additionally
+	// requires super_admin whenever ?global=true targets the system-wide
+	// (tenant_id=0) row.
+	g := rg.Group("/settings", authz.Require("settings.manage", nil), h.globalGuard())
 	{
 		// One endpoint per setting category. Plain category name in the URL
 		// instead of generic /settings?key=... because each category has a
@@ -82,10 +89,13 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 		g.PUT("/localization", h.putLocalization)
 
 		g.GET("/license", h.getLicense)
-		g.PUT("/license", h.putLicense)
+		// License + external URLs are platform-global (not tenant-scoped):
+		// a license change flips features for the whole install. Restrict the
+		// writes to super_admin, not merely settings.manage.
+		g.PUT("/license", h.superAdminOnly(), h.putLicense)
 
 		g.GET("/external-urls", h.getExternalURLs)
-		g.PUT("/external-urls", h.putExternalURLs)
+		g.PUT("/external-urls", h.superAdminOnly(), h.putExternalURLs)
 	}
 }
 
@@ -100,6 +110,47 @@ func (h *Handler) tenantID(c *gin.Context) int64 {
 		return 0
 	}
 	return tenantctx.FromContext(c, h.defaultTID)
+}
+
+// isSuperAdmin reports whether the caller holds the domain wildcard ("*"),
+// i.e. is a super_admin (see pkg/authz). Mirrors middleware.TenantContext.
+func (h *Handler) isSuperAdmin(c *gin.Context) bool {
+	svc := authz.FromContext(c)
+	if svc == nil {
+		return false
+	}
+	uid, _ := c.Get("user_id")
+	uidI, _ := uid.(int64)
+	stid, _ := c.Get("session_tenant_id")
+	stidI, _ := stid.(int64)
+	ok, err := svc.Check(c.Request.Context(), stidI, uidI, "*", nil)
+	return err == nil && ok
+}
+
+// globalGuard blocks a non-super_admin from targeting the system-wide
+// (tenant_id=0) settings row via ?global=true. Without it, any settings.manage
+// holder in one tenant could rewrite the platform defaults.
+func (h *Handler) globalGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Query("global") == "true" && !h.isSuperAdmin(c) {
+			response.Forbidden(c, 40300, "global settings require super_admin")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// superAdminOnly restricts a route to super_admin (platform-global writes).
+func (h *Handler) superAdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.isSuperAdmin(c) {
+			response.Forbidden(c, 40300, "requires super_admin")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func (h *Handler) userID(c *gin.Context) *int64 {
