@@ -54,6 +54,14 @@ type ClaimMapperConfig struct {
 	Scope  string `json:"scope"`
 }
 
+// Default token lifetimes (seconds), named so the numbers aren't magic ints.
+const (
+	defaultAccessTokenTTLSeconds  = 3600    // 1 hour
+	defaultIDTokenTTLSeconds      = 3600    // 1 hour
+	defaultRefreshTokenTTLSeconds = 2592000 // 30 days
+	defaultAuthCodeTTLSeconds     = 600     // 10 minutes
+)
+
 // Defaults returns an OIDCConfig with sane defaults.
 func Defaults() *OIDCConfig {
 	return &OIDCConfig{
@@ -62,10 +70,10 @@ func Defaults() *OIDCConfig {
 		Scopes:                []string{"openid", "profile", "email"},
 		PKCERequired:          false,
 		IDTokenSigningAlg:     "RS256",
-		AccessTokenTTL:        3600,
-		IDTokenTTL:            3600,
-		RefreshTokenTTL:       2592000,
-		AuthCodeTTL:           600,
+		AccessTokenTTL:        defaultAccessTokenTTLSeconds,
+		IDTokenTTL:            defaultIDTokenTTLSeconds,
+		RefreshTokenTTL:       defaultRefreshTokenTTLSeconds,
+		AuthCodeTTL:           defaultAuthCodeTTLSeconds,
 		RequireConsent:        false,
 		SubjectType:           "public",
 		TokenEndpointAuthMode: "client_secret_post",

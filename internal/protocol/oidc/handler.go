@@ -1602,9 +1602,13 @@ func (h *Handler) redirectError(c *gin.Context, redirectURI, state, errCode, err
 	if strings.Contains(redirectURI, "?") {
 		sep = "&"
 	}
-	location := fmt.Sprintf("%s%serror=%s&error_description=%s", redirectURI, sep, errCode, errDesc)
+	// URL-encode each param: error_description carries spaces/punctuation and
+	// state is attacker-controlled, so raw concatenation would produce a
+	// malformed redirect (and could break out of the query into the fragment).
+	location := fmt.Sprintf("%s%serror=%s&error_description=%s",
+		redirectURI, sep, url.QueryEscape(errCode), url.QueryEscape(errDesc))
 	if state != "" {
-		location += "&state=" + state
+		location += "&state=" + url.QueryEscape(state)
 	}
 	c.Redirect(http.StatusFound, location)
 }

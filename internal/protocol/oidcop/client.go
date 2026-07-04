@@ -39,12 +39,15 @@ type claimMapper struct {
 	Scope  string `json:"scope"`
 }
 
+// defaultIDTokenTTLSeconds is the fallback id_token lifetime (1 hour).
+const defaultIDTokenTTLSeconds = 3600
+
 func parseClientConfig(raw json.RawMessage) clientConfig {
 	cfg := clientConfig{
 		GrantTypes:            []string{"authorization_code", "refresh_token"},
 		ResponseTypes:         []string{"code"},
 		Scopes:                []string{"openid", "profile", "email"},
-		IDTokenTTL:            3600,
+		IDTokenTTL:            defaultIDTokenTTLSeconds,
 		TokenEndpointAuthMode: "client_secret_post",
 	}
 	if len(raw) > 0 {

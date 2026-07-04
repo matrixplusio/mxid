@@ -270,7 +270,7 @@ func (h *Handler) loginHandler(namespace, cookieName string) gin.HandlerFunc {
 
 		authType := req.AuthType
 		if authType == "" {
-			authType = "local"
+			authType = LocalProviderType
 		}
 
 		// Login-method gate: admin can disable password / sms / magic-link

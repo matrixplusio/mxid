@@ -91,7 +91,12 @@ func (h *Handler) IdPInitiatedLogout(ctx context.Context, userID, appID int64) {
 // SAMLRequest) through the SSRF-safe client. Best-effort: the response is
 // discarded and any error logged.
 func (h *Handler) sendLogoutRequest(doer httpDoer, target string, appID int64) {
-	req, err := http.NewRequest(http.MethodGet, target, nil)
+	// Detached back-channel call (fired from a goroutine with no request ctx);
+	// give it its own bounded context so the dial is cancellable and can't hang
+	// past the deadline even if the SSRF client's own timeout ever changed.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		h.logger.Warn("saml jit logout: new request failed",
 			zap.Int64("app_id", appID), zap.Error(err))
