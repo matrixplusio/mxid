@@ -1,8 +1,6 @@
 package org
 
 import (
-	"errors"
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -45,11 +43,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 	org, err := h.service.Create(c.Request.Context(), tenantctx.FromContext(c, h.tenantID), &req)
 	if err != nil {
-		if errors.Is(err, ErrOrgNotFound) {
-			response.NotFound(c, 40404, "parent organization not found")
-			return
-		}
-		response.InternalError(c, "failed to create organization", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -66,7 +60,7 @@ func (h *Handler) Get(c *gin.Context) {
 
 	org, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, 40401, "organization not found")
+		response.MapError(c, err)
 		return
 	}
 
@@ -89,11 +83,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 	org, err := h.service.Update(c.Request.Context(), id, &req)
 	if err != nil {
-		if errors.Is(err, ErrOrgNotFound) {
-			response.NotFound(c, 40401, "organization not found")
-			return
-		}
-		response.InternalError(c, "failed to update organization", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -109,11 +99,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		if errors.Is(err, ErrRootOrgDelete) {
-			response.Error(c, http.StatusForbidden, 40301, err.Error(), "")
-			return
-		}
-		response.InternalError(c, "failed to delete organization", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -135,13 +121,7 @@ func (h *Handler) Move(c *gin.Context) {
 	}
 
 	if err := h.service.Move(c.Request.Context(), id, &req); err != nil {
-		if errors.Is(err, ErrOrgNotFound) {
-			// Service can't discriminate which lookup missed (the org being
-			// moved, or the new parent) — both collapse to ErrOrgNotFound.
-			response.NotFound(c, 40401, "organization or parent organization not found")
-			return
-		}
-		response.InternalError(c, "failed to move organization", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -159,11 +139,7 @@ func (h *Handler) GetMembers(c *gin.Context) {
 	p := pagination.Parse(c)
 	userIDs, total, err := h.service.GetMembers(c.Request.Context(), id, p.Page, p.PageSize)
 	if err != nil {
-		if errors.Is(err, ErrOrgNotFound) {
-			response.NotFound(c, 40401, "organization not found")
-			return
-		}
-		response.InternalError(c, "failed to get organization members", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -185,15 +161,7 @@ func (h *Handler) AddMember(c *gin.Context) {
 	}
 
 	if err := h.service.AddMember(c.Request.Context(), id, &req); err != nil {
-		if errors.Is(err, ErrOrgNotFound) {
-			response.NotFound(c, 40401, "organization not found")
-			return
-		}
-		if errors.Is(err, ErrUserNotInTenant) {
-			response.NotFound(c, 40402, "user not found")
-			return
-		}
-		response.InternalError(c, "failed to add member", err)
+		response.MapError(c, err)
 		return
 	}
 
@@ -215,11 +183,7 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	}
 
 	if err := h.service.RemoveMember(c.Request.Context(), userID, orgID); err != nil {
-		if errors.Is(err, ErrOrgNotFound) {
-			response.NotFound(c, 40401, "organization not found")
-			return
-		}
-		response.InternalError(c, "failed to remove member", err)
+		response.MapError(c, err)
 		return
 	}
 

@@ -24,6 +24,12 @@ var ErrRootOrgDelete = errors.New("root organization cannot be deleted")
 // id resolves to gorm.ErrRecordNotFound).
 var ErrOrgNotFound = errors.New("organization not found")
 
+// ErrParentOrgNotFound is the parent-context variant of ErrOrgNotFound: the
+// parent org referenced by a Create/Move request does not exist (or is
+// cross-tenant). Distinct so the handler maps it to its own code/message
+// ("parent organization not found") instead of the plain "not found".
+var ErrParentOrgNotFound = errors.New("parent organization not found")
+
 // ErrUserNotInTenant is returned when AddMember is asked to plant a user that
 // does not exist in the caller's tenant — including a cross-tenant user id,
 // which the injected validator (backed by the tenant-scoped user repo) reports
@@ -65,7 +71,7 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req *CreateOrgRequ
 	// Build path based on parent
 	path := req.Code
 	if req.ParentID != nil {
-		parent, err := s.fetchOrg(ctx, *req.ParentID)
+		parent, err := s.fetchParentOrg(ctx, *req.ParentID)
 		if err != nil {
 			return nil, err
 		}
@@ -96,13 +102,20 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req *CreateOrgRequ
 	return org, nil
 }
 
-// GetByID retrieves an organization by ID.
+// GetByID retrieves an organization by ID, surfacing a missing/cross-tenant id
+// as ErrOrgNotFound so the handler maps it to a 404 (not a 500).
 func (s *Service) GetByID(ctx context.Context, id int64) (*Organization, error) {
-	org, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("get organization: %w", err)
+	return s.fetchOrg(ctx, id)
+}
+
+// fetchParentOrg is the parent-context variant of fetchOrg: a missing parent
+// surfaces as ErrParentOrgNotFound so Create/Move report it distinctly.
+func (s *Service) fetchParentOrg(ctx context.Context, parentID int64) (*Organization, error) {
+	org, err := s.fetchOrg(ctx, parentID)
+	if errors.Is(err, ErrOrgNotFound) {
+		return nil, ErrParentOrgNotFound
 	}
-	return org, nil
+	return org, err
 }
 
 // fetchOrg fetches an org via the tenant-scoped repo. A cross-tenant orgID
@@ -206,7 +219,7 @@ func (s *Service) Move(ctx context.Context, id int64, req *MoveOrgRequest) error
 	// Build new path
 	newPath := org.Code
 	if req.ParentID != nil {
-		parent, err := s.fetchOrg(ctx, *req.ParentID)
+		parent, err := s.fetchParentOrg(ctx, *req.ParentID)
 		if err != nil {
 			return err
 		}

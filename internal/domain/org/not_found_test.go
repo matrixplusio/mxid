@@ -39,7 +39,7 @@ func TestService_Move_MissingOrgReturnsErrOrgNotFound(t *testing.T) {
 	}
 }
 
-func TestService_Move_MissingParentReturnsErrOrgNotFound(t *testing.T) {
+func TestService_Move_MissingParentReturnsErrParentOrgNotFound(t *testing.T) {
 	db := newOrgChildGuardDB(t)
 	seedOrgWithMembers(t, db)
 	svc := &Service{repo: NewRepository(db)}
@@ -47,12 +47,12 @@ func TestService_Move_MissingParentReturnsErrOrgNotFound(t *testing.T) {
 	ctxA := tenantscope.WithTenant(context.Background(), 100)
 	missingParent := int64(999)
 	err := svc.Move(ctxA, 1, &MoveOrgRequest{ParentID: &missingParent})
-	if !errors.Is(err, ErrOrgNotFound) {
-		t.Fatalf("Move missing parent: got %v want ErrOrgNotFound", err)
+	if !errors.Is(err, ErrParentOrgNotFound) {
+		t.Fatalf("Move missing parent: got %v want ErrParentOrgNotFound", err)
 	}
 }
 
-func TestService_Create_MissingParentReturnsErrOrgNotFound(t *testing.T) {
+func TestService_Create_MissingParentReturnsErrParentOrgNotFound(t *testing.T) {
 	db := newOrgChildGuardDB(t)
 	seedOrgWithMembers(t, db)
 	svc := &Service{repo: NewRepository(db)}
@@ -60,7 +60,7 @@ func TestService_Create_MissingParentReturnsErrOrgNotFound(t *testing.T) {
 	ctxA := tenantscope.WithTenant(context.Background(), 100)
 	missingParent := int64(999)
 	_, err := svc.Create(ctxA, 100, &CreateOrgRequest{Name: "child", Code: "child", ParentID: &missingParent})
-	if !errors.Is(err, ErrOrgNotFound) {
-		t.Fatalf("Create with missing parent: got %v want ErrOrgNotFound", err)
+	if !errors.Is(err, ErrParentOrgNotFound) {
+		t.Fatalf("Create with missing parent: got %v want ErrParentOrgNotFound", err)
 	}
 }
