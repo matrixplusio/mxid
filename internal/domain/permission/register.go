@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/bootstrap"
+	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/pkg/response"
 )
 
@@ -32,7 +33,10 @@ func Register(app *bootstrap.App) *Module {
 // without creating an import cycle. orgs may be nil if org-inherited
 // permissions are intentionally disabled in a deployment.
 func RegisterEffectiveRolesRoute(app *bootstrap.App, svc *Service, groups GroupLookup, orgs OrgLookup, tenantID int64) {
-	app.ConsoleGroup.GET("/users/:id/roles", func(c *gin.Context) {
+	// Gated with user.read: this reads another user's effective roles, so it
+	// requires the same permission as any other user-detail read (previously it
+	// carried no authz.Require at all — an open admin endpoint).
+	app.ConsoleGroup.GET("/users/:id/roles", authz.Require("user.read", nil), func(c *gin.Context) {
 		uid, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			response.BadRequest(c, 40001, "invalid user id")
@@ -40,7 +44,7 @@ func RegisterEffectiveRolesRoute(app *bootstrap.App, svc *Service, groups GroupL
 		}
 		items, err := svc.EffectiveRolesForUser(c.Request.Context(), tenantID, uid, groups, orgs)
 		if err != nil {
-			response.InternalError(c, "list effective roles: "+err.Error(), err)
+			response.InternalError(c, "list effective roles", err)
 			return
 		}
 		response.OK(c, items)
