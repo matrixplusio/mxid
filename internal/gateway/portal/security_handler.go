@@ -9,6 +9,7 @@ import (
 	"github.com/imkerbos/mxid/internal/domain/authn"
 	"github.com/imkerbos/mxid/internal/domain/user"
 	"github.com/imkerbos/mxid/pkg/event"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/session"
 )
@@ -175,9 +176,8 @@ func (h *SecurityHandler) revokeAPIToken(c *gin.Context) {
 		response.InternalError(c, "api tokens not configured")
 		return
 	}
-	tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid token id")
+	tokenID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	if err := h.apiTokenQuerier.Revoke(c.Request.Context(), userID, tokenID); err != nil {
@@ -314,7 +314,6 @@ func (h *SecurityHandler) listLoginHistory(c *gin.Context) {
 	}
 	response.OK(c, items)
 }
-
 
 // changePassword handles password change.
 func (h *SecurityHandler) changePassword(c *gin.Context) {

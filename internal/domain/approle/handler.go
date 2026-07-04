@@ -1,10 +1,9 @@
 package approle
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
 )
@@ -91,9 +90,8 @@ func (h *Handler) userID(c *gin.Context) *int64 {
 /* ─── Roles ─── */
 
 func (h *Handler) listRolesForApp(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	rows, err := h.service.ListRoles(c.Request.Context(), OwnerApp, id, h.tenantID(c))
@@ -105,9 +103,8 @@ func (h *Handler) listRolesForApp(c *gin.Context) {
 }
 
 func (h *Handler) listRolesForAppGroup(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	rows, err := h.service.ListRoles(c.Request.Context(), OwnerAppGroup, id, h.tenantID(c))
@@ -127,9 +124,8 @@ type createRoleBody struct {
 }
 
 func (h *Handler) createRoleForApp(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body createRoleBody
@@ -155,9 +151,8 @@ func (h *Handler) createRoleForApp(c *gin.Context) {
 }
 
 func (h *Handler) createRoleForAppGroup(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body createRoleBody
@@ -190,9 +185,8 @@ type updateRoleBody struct {
 }
 
 func (h *Handler) updateRole(c *gin.Context) {
-	roleID, err := strconv.ParseInt(c.Param("role_id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid role id")
+	roleID, ok := ginutil.ParseInt64Param(c, "role_id")
+	if !ok {
 		return
 	}
 	var body updateRoleBody
@@ -216,9 +210,8 @@ func (h *Handler) updateRole(c *gin.Context) {
 }
 
 func (h *Handler) deleteRole(c *gin.Context) {
-	roleID, err := strconv.ParseInt(c.Param("role_id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid role id")
+	roleID, ok := ginutil.ParseInt64Param(c, "role_id")
+	if !ok {
 		return
 	}
 	if err := h.service.DeleteRole(c.Request.Context(), roleID, h.tenantID(c)); err != nil {
@@ -238,9 +231,8 @@ func (h *Handler) listBindingsForAppGroup(c *gin.Context) {
 }
 
 func (h *Handler) listBindings(c *gin.Context, owner Owner) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	bindings, err := h.service.ListBindings(c.Request.Context(), owner, id, h.tenantID(c))
@@ -275,9 +267,8 @@ type createBindingBody struct {
 }
 
 func (h *Handler) createBindingForApp(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body createBindingBody
@@ -301,9 +292,8 @@ func (h *Handler) createBindingForApp(c *gin.Context) {
 }
 
 func (h *Handler) createBindingForAppGroup(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body createBindingBody
@@ -327,9 +317,8 @@ func (h *Handler) createBindingForAppGroup(c *gin.Context) {
 }
 
 func (h *Handler) deleteBinding(c *gin.Context) {
-	bindingID, err := strconv.ParseInt(c.Param("binding_id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid binding id")
+	bindingID, ok := ginutil.ParseInt64Param(c, "binding_id")
+	if !ok {
 		return
 	}
 	if err := h.service.DeleteBinding(c.Request.Context(), bindingID, h.tenantID(c)); err != nil {
@@ -358,9 +347,8 @@ func (h *Handler) listBindingsForUser(c *gin.Context) {
 }
 
 func (h *Handler) listBindingsForSubject(c *gin.Context, subjectType string) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	bindings, err := h.service.ListBindingsBySubject(c.Request.Context(), subjectType, id, h.tenantID(c))
@@ -404,9 +392,8 @@ type MemberAppRoles struct {
 }
 
 func (h *Handler) listMemberAppsRoles(c *gin.Context) {
-	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	appIDs, err := h.service.MemberAppIDs(c.Request.Context(), groupID)

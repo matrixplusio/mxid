@@ -1,12 +1,11 @@
 package tenant
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/middleware"
 	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/pkg/ee/license"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
 )
 
@@ -49,9 +48,8 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid tenant id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	t, err := h.svc.Get(c.Request.Context(), id)
@@ -77,9 +75,8 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 func (h *Handler) Update(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid tenant id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var req UpdateRequest
@@ -96,9 +93,8 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 func (h *Handler) Delete(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid tenant id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {

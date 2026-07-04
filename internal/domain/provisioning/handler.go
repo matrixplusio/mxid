@@ -1,12 +1,11 @@
 package provisioning
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/imkerbos/mxid/internal/bootstrap"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
 )
@@ -49,9 +48,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 // Get returns the app's provisioning config (token never echoed).
 func (h *Handler) Get(c *gin.Context) {
-	appID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid app id")
+	appID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	v, err := h.svc.Get(c.Request.Context(), appID)
@@ -71,9 +69,8 @@ type putProvisioningRequest struct {
 
 // Put updates the app's provisioning config.
 func (h *Handler) Put(c *gin.Context) {
-	appID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid app id")
+	appID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var req putProvisioningRequest

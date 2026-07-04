@@ -2,10 +2,10 @@ package authn
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/session"
 )
@@ -59,9 +59,8 @@ func (h *AdminSessionHandler) RegisterRoutes(rg *gin.RouterGroup) {
 }
 
 func (h *AdminSessionHandler) list(c *gin.Context) {
-	uid, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid user id")
+	uid, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 
@@ -94,9 +93,8 @@ func (h *AdminSessionHandler) list(c *gin.Context) {
 // revokeAll force-logs-out the user from every namespace. Useful after a
 // password reset or suspected compromise.
 func (h *AdminSessionHandler) revokeAll(c *gin.Context) {
-	uid, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid user id")
+	uid, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	for _, ns := range []string{session.NamespaceConsole, session.NamespacePortal, session.NamespaceProtocol} {
@@ -110,9 +108,8 @@ func (h *AdminSessionHandler) revokeAll(c *gin.Context) {
 // query param because the session ID alone is opaque — we don't trial-delete
 // against three namespaces to avoid masking errors.
 func (h *AdminSessionHandler) revokeOne(c *gin.Context) {
-	uid, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid user id")
+	uid, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	sid := c.Param("sid")

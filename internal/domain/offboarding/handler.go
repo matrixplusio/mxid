@@ -2,12 +2,12 @@ package offboarding
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/imkerbos/mxid/internal/domain/user"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/pagination"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
@@ -44,9 +44,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 // departing user (disable account + back-channel logout + kill all sessions),
 // plus a review checklist of the user's app footprint.
 func (h *Handler) Offboard(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid user id")
+	id, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	if err := h.svc.Offboard(c.Request.Context(), id, actorID(c)); err != nil {
@@ -74,9 +73,8 @@ func (h *Handler) ListTasks(c *gin.Context) {
 
 // ListItems handles GET /offboarding/tasks/:id/items.
 func (h *Handler) ListItems(c *gin.Context) {
-	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid task id")
+	taskID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	tenantID := tenantctx.FromContext(c, h.tenantID)
@@ -90,9 +88,8 @@ func (h *Handler) ListItems(c *gin.Context) {
 
 // MarkItemDone handles POST /offboarding/items/:id/done.
 func (h *Handler) MarkItemDone(c *gin.Context) {
-	itemID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid item id")
+	itemID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	tenantID := tenantctx.FromContext(c, h.tenantID)

@@ -1,10 +1,9 @@
 package appaccess
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/pkg/authz"
+	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
 )
@@ -57,9 +56,8 @@ func (h *Handler) userID(c *gin.Context) *int64 {
 /* ──────────────── App-scoped endpoints ──────────────── */
 
 func (h *Handler) listForApp(c *gin.Context) {
-	appID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid app id")
+	appID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	rows, err := h.service.ListOwnByApp(c.Request.Context(), appID, h.tenantID(c))
@@ -71,9 +69,8 @@ func (h *Handler) listForApp(c *gin.Context) {
 }
 
 func (h *Handler) createForApp(c *gin.Context) {
-	appID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid app id")
+	appID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body createBody
@@ -99,9 +96,8 @@ func (h *Handler) createForApp(c *gin.Context) {
 /* ──────────────── App-group-scoped endpoints ──────────────── */
 
 func (h *Handler) listForAppGroup(c *gin.Context) {
-	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid app group id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	rows, err := h.service.ListByAppGroup(c.Request.Context(), groupID, h.tenantID(c))
@@ -113,9 +109,8 @@ func (h *Handler) listForAppGroup(c *gin.Context) {
 }
 
 func (h *Handler) createForAppGroup(c *gin.Context) {
-	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40001, "invalid app group id")
+	groupID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
 		return
 	}
 	var body createBody
@@ -147,9 +142,8 @@ type createBody struct {
 }
 
 func (h *Handler) remove(c *gin.Context) {
-	policyID, err := strconv.ParseInt(c.Param("policy_id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, 40002, "invalid policy id")
+	policyID, ok := ginutil.ParseInt64Param(c, "policy_id")
+	if !ok {
 		return
 	}
 	if err := h.service.DeletePolicy(c.Request.Context(), policyID, h.tenantID(c)); err != nil {
