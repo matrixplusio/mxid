@@ -9,6 +9,7 @@ export default {
   },
   errors: {
     eeFeatureRequired: 'This is an Enterprise Edition feature and requires a valid enterprise license. Activate one under Settings → License.',
+    totpCodeReused: 'That code was just used. Wait for your authenticator to show the next 6-digit code and try again.',
   },
   common: {
     save: 'Save',
@@ -16,6 +17,8 @@ export default {
     delete: 'Delete',
     remove: 'Remove',
     confirm: 'Confirm',
+    cropTitle: 'Crop avatar',
+    zoom: 'Zoom',
     edit: 'Edit',
     create: 'Create',
     add: 'Add',
@@ -255,9 +258,11 @@ export default {
       email: 'Email',
       phone: 'Phone',
       status: 'Status',
+      mfa: 'MFA',
       lastLogin: 'Last sign-in',
       createdAt: 'Created',
     },
+    mfa: { on: 'Enabled', off: 'Off' },
     statusActive: 'Active',
     statusLocked: 'Locked',
     statusDisabled: 'Disabled',
@@ -1183,7 +1188,7 @@ export default {
       avatarHint: 'PNG/JPG/WebP · ≤2MB',
       uploadFailed: 'Upload failed',
       tooLarge: 'File too large',
-      sizeHint: 'Please upload an image under 2MB',
+      sizeHint: 'Please upload an image under 3MB',
     },
     pwd: {
       old: 'Current password',
@@ -1347,6 +1352,7 @@ export default {
     consent: {
       title: 'App authorization',
       subtitle: 'Please confirm the permissions this app is requesting',
+      loginPrompt: 'Confirm sign-in to this application',
       grantBtn: 'Authorize',
       denyBtn: 'Deny',
     },

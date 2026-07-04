@@ -12,6 +12,7 @@ export default {
   },
   errors: {
     eeFeatureRequired: '该功能为企业版功能,需有效的企业版授权。请在「设置 → 许可信息」激活授权。',
+    totpCodeReused: '该验证码刚使用过,请等待认证器刷新出新的 6 位验证码再试。',
   },
   common: {
     save: '保存',
@@ -19,6 +20,8 @@ export default {
     delete: '删除',
     remove: '移除',
     confirm: '确认',
+    cropTitle: '裁剪头像',
+    zoom: '缩放',
     edit: '编辑',
     create: '新建',
     add: '添加',
@@ -258,9 +261,11 @@ export default {
       email: '邮箱',
       phone: '手机',
       status: '状态',
+      mfa: 'MFA',
       lastLogin: '上次登录',
       createdAt: '创建时间',
     },
+    mfa: { on: '已启用', off: '未启用' },
     statusActive: '正常',
     statusLocked: '锁定',
     statusDisabled: '禁用',
@@ -1186,7 +1191,7 @@ export default {
       avatarHint: 'PNG/JPG/WebP · ≤2MB',
       uploadFailed: '上传失败',
       tooLarge: '文件过大',
-      sizeHint: '请上传 2MB 以内的图片',
+      sizeHint: '请上传 3MB 以内的图片',
     },
     pwd: {
       old: '当前密码',
@@ -1350,6 +1355,7 @@ export default {
     consent: {
       title: '应用授权',
       subtitle: '请确认下方应用申请的权限',
+      loginPrompt: '确认登录到此应用',
       grantBtn: '同意授权',
       denyBtn: '拒绝',
     },
