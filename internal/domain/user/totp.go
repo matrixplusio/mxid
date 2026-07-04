@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/imkerbos/mxid/pkg/dberr"
@@ -17,6 +18,12 @@ var (
 	ErrMFAAlreadyExists = errors.New("totp already enrolled")
 	ErrMFANotEnrolled   = errors.New("totp not enrolled")
 	ErrMFAInvalidCode   = errors.New("invalid totp code")
+	// ErrMFACodeReused is a cryptographically-valid code whose time-step was
+	// already consumed (single-use replay). Distinct from ErrMFAInvalidCode so
+	// authenticated callers (enroll/re-verify) can tell the user to wait for the
+	// next code. Login/step-up deliberately collapse it back to a generic failure
+	// to avoid confirming to an attacker that a captured code was ever valid.
+	ErrMFACodeReused = errors.New("totp code already used")
 )
 
 // SetupTOTP starts TOTP enrollment for a user.
@@ -46,8 +53,16 @@ func (s *Service) SetupTOTP(ctx context.Context, userID int64) (secret, otpauthU
 	if err != nil && !dberr.IsNotFound(err) {
 		return "", "", fmt.Errorf("get mfa: %w", err)
 	}
-	if existing != nil && existing.Verified {
-		return "", "", ErrMFAAlreadyExists
+	if existing != nil {
+		if existing.Verified {
+			return "", "", ErrMFAAlreadyExists
+		}
+		// A pending (unverified) enrollment already has a secret — REUSE it.
+		// Enrollment fires setup more than once (a double-click, React StrictMode
+		// double-effect), and each fresh generate would store a different secret
+		// than the QR the user actually scanned → "invalid code" on verify.
+		// Returning the same secret every time makes setup idempotent.
+		return s.reuseTOTP(existing, u.Username)
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -67,29 +82,54 @@ func (s *Service) SetupTOTP(ctx context.Context, userID int64) (secret, otpauthU
 	}
 
 	now := time.Now()
-	if existing != nil {
-		existing.Secret = &encSecret
-		existing.Verified = false
-		existing.UpdatedAt = now
-		if err := s.repo.UpdateMFA(ctx, existing); err != nil {
-			return "", "", fmt.Errorf("update mfa: %w", err)
+	inserted, err := s.repo.CreateMFA(ctx, &UserMFA{
+		ID:        s.idGen.Generate(),
+		UserID:    userID,
+		Type:      MFATypeTotp,
+		Secret:    &encSecret,
+		Verified:  false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("create mfa: %w", err)
+	}
+	if !inserted {
+		// Lost the race to a concurrent setup — return THAT row's secret so both
+		// callers (and the QR shown) agree with what's stored.
+		winner, gerr := s.repo.GetMFA(ctx, userID, MFATypeTotp)
+		if gerr != nil || winner == nil {
+			return "", "", fmt.Errorf("resolve concurrent mfa enrollment: %w", gerr)
 		}
-	} else {
-		mfa := &UserMFA{
-			ID:        s.idGen.Generate(),
-			UserID:    userID,
-			Type:      MFATypeTotp,
-			Secret:    &encSecret,
-			Verified:  false,
-			CreatedAt: now,
-			UpdatedAt: now,
+		if winner.Verified {
+			return "", "", ErrMFAAlreadyExists
 		}
-		if err := s.repo.CreateMFA(ctx, mfa); err != nil {
-			return "", "", fmt.Errorf("create mfa: %w", err)
-		}
+		return s.reuseTOTP(winner, u.Username)
 	}
 
 	return key.Secret(), key.URL(), nil
+}
+
+// reuseTOTP returns the (base32 secret, otpauth URL) for an existing unverified
+// enrollment so repeated SetupTOTP calls are idempotent. The URL is rebuilt from
+// the stored secret to exactly match what totp.Generate would have produced.
+func (s *Service) reuseTOTP(mfa *UserMFA, account string) (string, string, error) {
+	if mfa.Secret == nil || *mfa.Secret == "" {
+		return "", "", ErrMFANotEnrolled
+	}
+	plain, err := s.masterKey.Decrypt(*mfa.Secret)
+	if err != nil {
+		return "", "", fmt.Errorf("decrypt secret: %w", err)
+	}
+	b32 := string(plain)
+	v := url.Values{}
+	v.Set("secret", b32)
+	v.Set("issuer", s.issuer)
+	v.Set("algorithm", "SHA1")
+	v.Set("digits", "6")
+	v.Set("period", "30")
+	u := url.URL{Scheme: "otpauth", Host: "totp", Path: "/" + s.issuer + ":" + account, RawQuery: v.Encode()}
+	return b32, u.String(), nil
 }
 
 // VerifyTOTP validates a TOTP code.
@@ -131,11 +171,19 @@ func (s *Service) VerifyTOTP(ctx context.Context, userID int64, code string) err
 	if !ok {
 		return ErrMFAInvalidCode
 	}
-	if !s.claimTOTPStep(ctx, userID, matchedStep) {
-		// Code is cryptographically valid but its time-step was already
-		// consumed in this window — a replay. Surface the same opaque error
-		// as a wrong code so the response shape never distinguishes them.
+	claimed, claimErr := s.claimTOTPStep(ctx, userID, matchedStep)
+	if claimErr != nil {
+		// Replay store is down — fail CLOSED, but this is not a replay, so return
+		// the generic invalid-code (not the "already used, wait" hint).
 		return ErrMFAInvalidCode
+	}
+	if !claimed {
+		// Code is cryptographically valid but its time-step was already
+		// consumed in this window — a replay. Return a distinct error so
+		// authenticated callers can hint "wait for the next code"; login/step-up
+		// collapse it back to the opaque failure (see VerifyMFAChallenge /
+		// VerifyStepUp) so no attacker learns a captured code was valid.
+		return ErrMFACodeReused
 	}
 
 	if !mfa.Verified {

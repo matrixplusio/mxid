@@ -102,22 +102,25 @@ func stepDeltas() []int {
 	return deltas
 }
 
-// claimTOTPStep records matchedStep as consumed for userID and returns true
-// when the claim succeeded (step not seen before). Returns false on a replay
-// (step already consumed). When no redis is wired it returns true so the
-// (test-only) path stays functional.
-func (s *Service) claimTOTPStep(ctx context.Context, userID int64, matchedStep int64) bool {
+// claimTOTPStep atomically claims matchedStep for userID. Returns:
+//   - (true, nil)  fresh step, claimed.
+//   - (false, nil) genuine replay — the step was already consumed.
+//   - (false, err) store failure — the caller must fail CLOSED, but this is NOT
+//     a replay, so it surfaces a generic invalid-code rather than the
+//     "code already used" hint (which would mislead while Redis is down).
+//
+// When no redis is wired it returns (true, nil) so the (test-only) path stays
+// functional.
+func (s *Service) claimTOTPStep(ctx context.Context, userID int64, matchedStep int64) (bool, error) {
 	if s.totpReplayRDB == nil {
-		return true
+		return true, nil
 	}
 	res, err := totpClaimScript.Run(ctx, s.totpReplayRDB,
 		[]string{totpUsedKey(userID)},
 		matchedStep, totpUsedTTL.Milliseconds(),
 	).Int64()
 	if err != nil {
-		// Fail-CLOSED on a store error: treat as a replay so a Redis outage
-		// can't silently reopen the replay window on this auth hot path.
-		return false
+		return false, err
 	}
-	return res == 1
+	return res == 1, nil
 }

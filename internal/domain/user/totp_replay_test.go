@@ -80,8 +80,8 @@ func TestVerifyTOTP_ReplayRejected(t *testing.T) {
 	}
 	if err := svc.VerifyTOTP(ctx, 42, code); err == nil {
 		t.Fatal("second VerifyTOTP with the SAME code must fail (replay), got nil")
-	} else if err != ErrMFAInvalidCode {
-		t.Fatalf("replay should map to ErrMFAInvalidCode, got %v", err)
+	} else if err != ErrMFACodeReused {
+		t.Fatalf("replay should map to ErrMFACodeReused, got %v", err)
 	}
 }
 

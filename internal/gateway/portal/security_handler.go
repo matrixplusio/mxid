@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/domain/authn"
+	"github.com/imkerbos/mxid/internal/domain/user"
 	"github.com/imkerbos/mxid/pkg/event"
 	"github.com/imkerbos/mxid/pkg/ginutil"
 	"github.com/imkerbos/mxid/pkg/response"
@@ -436,10 +437,24 @@ func (h *SecurityHandler) verifyTOTP(c *gin.Context) {
 
 	if err := h.mfaQuerier.VerifyTOTP(c.Request.Context(), userID, req.Code); err != nil {
 		h.mfaRateLimiter.RecordFailure(c.Request.Context(), userID, ip)
+		if errors.Is(err, user.ErrMFACodeReused) {
+			// Common right after scanning: the same code was just used to finish a
+			// previous step. Tell the user to wait for the next one instead of the
+			// misleading "invalid code".
+			response.BadRequest(c, 40003, "totp code already used, wait for the next one")
+			return
+		}
 		response.BadRequest(c, 40002, "invalid totp code")
 		return
 	}
 	h.mfaRateLimiter.Reset(c.Request.Context(), userID, ip)
+
+	// This verify already proved TOTP possession — treat it as a fresh step-up so
+	// a high-risk op right after enrolling doesn't demand another code (which
+	// would reuse this same TOTP window and get rejected as a replay). Best-effort.
+	if sid, ok := authn.GetSessionID(c); ok {
+		_ = h.sessionQuerier.MarkStepUpFresh(c.Request.Context(), h.namespace, sid)
+	}
 
 	h.publish(c, event.MFAEnabled, map[string]any{
 		"user_id": userID, "tenant_id": h.tenantID, "type": "totp",
