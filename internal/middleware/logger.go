@@ -59,12 +59,12 @@ func Logger(logger *zap.Logger) gin.HandlerFunc {
 		status := c.Writer.Status()
 
 		fields := []zap.Field{
-			zap.Int("status", status),
+			zap.Int("statusCode", status),
 			zap.String("method", c.Request.Method),
 			zap.String("path", path),
 			zap.String("query", redactQuery(query)),
-			zap.String("ip", c.ClientIP()),
-			zap.Duration("latency", latency),
+			zap.String("clientIp", c.ClientIP()),
+			zap.Int64("costMs", latency.Milliseconds()),
 			zap.Int("size", c.Writer.Size()),
 		}
 
