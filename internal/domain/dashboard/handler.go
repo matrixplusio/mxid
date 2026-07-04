@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/tenantctx"
 )
@@ -26,10 +27,13 @@ func NewHandler(svc *Service, defaultTenantID int64) *Handler {
 
 // RegisterRoutes mounts the dashboard routes.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	// Read-only admin overview + audit export. Gated so a bare authenticated
+	// console session can't scrape tenant-wide stats or stream the audit log
+	// without the corresponding read permission (super_admin passes via `*`).
 	d := rg.Group("/dashboard")
 	{
-		d.GET("/overview", h.Overview)
-		d.GET("/export", h.Export)
+		d.GET("/overview", authz.Require("user.read", nil), h.Overview)
+		d.GET("/export", authz.Require("audit.read", nil), h.Export)
 	}
 }
 
