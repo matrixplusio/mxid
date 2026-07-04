@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/imkerbos/mxid/internal/middleware"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -70,7 +71,7 @@ func (l *zapGormLogger) Error(_ context.Context, msg string, data ...any) {
 	}
 }
 
-func (l *zapGormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+func (l *zapGormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	if l.level <= gormlogger.Silent {
 		return
 	}
@@ -82,6 +83,11 @@ func (l *zapGormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql
 		zap.Duration("elapsed", elapsed),
 		zap.Int64("rows", rows),
 		zap.String("sql", redactSQL(sql)),
+	}
+	// Correlate the query to its request when the caller threaded the
+	// request-scoped context through (repo WithContext(ctx)); best-effort.
+	if rid := middleware.RequestIDFromContext(ctx); rid != "" {
+		fields = append(fields, zap.String("request_id", rid))
 	}
 
 	switch {

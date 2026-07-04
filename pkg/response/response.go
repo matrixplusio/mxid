@@ -26,6 +26,20 @@ type Response struct {
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
 	Detail  string `json:"detail,omitempty"`
+	// TraceID echoes the per-request id (set by middleware.RequestID) so a
+	// client / support can correlate a response to the server log line for it.
+	TraceID string `json:"traceId,omitempty"`
+}
+
+// traceID returns the request id stamped on the context by middleware.RequestID,
+// or "" if absent (e.g. a response built outside the middleware chain).
+func traceID(c *gin.Context) string {
+	if v, ok := c.Get("request_id"); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 // PaginatedData wraps paginated results.
@@ -42,6 +56,7 @@ func OK(c *gin.Context, data any) {
 		Code:    0,
 		Message: "ok",
 		Data:    data,
+		TraceID: traceID(c),
 	})
 }
 
@@ -51,6 +66,7 @@ func Created(c *gin.Context, data any) {
 		Code:    0,
 		Message: "created",
 		Data:    data,
+		TraceID: traceID(c),
 	})
 }
 
@@ -65,6 +81,7 @@ func Paginated(c *gin.Context, items any, total int64, page, pageSize int) {
 			Page:     page,
 			PageSize: pageSize,
 		},
+		TraceID: traceID(c),
 	})
 }
 
@@ -74,6 +91,7 @@ func Error(c *gin.Context, httpStatus int, code int, message, detail string) {
 		Code:    code,
 		Message: message,
 		Detail:  detail,
+		TraceID: traceID(c),
 	})
 }
 
