@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/session"
 )
@@ -43,10 +44,18 @@ type AdminSessionResponse struct {
 }
 
 // RegisterRoutes mounts the admin session endpoints on the console API.
+//
+// SECURITY: this MUST be mounted on a group that already carries the console
+// AuthMiddleware + authz + TenantContext chain (i.e. after they are `.Use`d).
+// It was historically mounted from inside authn.Register, which runs BEFORE
+// those middlewares were added to the group, leaving these routes fully
+// unauthenticated (gin group middleware only applies to routes registered
+// after `.Use`). Each route now also carries an explicit authz.Require so it
+// fails closed regardless of the audit-only gateway.
 func (h *AdminSessionHandler) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/users/:id/sessions", h.list)
-	rg.DELETE("/users/:id/sessions", h.revokeAll)
-	rg.DELETE("/users/:id/sessions/:sid", h.revokeOne)
+	rg.GET("/users/:id/sessions", authz.Require("user.read", nil), h.list)
+	rg.DELETE("/users/:id/sessions", authz.Require("user.update", nil), h.revokeAll)
+	rg.DELETE("/users/:id/sessions/:sid", authz.Require("user.update", nil), h.revokeOne)
 }
 
 func (h *AdminSessionHandler) list(c *gin.Context) {
@@ -101,7 +110,7 @@ func (h *AdminSessionHandler) revokeAll(c *gin.Context) {
 // query param because the session ID alone is opaque — we don't trial-delete
 // against three namespaces to avoid masking errors.
 func (h *AdminSessionHandler) revokeOne(c *gin.Context) {
-	_, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	uid, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, 40001, "invalid user id")
 		return
@@ -121,6 +130,14 @@ func (h *AdminSessionHandler) revokeOne(c *gin.Context) {
 		// valid
 	default:
 		response.BadRequest(c, 40004, "invalid namespace")
+		return
+	}
+	// Ownership guard: the opaque session id must actually belong to :id,
+	// otherwise an operator authorized to manage user A could delete an
+	// arbitrary session (incl. another user's / a super_admin's) by id.
+	sess, err := h.sessionMgr.Get(c.Request.Context(), ns, sid)
+	if err != nil || sess == nil || sess.UserID != uid {
+		response.NotFound(c, 40401, "session not found")
 		return
 	}
 	if err := h.sessionMgr.Delete(c.Request.Context(), ns, sid); err != nil {

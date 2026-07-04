@@ -497,6 +497,11 @@ func registerModules(a *bootstrap.App) {
 
 	userModule.RegisterRoutes(a)
 
+	// Admin per-user session ops (/users/:id/sessions) — mounted HERE, after the
+	// console auth/authz/tenant chain, not from inside authn.Register (which runs
+	// before .Use). Previously these were unauthenticated due to that ordering.
+	authnModule.AdminSession.RegisterRoutes(a.ConsoleGroup)
+
 	// Settings routes mounted here — AFTER AuthMiddleware + authz + tenant
 	// context are on the console group — so config read/write requires an
 	// authenticated admin session (previously these registered pre-auth and

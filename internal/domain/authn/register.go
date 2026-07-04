@@ -10,6 +10,11 @@ type Module struct {
 	Engine     *Engine
 	Handler    *Handler
 	SessionMgr *session.Manager
+	// AdminSession is mounted by the caller AFTER the console auth/authz/tenant
+	// middleware chain is installed — see run.go. It must NOT be registered from
+	// within Register (which runs before that chain is `.Use`d), or its routes
+	// escape authentication entirely.
+	AdminSession *AdminSessionHandler
 }
 
 // Register wires up the authentication module and registers routes.
@@ -58,14 +63,13 @@ func Register(
 	handler.RegisterPortalRoutes(app.PortalGroup)
 
 	// Admin-side per-user session ops live in authn (the only module holding
-	// the session manager) but mount under the /users path so the console UI
-	// can use them from the user-detail page.
-	adminSession := NewAdminSessionHandler(sessionMgr)
-	adminSession.RegisterRoutes(app.ConsoleGroup)
-
+	// the session manager) but are mounted by run.go under the /users path
+	// AFTER the console auth/authz/tenant middleware chain — NOT here, which
+	// runs before that chain is installed.
 	return &Module{
-		Engine:     engine,
-		Handler:    handler,
-		SessionMgr: sessionMgr,
+		Engine:       engine,
+		Handler:      handler,
+		SessionMgr:   sessionMgr,
+		AdminSession: NewAdminSessionHandler(sessionMgr),
 	}
 }
