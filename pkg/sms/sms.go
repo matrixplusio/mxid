@@ -25,7 +25,7 @@ import (
 )
 
 // smsHTTPClient is the shared outbound client for every SMS provider. It is
-// SSRF-safe and, critically, timeout-bounded: bare http.DefaultClient has no
+// SSRF-safe and, critically, timeout-bounded: the stdlib default client has no
 // timeout, so a slow/hung provider endpoint would pile up handler goroutines on
 // the unauthenticated OTP-send path (/auth/sms/send) until the process starves.
 // All three providers target public HTTPS APIs, so the SSRF guard is compatible.
