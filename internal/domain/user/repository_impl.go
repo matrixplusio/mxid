@@ -26,6 +26,24 @@ func (r *gormRepository) Create(ctx context.Context, user *User) error {
 	return nil
 }
 
+// CreateWithProfile inserts the user + empty detail + initial password history
+// in a single transaction. WithContext(ctx) carries the tenant scope into the
+// transaction so the tenantscope plugin still stamps tenant_id on the user row.
+func (r *gormRepository) CreateWithProfile(ctx context.Context, user *User, detail *UserDetail, history *UserPasswordHistory) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return fmt.Errorf("create user: %w", err)
+		}
+		if err := tx.Create(detail).Error; err != nil {
+			return fmt.Errorf("create user detail: %w", err)
+		}
+		if err := tx.Create(history).Error; err != nil {
+			return fmt.Errorf("create password history: %w", err)
+		}
+		return nil
+	})
+}
+
 // SetSuperAdmin toggles the super-admin flag for a user.
 func (r *gormRepository) SetSuperAdmin(ctx context.Context, id int64, makeSuper bool) error {
 	res := r.db.WithContext(ctx).

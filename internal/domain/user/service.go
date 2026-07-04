@@ -312,30 +312,22 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req *CreateUserReq
 		UpdatedAt:         now,
 	}
 
-	if err := s.repo.Create(ctx, user); err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
-	}
-
-	// Create empty detail record
+	// Empty detail record + initial password history, written together with the
+	// user in one transaction so a partial failure never orphans the user row.
 	detail := &UserDetail{
 		ID:        s.idGen.Generate(),
 		UserID:    user.ID,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := s.repo.CreateDetail(ctx, detail); err != nil {
-		return nil, fmt.Errorf("create user detail: %w", err)
-	}
-
-	// Save initial password history
 	pwdHistory := &UserPasswordHistory{
 		ID:           s.idGen.Generate(),
 		UserID:       user.ID,
 		PasswordHash: hash,
 		CreatedAt:    now,
 	}
-	if err := s.repo.CreatePasswordHistory(ctx, pwdHistory); err != nil {
-		return nil, fmt.Errorf("create password history: %w", err)
+	if err := s.repo.CreateWithProfile(ctx, user, detail, pwdHistory); err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	// Publish event. Email + display_name carried in the payload so async

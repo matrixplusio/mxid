@@ -15,6 +15,10 @@ type ListParams struct {
 type Repository interface {
 	// User CRUD
 	Create(ctx context.Context, user *User) error
+	// CreateWithProfile inserts the user, its empty detail row and the initial
+	// password-history row atomically in one transaction, so a partial failure
+	// can never leave an orphaned user without a detail / history record.
+	CreateWithProfile(ctx context.Context, user *User, detail *UserDetail, history *UserPasswordHistory) error
 	GetByID(ctx context.Context, id int64) (*User, error)
 	GetByUsername(ctx context.Context, tenantID int64, username string) (*User, error)
 	GetByEmail(ctx context.Context, tenantID int64, email string) (*User, error)
