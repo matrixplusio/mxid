@@ -49,6 +49,7 @@ export interface CurrentUser {
   user_id: string
   username: string
   display_name: string
+  avatar?: string | null
   status: number
   // is_admin reports whether the user holds any admin permission. Portal
   // SPA shows the "switch to console" button only when true.
@@ -69,6 +70,8 @@ export interface User {
   display_name: string | null
   avatar: string | null
   status: number
+  /** true when the user has ≥1 verified MFA method (list view only, batched). */
+  mfa_enabled?: boolean
   last_login_at: string | null
   last_login_ip: string | null
   password_changed_at: string | null

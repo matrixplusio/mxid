@@ -140,8 +140,12 @@ export default function Sidebar() {
             className="group flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left transition-colors hover:bg-sidebar-hover"
             title={t('nav.myAccountTitle')}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/30 text-sm font-medium">
-              {user?.display_name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/30 text-sm font-medium">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+              ) : (
+                user?.display_name?.charAt(0) || user?.username?.charAt(0) || 'U'
+              )}
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium group-hover:text-white">{user?.display_name || user?.username}</p>

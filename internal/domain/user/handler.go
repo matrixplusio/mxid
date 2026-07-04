@@ -240,8 +240,19 @@ func (h *Handler) List(c *gin.Context) {
 	// List view: mask PII. Detail page calls /users/:id which returns the
 	// raw fields for admin editing.
 	items := make([]*UserResponse, len(users))
+	ids := make([]int64, len(users))
 	for i, u := range users {
 		items[i] = ToResponseMasked(u)
+		ids[i] = u.ID
+	}
+
+	// Batch the MFA-enabled flag for the whole page (one GROUP BY, no N+1) so
+	// the list can show an MFA badge. A lookup failure must not fail the list —
+	// the badge just stays off.
+	if mfaSet, err := h.svc.MFAEnabledByUserIDs(c.Request.Context(), ids); err == nil {
+		for _, it := range items {
+			it.MFAEnabled = mfaSet[it.ID]
+		}
 	}
 
 	response.Paginated(c, items, total, p.Page, p.PageSize)

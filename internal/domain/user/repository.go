@@ -70,7 +70,13 @@ type Repository interface {
 	// MFA
 	GetMFA(ctx context.Context, userID int64, mfaType string) (*UserMFA, error)
 	ListMFA(ctx context.Context, userID int64) ([]*UserMFA, error)
-	CreateMFA(ctx context.Context, mfa *UserMFA) error
+	// MFAEnabledByUserIDs returns the set of user IDs (from the given list) that
+	// have at least one verified MFA method. Batched (one GROUP BY) so the user
+	// list view can show an MFA badge without an N+1.
+	MFAEnabledByUserIDs(ctx context.Context, userIDs []int64) (map[int64]bool, error)
+	// CreateMFA inserts only if absent (ON CONFLICT DO NOTHING); the bool reports
+	// whether this call inserted (false = a concurrent enroll won the race).
+	CreateMFA(ctx context.Context, mfa *UserMFA) (bool, error)
 	UpdateMFA(ctx context.Context, mfa *UserMFA) error
 	DeleteMFA(ctx context.Context, userID int64, mfaType string) error
 

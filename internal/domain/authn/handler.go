@@ -73,6 +73,7 @@ type CurrentUserResponse struct {
 	UserID      int64  `json:"user_id,string"`
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 	Status      int    `json:"status"`
 	// IsAdmin reports whether the user has any non-empty admin permission
 	// — i.e. would the console route guard let them in. The portal SPA
@@ -524,6 +525,7 @@ func (h *Handler) meHandler(namespace, cookieName string) gin.HandlerFunc {
 			UserID:      userInfo.ID,
 			Username:    userInfo.Username,
 			DisplayName: userInfo.DisplayName,
+			Avatar:      userInfo.Avatar,
 			Status:      userInfo.Status,
 			IsAdmin:     isAdmin,
 		})

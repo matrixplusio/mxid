@@ -861,6 +861,12 @@ func (s *Service) ListIdentities(ctx context.Context, userID int64) ([]*UserIden
 // ListMFA returns all MFA configurations for a user.
 //
 // Returns an empty (non-nil) slice when the user has not enrolled any factor.
+// MFAEnabledByUserIDs returns the set of users (from the list) with a verified
+// MFA method. Batched for the list view's MFA badge (no N+1).
+func (s *Service) MFAEnabledByUserIDs(ctx context.Context, userIDs []int64) (map[int64]bool, error) {
+	return s.repo.MFAEnabledByUserIDs(ctx, userIDs)
+}
+
 func (s *Service) ListMFA(ctx context.Context, userID int64) ([]*UserMFA, error) {
 	if err := s.requireUser(ctx, userID); err != nil {
 		return nil, err

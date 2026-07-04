@@ -21,7 +21,10 @@ type UpdateUserRequest struct {
 	Email       *string `json:"email" binding:"omitempty,email,max=256"`
 	Phone       *string `json:"phone" binding:"omitempty,max=32"`
 	DisplayName *string `json:"display_name" binding:"omitempty,max=128"`
-	Avatar      *string `json:"avatar" binding:"omitempty,max=512"`
+	// Avatar holds either a URL or an inline base64 data URL. Cap ~5 MB of chars:
+	// the client crops to a small square PNG (well under this), and even a raw
+	// 3 MB image → ~4 M base64 chars fits — bounded to reject abusive payloads.
+	Avatar      *string `json:"avatar" binding:"omitempty,max=5242880"`
 	Status      *int    `json:"status" binding:"omitempty,oneof=1 2 3 4"`
 }
 
@@ -145,6 +148,9 @@ type UserResponse struct {
 	DisplayName       *string            `json:"display_name"`
 	Avatar            *string            `json:"avatar"`
 	Status            int                `json:"status"`
+	// MFAEnabled is true when the user has ≥1 verified MFA method. Populated only
+	// on the list view (batched); zero-valued on single-user responses.
+	MFAEnabled        bool               `json:"mfa_enabled"`
 	LastLoginAt       *time.Time         `json:"last_login_at"`
 	LastLoginIP       *string            `json:"last_login_ip"`
 	PasswordChangedAt *time.Time         `json:"password_changed_at"`

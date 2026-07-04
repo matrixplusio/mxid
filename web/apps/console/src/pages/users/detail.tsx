@@ -39,7 +39,7 @@ import type {
 } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { useTabParam } from '../../hooks/useTabParam'
-import { Field, pageMotion, Button, ConfirmDialog } from '../../components/ui'
+import { Field, pageMotion, Button, ConfirmDialog, AvatarUpload, avatarTexts } from '../../components/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
 
 type Tab = 'basic' | 'detail' | 'groups' | 'roles' | 'identities' | 'mfa' | 'sessions' | 'history'
@@ -352,7 +352,20 @@ function BasicTab({ user, onSaved }: { user: User; onSaved: () => void }) {
         <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
       </Field>
       <Field label={t('users.detail.basicForm.avatar')} hint={t('users.detail.basicForm.avatarHint')}>
-        <input value={form.avatar} onChange={(e) => setForm({ ...form, avatar: e.target.value })} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+        <div className="flex items-center gap-4">
+          <AvatarUpload
+            value={form.avatar}
+            onChange={(dataURL) => setForm((f) => ({ ...f, avatar: dataURL }))}
+            size={64}
+            texts={avatarTexts(t)}
+            fallback={<span className="text-xl font-medium uppercase">{(form.display_name || user.username).charAt(0)}</span>}
+          />
+          {form.avatar && (
+            <button type="button" onClick={() => setForm({ ...form, avatar: '' })} className="text-xs text-faint hover:text-danger">
+              {t('common.remove')}
+            </button>
+          )}
+        </div>
       </Field>
       <Field label={t('users.detail.basicForm.status')} hint={<><strong>{t('users.detail.status.active')}</strong>{t('users.detail.basicForm.statusHintActiveDesc')}<strong>{t('users.detail.status.locked')}</strong>{t('users.detail.basicForm.statusHintLockedDesc')}<strong>{t('users.detail.status.disabled')}</strong>{t('users.detail.basicForm.statusHintDisabledDesc')}<strong>{t('users.detail.status.pending')}</strong>{t('users.detail.basicForm.statusHintPendingDesc')}</>}>
         <select value={form.status} onChange={(e) => setForm({ ...form, status: Number(e.target.value) })} className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">

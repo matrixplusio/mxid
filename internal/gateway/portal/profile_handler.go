@@ -19,9 +19,12 @@ type UpdateProfileRequest struct {
 	Email       string `json:"email"`
 }
 
-// UpdateAvatarRequest is the request body for avatar update.
+// UpdateAvatarRequest is the request body for avatar update. Avatar is an inline
+// base64 data URL; cap ~5 MB of chars (the client crops to a small square PNG,
+// and a raw 3 MB image → ~4 M base64 chars still fits) so an oversized payload
+// is rejected up front.
 type UpdateAvatarRequest struct {
-	Avatar string `json:"avatar" binding:"required"`
+	Avatar string `json:"avatar" binding:"required,max=5242880"`
 }
 
 // ProfileHandler serves portal profile endpoints.

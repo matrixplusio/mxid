@@ -23,7 +23,7 @@ import {
   type ConsoleUserInfo,
   type APITokenRow,
 } from '@mxid/shared'
-import { Button, ConfirmDialog } from '../../components/ui'
+import { Button, ConfirmDialog, AvatarUpload, avatarTexts } from '../../components/ui'
 import { toast } from '@mxid/shared/ui/toast'
 import type { MFAInfo, SessionInfo } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -31,7 +31,6 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle,
-  Camera,
   Copy,
   Eye,
   EyeOff,
@@ -113,6 +112,7 @@ export default function AccountPage() {
 /* ─────────────── Profile (avatar + display name + email) ─────────────── */
 function ProfileSection() {
   const { t } = useTranslation()
+  const { user, setUser } = useAuthStore()
   const [profile, setProfile] = useState<ConsoleUserInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -174,25 +174,13 @@ function ProfileSection() {
     }
   }
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error(t('account.fields.tooLarge'), t('account.fields.sizeHint'))
-      return
-    }
+  // Persist the cropped avatar (square PNG data URL from AvatarUpload).
+  const saveAvatar = async (dataURL: string) => {
     setUploading(true)
     try {
-      // Inline base64 keeps this PR free of an extra upload endpoint. For
-      // production a proper /upload + CDN URL flow is recommended; we keep
-      // it simple here because the column already accepts a data URL.
-      const dataURL = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader()
-        r.onload = () => resolve(r.result as string)
-        r.onerror = reject
-        r.readAsDataURL(file)
-      })
       await consoleSecurityApi.updateAvatar(dataURL)
+      // Reflect the new avatar in the sidebar immediately (store drives it).
+      if (user) setUser({ ...user, avatar: dataURL })
       toast.success(t('account.avatarUpdated'))
       load()
     } catch (e) {
@@ -224,26 +212,13 @@ function ProfileSection() {
       ) : (
         <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex flex-col items-center gap-2">
-            <label
-              htmlFor="avatar-upload"
-              className="group relative flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-primary/15 text-2xl font-medium text-primary"
-            >
-              {profile?.avatar ? (
-                <img src={profile.avatar} alt="avatar" className="h-full w-full object-cover" />
-              ) : (
-                <span>{profile?.display_name?.charAt(0) || profile?.username?.charAt(0) || 'U'}</span>
-              )}
-              <div className="absolute inset-0 hidden items-center justify-center bg-black/50 text-white group-hover:flex">
-                {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-              </div>
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleAvatarChange}
-                className="hidden"
-              />
-            </label>
+            <AvatarUpload
+              value={profile?.avatar}
+              onChange={saveAvatar}
+              disabled={uploading}
+              texts={avatarTexts(t)}
+              fallback={<span className="text-2xl font-medium">{profile?.display_name?.charAt(0) || profile?.username?.charAt(0) || 'U'}</span>}
+            />
             <p className="text-[10px] text-faint">{t('account.fields.avatarHint')}</p>
           </div>
 

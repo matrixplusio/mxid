@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, RotateCcw, Trash2, Loader2, Pencil, X } from 'lucide-react'
+import { Plus, RotateCcw, Trash2, Loader2, Pencil, X, ShieldCheck, ShieldOff } from 'lucide-react'
 import { userApi, formatDate, statusLabel, statusColor, cn, useTranslation, UserStatus } from '@mxid/shared'
 import { pageMotion, Button, Card, DataTable, Pagination, SearchInput, Select, FilterBar, ConfirmDialog } from '@mxid/shared/ui'
 import type { Column } from '@mxid/shared/ui'
@@ -181,7 +181,18 @@ export default function UsersPage() {
     {
       key: 'username',
       title: t('users.columns.username'),
-      render: (u) => <span className="font-medium text-primary hover:underline">{u.username}</span>,
+      render: (u) => (
+        <div className="flex items-center gap-2.5">
+          {u.avatar ? (
+            <img src={u.avatar} alt={u.username} className="h-7 w-7 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-medium uppercase text-primary">
+              {(u.display_name || u.username).charAt(0)}
+            </span>
+          )}
+          <span className="font-medium text-primary hover:underline">{u.username}</span>
+        </div>
+      ),
     },
     {
       key: 'display_name',
@@ -199,6 +210,20 @@ export default function UsersPage() {
       render: (u) => (
         <span className={cn('text-sm font-medium', statusColor(u.status))}>{statusLabel(u.status)}</span>
       ),
+    },
+    {
+      key: 'mfa',
+      title: t('users.columns.mfa'),
+      render: (u) =>
+        u.mfa_enabled ? (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+            <ShieldCheck className="h-3.5 w-3.5" /> {t('users.mfa.on')}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-faint">
+            <ShieldOff className="h-3.5 w-3.5" /> {t('users.mfa.off')}
+          </span>
+        ),
     },
     {
       key: 'last_login',

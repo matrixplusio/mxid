@@ -101,7 +101,14 @@ export default function Navbar() {
               {t('nav.switchToConsole')}
             </a>
           )}
-          <span className="text-sm text-muted">
+          <span className="flex items-center gap-2 text-sm text-muted">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-medium uppercase text-primary">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+              ) : (
+                user?.display_name?.charAt(0) || user?.username?.charAt(0) || 'U'
+              )}
+            </span>
             {user?.display_name || user?.username}
           </span>
           <button

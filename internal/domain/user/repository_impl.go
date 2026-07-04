@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // gormRepository implements Repository using GORM.
@@ -383,12 +384,45 @@ func (r *gormRepository) ListMFA(ctx context.Context, userID int64) ([]*UserMFA,
 	return mfas, nil
 }
 
-// CreateMFA inserts a new MFA configuration.
-func (r *gormRepository) CreateMFA(ctx context.Context, mfa *UserMFA) error {
-	if err := r.db.WithContext(ctx).Create(mfa).Error; err != nil {
-		return fmt.Errorf("create user mfa: %w", err)
+// MFAEnabledByUserIDs returns which of the given users have at least one
+// verified MFA method. One GROUP BY query for the whole page (no N+1). The
+// user IDs are already tenant-scoped by the caller (the list query), and
+// mxid_user_mfa has no tenant column, so filtering by user_id is sufficient.
+func (r *gormRepository) MFAEnabledByUserIDs(ctx context.Context, userIDs []int64) (map[int64]bool, error) {
+	out := make(map[int64]bool, len(userIDs))
+	if len(userIDs) == 0 {
+		return out, nil
 	}
-	return nil
+	var ids []int64
+	if err := r.db.WithContext(ctx).
+		Model(&UserMFA{}).
+		Distinct("user_id").
+		Where("user_id IN ? AND verified = ?", userIDs, true).
+		Pluck("user_id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("batch mfa-enabled lookup: %w", err)
+	}
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
+// CreateMFA inserts a new MFA configuration.
+// CreateMFA inserts the row only if no (user_id, type) row exists yet, returning
+// whether THIS call performed the insert. SetupTOTP can fire twice near
+// simultaneously (a double-click, or React StrictMode double-invoking the enroll
+// effect); DO-NOTHING-on-conflict makes the loser a no-op (inserted=false) rather
+// than a 500, and — critically — does NOT overwrite the winner's secret, so the
+// caller can hand BOTH setup responses the one stored secret (see SetupTOTP).
+func (r *gormRepository) CreateMFA(ctx context.Context, mfa *UserMFA) (bool, error) {
+	res := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "type"}},
+		DoNothing: true,
+	}).Create(mfa)
+	if res.Error != nil {
+		return false, fmt.Errorf("create user mfa: %w", res.Error)
+	}
+	return res.RowsAffected > 0, nil
 }
 
 // UpdateMFA saves changes to an MFA configuration.

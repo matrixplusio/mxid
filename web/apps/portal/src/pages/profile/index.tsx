@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { portalApi, useAuthStore, formatDate, useTranslation } from '@mxid/shared'
-import { Button } from '@mxid/shared/ui'
+import { Button, AvatarUpload, avatarTexts } from '@mxid/shared/ui'
+import { toast, extractMessage } from '@mxid/shared/ui/toast'
 import { UserCircle, Save, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 
 interface ProfileData {
@@ -18,7 +19,7 @@ interface ProfileData {
 
 export default function ProfilePage() {
   const { t } = useTranslation()
-  const { setUser } = useAuthStore()
+  const { user, setUser } = useAuthStore()
 
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -32,6 +33,25 @@ export default function ProfilePage() {
 
   const [sendingVerify, setSendingVerify] = useState(false)
   const [devLink, setDevLink] = useState<string | null>(null)
+
+  const [uploading, setUploading] = useState(false)
+
+  // Persist the cropped avatar (a square PNG data URL from AvatarUpload). The
+  // avatar column stores the data URL inline.
+  const saveAvatar = async (dataURL: string) => {
+    setUploading(true)
+    try {
+      await portalApi.updateAvatar(dataURL)
+      setProfile((p) => (p ? { ...p, avatar: dataURL } : p))
+      // Reflect the new avatar in the nav bar immediately (store drives Navbar).
+      if (user) setUser({ ...user, avatar: dataURL })
+      toast.success(t('account.avatarUpdated'))
+    } catch (err: unknown) {
+      toast.error(t('account.fields.uploadFailed'), extractMessage(err))
+    } finally {
+      setUploading(false)
+    }
+  }
 
   // Pick up the click-back from /profile/email/verify?token=... — backend
   // redirects here with ?email_verified=1 on success. Show a banner and
@@ -143,17 +163,13 @@ export default function ProfilePage() {
         {/* Left - User card */}
         <div className="rounded-xl border border-border bg-surface p-6">
           <div className="flex flex-col items-center text-center">
-            {profile.avatar ? (
-              <img
-                src={profile.avatar}
-                alt={t('account.fields.avatar')}
-                className="h-20 w-20 rounded-full object-cover ring-4 ring-gray-100"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-gray-100">
-                <UserCircle className="h-10 w-10 text-primary" />
-              </div>
-            )}
+            <AvatarUpload
+              value={profile.avatar}
+              onChange={saveAvatar}
+              disabled={uploading}
+              texts={avatarTexts(t)}
+              fallback={<UserCircle className="h-10 w-10 text-primary" />}
+            />
             <h2 className="mt-4 text-lg font-semibold text-ink">
               {profile.display_name || profile.username}
             </h2>

@@ -39,7 +39,7 @@ type User struct {
 	EmailVerifiedAt   *time.Time     `gorm:"column:email_verified_at" json:"email_verified_at"`
 	Phone             *string        `gorm:"column:phone;size:32" json:"phone"`
 	DisplayName       *string        `gorm:"column:display_name;size:128" json:"display_name"`
-	Avatar            *string        `gorm:"column:avatar;size:512" json:"avatar"`
+	Avatar            *string        `gorm:"column:avatar;type:text" json:"avatar"`
 	PasswordHash      string         `gorm:"column:password_hash;size:256" json:"-"`
 	Status            int            `gorm:"column:status;not null;default:1" json:"status"`
 	LastLoginAt       *time.Time     `gorm:"column:last_login_at" json:"last_login_at"`
