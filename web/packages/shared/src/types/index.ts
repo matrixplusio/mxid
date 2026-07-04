@@ -436,6 +436,15 @@ export const AppProtocol = {
   CAS: 'cas',
 } as const
 
+// Mirror of backend domain enum consts (group/tenant/externalidp/offboarding/
+// access model.go). Keep the numbers/strings in sync with the Go source.
+export const GroupType = { Static: 1, Dynamic: 2 } as const
+export const TenantStatus = { Enabled: 1, Disabled: 2 } as const
+export const IdpStatus = { Enabled: 1, Disabled: 2 } as const
+export const OffboardingTaskStatus = { Open: 0, Resolved: 1 } as const
+export const OffboardingItemStatus = { Pending: 0, Done: 1 } as const
+export const AccessRequestStatus = { Pending: 'pending', Approved: 'approved', Rejected: 'rejected' } as const
+
 export interface AppTemplateField {
   key: string
   label: string

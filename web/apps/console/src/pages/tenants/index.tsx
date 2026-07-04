@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Pencil, Trash2, Building } from 'lucide-react'
-import { tenantApi, useTranslation } from '@mxid/shared'
+import { tenantApi, useTranslation, TenantStatus } from '@mxid/shared'
 import type { Tenant } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { Field, Input, Select, Button, Tag, Modal, EmptyState, LoadingState, Card, ConfirmDialog, pageMotion } from '../../components/ui'
@@ -110,7 +110,7 @@ export default function TenantsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-ink">{tenant.name}</span>
                       <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-muted">{tenant.code}</code>
-                      {tenant.status === 1 ? (
+                      {tenant.status === TenantStatus.Enabled ? (
                         <Tag variant="green">{t('common.enabled')}</Tag>
                       ) : (
                         <Tag variant="gray">{t('common.disabled')}</Tag>

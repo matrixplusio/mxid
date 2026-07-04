@@ -7,6 +7,8 @@ import {
   useTranslation,
   type OffboardingTask,
   type OffboardingItem,
+  OffboardingTaskStatus,
+  OffboardingItemStatus,
 } from '@mxid/shared'
 import { pageMotion, Button, Card, StatusTag, LoadingState, EmptyState } from '@mxid/shared/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
@@ -87,7 +89,7 @@ function TaskRow({
   const { t } = useTranslation()
   const [items, setItems] = useState<OffboardingItem[] | null>(null)
   const [loadingItems, setLoadingItems] = useState(false)
-  const resolved = task.status === 1
+  const resolved = task.status === OffboardingTaskStatus.Resolved
 
   useEffect(() => {
     if (open && items === null) {
@@ -152,7 +154,7 @@ function TaskRow({
                     <div className="truncate text-sm text-ink">{item.app_name || item.app_code}</div>
                     <div className="truncate font-mono text-[11px] text-faint">{item.app_code}</div>
                   </div>
-                  {item.status === 1 ? (
+                  {item.status === OffboardingItemStatus.Done ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                       <Check className="h-3.5 w-3.5" />
                       {t('offboarding.done')}

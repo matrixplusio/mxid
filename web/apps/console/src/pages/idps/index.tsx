@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Pencil, Trash2, Plug, Power } from 'lucide-react'
-import { externalIdpApi, cn, useTranslation, useEdition } from '@mxid/shared'
+import { externalIdpApi, cn, useTranslation, useEdition, IdpStatus } from '@mxid/shared'
 import type { ExternalIDP } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { Field, Button, Tag, EmptyState, LoadingState, Card, ConfirmDialog, Modal, pageMotion } from '../../components/ui'
@@ -104,7 +104,7 @@ export default function IDPsPage() {
   }
   const toggleStatus = async (idp: ExternalIDP) => {
     try {
-      await externalIdpApi.update(idp.id, { status: idp.status === 1 ? 2 : 1 })
+      await externalIdpApi.update(idp.id, { status: idp.status === IdpStatus.Enabled ? IdpStatus.Disabled : IdpStatus.Enabled })
       toast.success(t('common.saveSuccess'))
       await load()
     } catch (e) {
@@ -150,7 +150,7 @@ export default function IDPsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-ink">{idp.name}</span>
                       <Tag variant="blue">{PROVIDER_LABEL[idp.type] ?? idp.type}</Tag>
-                      {idp.status === 1 ? (
+                      {idp.status === IdpStatus.Enabled ? (
                         <Tag variant="green">{t('common.enabled')}</Tag>
                       ) : (
                         <Tag variant="gray">{t('common.disabled')}</Tag>
@@ -166,11 +166,11 @@ export default function IDPsPage() {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    variant={idp.status === 1 ? 'secondary' : 'success'}
+                    variant={idp.status === IdpStatus.Enabled ? 'secondary' : 'success'}
                     onClick={() => toggleStatus(idp)}
                     icon={<Power className="h-3.5 w-3.5" />}
                   >
-                    {idp.status === 1 ? t('common.disable') : t('common.enable')}
+                    {idp.status === IdpStatus.Enabled ? t('common.disable') : t('common.enable')}
                   </Button>
                   <Button size="sm" variant="secondary" onClick={() => openEdit(idp)} icon={<Pencil className="h-3.5 w-3.5" />}>
                     {t('common.edit')}

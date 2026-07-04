@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, AppWindow, Loader2, Copy, X, Settings, Eye, EyeOff, LayoutGrid } from 'lucide-react'
-import { appApi, protocolLabel, statusLabel, statusColor, cn, AppIcon, useTranslation } from '@mxid/shared'
+import { appApi, protocolLabel, statusLabel, statusColor, cn, AppIcon, useTranslation, AppStatus } from '@mxid/shared'
 import type { App, PaginatedData, AppTemplate, AppTemplateListItem } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import AppGroupsTab from './AppGroupsTab'
@@ -560,7 +560,7 @@ export default function AppsPage() {
   // -------------------------------------------------------------------------
 
   const handleToggleStatus = async (app: App) => {
-    const newStatus = app.status === 1 ? 2 : 1
+    const newStatus = app.status === AppStatus.Enabled ? AppStatus.Disabled : AppStatus.Enabled
     try {
       await appApi.updateStatus(app.id, newStatus)
       toast.success(newStatus === 1 ? t('apps.list.statusEnabled') : t('apps.list.statusDisabled'))
@@ -865,12 +865,12 @@ export default function AppsPage() {
                   }}
                   className={cn(
                     'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                    app.status === 1
+                    app.status === AppStatus.Enabled
                       ? 'text-gray-500 hover:bg-gray-100'
                       : 'text-emerald-600 hover:bg-emerald-50'
                   )}
                 >
-                  {app.status === 1 ? t('common.disable') : t('common.enable')}
+                  {app.status === AppStatus.Enabled ? t('common.disable') : t('common.enable')}
                 </button>
                 <button
                   onClick={(e) => {

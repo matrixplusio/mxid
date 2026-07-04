@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { accessApprovalApi, formatDate, useTranslation, useEdition } from '@mxid/shared'
+import { accessApprovalApi, formatDate, useTranslation, useEdition, AccessRequestStatus } from '@mxid/shared'
 import type { AccessRequest } from '@mxid/shared'
 import { pageMotion, Button, Modal, Field, Textarea, Card, DataTable, FilterBar, Select, ConfirmDialog } from '@mxid/shared/ui'
 import type { Column } from '@mxid/shared/ui'
@@ -133,13 +133,13 @@ export default function AccessApprovalsPage() {
       align: 'right',
       render: (r) => (
         <div className="flex items-center justify-end gap-2">
-          {r.status === 'pending' && (
+          {r.status === AccessRequestStatus.Pending && (
             <>
               <Button size="sm" onClick={() => handleApprove(r.id)}>{t('approvals.approve')}</Button>
               <Button size="sm" variant="secondary" onClick={() => openRejectModal(r.id)}>{t('approvals.reject')}</Button>
             </>
           )}
-          {r.status === 'approved' && (
+          {r.status === AccessRequestStatus.Approved && (
             <Button size="sm" variant="danger" onClick={() => setRevokeTargetId(r.id)}>{t('approvals.revoke')}</Button>
           )}
         </div>

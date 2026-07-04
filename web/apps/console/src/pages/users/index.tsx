@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Plus, RotateCcw, Trash2, Loader2, Pencil, X } from 'lucide-react'
-import { userApi, formatDate, statusLabel, statusColor, cn, useTranslation } from '@mxid/shared'
+import { userApi, formatDate, statusLabel, statusColor, cn, useTranslation, UserStatus } from '@mxid/shared'
 import { pageMotion, Button, Card, DataTable, Pagination, SearchInput, Select, FilterBar, ConfirmDialog } from '@mxid/shared/ui'
 import type { Column } from '@mxid/shared/ui'
 import type { User, PaginatedData, UpdateUserRequest } from '@mxid/shared'
@@ -223,7 +223,7 @@ export default function UsersPage() {
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          {u.status === 1 ? (
+          {u.status === UserStatus.Active ? (
             <button
               onClick={() => handleStatusChange(u, 3)}
               className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"

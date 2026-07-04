@@ -13,7 +13,7 @@ import {
   Zap,
   RefreshCw,
 } from 'lucide-react'
-import { groupApi, userApi, formatDate, cn, useTranslation } from '@mxid/shared'
+import { groupApi, userApi, formatDate, cn, useTranslation, GroupType } from '@mxid/shared'
 import type { Group, User, PaginatedData, GroupMember, RuleExpr, GroupRule } from '@mxid/shared'
 import axios from 'axios'
 import PageHeader from '../../components/layout/PageHeader'
@@ -137,7 +137,7 @@ export default function GroupsPage() {
   const openEdit = (group: Group) => {
     setEditGroup(group)
     setEditForm({ name: group.name, description: group.description || '' })
-    if (group.type === 2) {
+    if (group.type === GroupType.Dynamic) {
       setEditRule(null)
       groupApi
         .getRule(group.id)
@@ -159,7 +159,7 @@ export default function GroupsPage() {
       })
       // For dynamic groups also persist the (possibly edited) rule; backend
       // re-syncs membership automatically.
-      if (editGroup.type === 2 && editRule) {
+      if (editGroup.type === GroupType.Dynamic && editRule) {
         if (editRule.conditions.length === 0) {
           alert(t("groups.needAtLeastOneRule"))
           setEditing(false)
@@ -240,7 +240,7 @@ export default function GroupsPage() {
     setMemberGroup(group)
     setMemberPage(1)
     loadMembers(group.id, 1)
-    if (group.type === 2) {
+    if (group.type === GroupType.Dynamic) {
       groupApi.getRule(group.id).then(setGroupRule).catch(() => setGroupRule(null))
     } else {
       setGroupRule(null)
@@ -419,7 +419,7 @@ export default function GroupsPage() {
                         >
                           {group.name}
                         </button>
-                        {group.type === 2 && (
+                        {group.type === GroupType.Dynamic && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700" title={t('groups.dynamicTagHint')}>
                             <Zap className="h-3 w-3" />
                             {t('groups.dynamicTag')}
@@ -528,7 +528,7 @@ export default function GroupsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {memberModalTab === 'members' && (memberGroup.type === 2 ? (
+                {memberModalTab === 'members' && (memberGroup.type === GroupType.Dynamic ? (
                   <button
                     onClick={handleSync}
                     disabled={syncing}
@@ -573,7 +573,7 @@ export default function GroupsPage() {
             </div>
 
             {/* Dynamic group sync banner */}
-            {memberModalTab === 'members' && memberGroup.type === 2 && groupRule && (
+            {memberModalTab === 'members' && memberGroup.type === GroupType.Dynamic && groupRule && (
               <div className="border-b border-gray-100 bg-amber-50/40 px-6 py-2 text-xs text-gray-600">
                 <Zap className="mr-1 inline h-3 w-3 text-amber-500" />
                 {groupRule.last_sync_at
@@ -604,7 +604,7 @@ export default function GroupsPage() {
                 </div>
               ) : members.items.length === 0 ? (
                 <div className="py-8 text-center text-sm text-gray-400">
-                  {memberGroup.type === 2 ? t('groups.membersEmptyDynamic') : t('groups.membersEmptyStatic')}
+                  {memberGroup.type === GroupType.Dynamic ? t('groups.membersEmptyDynamic') : t('groups.membersEmptyStatic')}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -641,7 +641,7 @@ export default function GroupsPage() {
                             )}
                           </div>
                         </div>
-                        {memberGroup.type === 2 ? (
+                        {memberGroup.type === GroupType.Dynamic ? (
                           <span className="text-xs text-gray-400" title={t('groups.dynamicMemberLocked')}>
                             —
                           </span>
@@ -827,7 +827,7 @@ export default function GroupsPage() {
                   />
                   <p className="mt-1 text-xs text-gray-400">{t('groups.editModal.descHint')}</p>
                 </div>
-                {editGroup.type === 2 && (
+                {editGroup.type === GroupType.Dynamic && (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">
                       <Zap className="mr-1 inline h-3.5 w-3.5 text-amber-500" />

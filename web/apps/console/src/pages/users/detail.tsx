@@ -24,6 +24,7 @@ import {
   statusLabel,
   cn,
   useTranslation,
+  UserStatus,
 } from '@mxid/shared'
 import type {
   User,
@@ -175,7 +176,7 @@ export default function UserDetailPage() {
             </div>
             <div className="flex flex-col items-end gap-2">
               <ResetPasswordButton userID={userID} onDone={loadUser} />
-              {user.status === 2 ? (
+              {user.status === UserStatus.Locked ? (
                 <UnlockButton userID={userID} onDone={loadUser} />
               ) : (
                 <LockButton userID={userID} onDone={loadUser} />
