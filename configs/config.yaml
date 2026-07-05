@@ -91,6 +91,10 @@ crypto:
   # MXID_CRYPTO_KEY_ENCRYPTION_KEY (.env in dev, secret manager in prod).
   # Generate: openssl rand -base64 32
   key_encryption_key: ""
+  # Base64-encoded HMAC key sealing the audit hash chain — NEVER committed.
+  # Injected via MXID_CRYPTO_AUDIT_CHAIN_KEY (.env in dev, secret manager in
+  # prod). Generate: openssl rand -base64 32
+  audit_chain_key: ""
 
 log:
   level: info # debug/info/warn/error

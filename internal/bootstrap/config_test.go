@@ -49,7 +49,7 @@ func TestValidateSecrets_ReleaseRejectsDevRedisPassword(t *testing.T) {
 			Server:   ServerConfig{Mode: "release"},
 			Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
 			Redis:    RedisConfig{Password: pw},
-			Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty"},
+			Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty", AuditChainKey: "non-empty"},
 			Session:  SessionConfig{CookieSecure: true},
 		}
 		if err := cfg.validateSecrets(); err == nil {
@@ -67,12 +67,34 @@ func TestValidateSecrets_ReleaseRequiresKEK(t *testing.T) {
 		},
 		Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
 		Redis:    RedisConfig{Password: "a-real-redis-password"},
+		Crypto:   CryptoConfig{AuditChainKey: "non-empty"},
 		Session:  SessionConfig{CookieSecure: true},
 	}
 	if err := cfg.validateSecrets(); err == nil {
 		t.Errorf("missing KEK must fail in release")
 	}
 	cfg.Crypto.KeyEncryptionKey = "non-empty"
+	if err := cfg.validateSecrets(); err != nil {
+		t.Errorf("release with all secrets set should pass, got %v", err)
+	}
+}
+
+func TestValidateSecrets_ReleaseRequiresAuditChainKey(t *testing.T) {
+	cfg := &Config{
+		Server: ServerConfig{
+			Mode:           "release",
+			AllowedOrigins: []string{"https://id.example.com"},
+			IssuerURL:      "https://id.example.com",
+		},
+		Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
+		Redis:    RedisConfig{Password: "a-real-redis-password"},
+		Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty"},
+		Session:  SessionConfig{CookieSecure: true},
+	}
+	if err := cfg.validateSecrets(); err == nil {
+		t.Errorf("missing audit chain key must fail in release")
+	}
+	cfg.Crypto.AuditChainKey = "non-empty"
 	if err := cfg.validateSecrets(); err != nil {
 		t.Errorf("release with all secrets set should pass, got %v", err)
 	}
@@ -89,7 +111,7 @@ func TestValidateSecrets_ReleaseRequiresOriginsAndIssuer(t *testing.T) {
 			Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
 			Redis:    RedisConfig{Password: "a-real-redis-password"},
 			Session:  SessionConfig{CookieSecure: true},
-			Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty"},
+			Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty", AuditChainKey: "non-empty"},
 		}
 	}
 	if err := base().validateSecrets(); err != nil {
@@ -153,7 +175,7 @@ func TestValidateSecrets_ReleaseRequiresCookieSecure(t *testing.T) {
 		Server:   ServerConfig{Mode: "release"},
 		Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
 		Redis:    RedisConfig{Password: "a-real-redis-password"},
-		Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty"},
+		Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty", AuditChainKey: "non-empty"},
 		Session:  SessionConfig{CookieSecure: false},
 	}
 	if err := cfg.validateSecrets(); err == nil {

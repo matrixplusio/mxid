@@ -194,8 +194,21 @@ type TenantConfig struct {
 //  2. YAML key crypto.key_encryption_key
 //
 // Missing or malformed key MUST cause server startup to fail fast.
+//
+// AuditChainKey is a base64-encoded HMAC key used by the audit Chainer to
+// seal the tamper-evident hash chain (mxid_audit_entry.entry_hash). Same
+// sourcing convention as KeyEncryptionKey:
+//
+//  1. Env var MXID_CRYPTO_AUDIT_CHAIN_KEY
+//  2. YAML key crypto.audit_chain_key
+//
+// Missing key MUST cause server startup to fail fast in release mode; a
+// malformed (non-base64) value MUST fail startup in all modes (see
+// app.Run wiring) since silently running with a zero/garbage key would
+// produce a chain nobody can verify.
 type CryptoConfig struct {
 	KeyEncryptionKey string `mapstructure:"key_encryption_key"`
+	AuditChainKey    string `mapstructure:"audit_chain_key"`
 }
 
 // GeoIPConfig points the audit subsystem at a MaxMind GeoLite2-City
@@ -335,6 +348,9 @@ func (c *Config) validateSecrets() error {
 	}
 	if _, leaked := leakedDevKEKs[kek]; leaked {
 		return fmt.Errorf("crypto.key_encryption_key is a value that leaked into git history; rotate it: export MXID_CRYPTO_KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)")
+	}
+	if strings.TrimSpace(c.Crypto.AuditChainKey) == "" {
+		return fmt.Errorf("crypto.audit_chain_key not set; export MXID_CRYPTO_AUDIT_CHAIN_KEY=$(openssl rand -base64 32)")
 	}
 	if !c.Session.CookieSecure {
 		return fmt.Errorf("session.cookie_secure must be true in release mode (HTTPS required)")
