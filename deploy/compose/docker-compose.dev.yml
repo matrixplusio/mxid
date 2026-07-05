@@ -68,11 +68,13 @@ services:
       - MXID_REDIS_PASSWORD=${REDIS_PASSWORD:-123456}
       # OIDC engine: "zitadel" mounts internal/protocol/oidcop, else hand-rolled.
       - MXID_OIDC_ENGINE=${MXID_OIDC_ENGINE:-legacy}
-      # External-IdP OAuth callback host. Must be the BROWSER-facing origin
-      # (nginx :3500), not the internal backend port, so the redirect_uri sent
-      # to Lark/Teams matches what you register there AND lands same-origin as
-      # the SPA (clean session cookies). Prod: set to the public https domain.
-      - MXID_EXTERNAL_BACKEND_URL=${MXID_EXTERNAL_BACKEND_URL:-http://localhost:3500}
+      # Browser-facing origin (nginx :3500) — the OIDC issuer / SAML EntityID /
+      # external-IdP callback base. Must be this origin, not the internal backend
+      # port, so the redirect_uri sent to Lark/Teams matches what you register
+      # there AND lands same-origin as the SPA (clean session cookies). Prod: the
+      # public https domain. This is the REAL knob (ResolveBootIssuer); the old
+      # MXID_EXTERNAL_BACKEND_URL was never read by any code.
+      - MXID_ISSUER=${MXID_ISSUER:-http://localhost:3500}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
