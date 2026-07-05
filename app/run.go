@@ -72,6 +72,21 @@ func Run() {
 		os.Exit(1)
 	}
 
+	// Operator subcommand: `verify-audit` walks every audit chain head and
+	// recomputes its HMAC chain from genesis, printing per-chain status, then
+	// exits — it must NOT build the portal group, register modules, start the
+	// chainer goroutine, or serve traffic (that would be a second writer on
+	// the same chain). Flags must precede the subcommand (Go's flag package
+	// stops parsing at the first non-flag arg): `mxid-server -config=configs
+	// verify-audit`.
+	if flag.Arg(0) == "verify-audit" {
+		if err := runVerifyAudit(a); err != nil {
+			fmt.Fprintf(os.Stderr, "verify-audit failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Public portal group MUST be created before registerModules so the
 	// password-reset / magic-link / sms-otp routes wired inside it have a
 	// non-nil group to mount on.
