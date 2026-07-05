@@ -105,6 +105,24 @@ func (c *Chainer) chainOne(tx *gorm.DB, p *AuditPending) error {
 	return tx.Save(&head).Error
 }
 
+// Run ticks ProcessBatch every interval until ctx is cancelled. Single
+// goroutine — this IS the single writer to the chain; do not start a second
+// one against the same DB.
+func (c *Chainer) Run(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if _, err := c.ProcessBatch(ctx, 100); err != nil {
+			c.logger.Warn("audit chainer: batch failed", zap.Error(err))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func jsonToMap(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 {
 		return nil
