@@ -10,7 +10,14 @@ data:
   MXID_CONFIG_ENV: "prod"
   MXID_SERVER_PORT: "8080"
   MXID_SERVER_MODE: {{ .Values.config.serverMode | quote }}
-  MXID_SERVER_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
+  MXID_SERVER_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | default (printf "https://%s" .Values.host) | quote }}
+
+  # Canonical external URLs — blank values derive from .Values.host. These drive
+  # the OIDC issuer / SAML EntityID / CAS root and CORS/CSRF auto-trust, so a
+  # deploy no longer boots with the baked config.prod.yaml placeholder.
+  MXID_SERVER_ISSUER_URL: {{ .Values.config.issuerUrl | default (printf "https://%s" .Values.host) | quote }}
+  MXID_SERVER_PORTAL_URL: {{ .Values.config.portalUrl | default (printf "https://%s" .Values.host) | quote }}
+  MXID_SERVER_CONSOLE_URL: {{ .Values.config.consoleUrl | default (printf "https://%s/admin" .Values.host) | quote }}
 
   # Database connection (non-sensitive fields only — password is in the Secret)
   MXID_DATABASE_HOST: {{ .Values.database.host | quote }}

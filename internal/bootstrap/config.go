@@ -316,11 +316,11 @@ func (c *Config) validateSecrets() error {
 	// an empty allow-list collapses CORS/CSRF to localhost defaults, and a
 	// localhost/empty issuer mints tokens with an unreachable iss.
 	if len(c.Server.AllowedOrigins) == 0 {
-		return fmt.Errorf("server.allowed_origins must be set in release mode; export MXID_ALLOWED_ORIGINS")
+		return fmt.Errorf("server.allowed_origins must be set in release mode; export MXID_SERVER_ALLOWED_ORIGINS")
 	}
 	iss := strings.TrimSpace(c.Server.IssuerURL)
 	if iss == "" || strings.Contains(iss, "localhost") || strings.Contains(iss, "127.0.0.1") {
-		return fmt.Errorf("server.issuer_url must be an externally-reachable URL in release mode (not empty/localhost); export MXID_ISSUER_URL")
+		return fmt.Errorf("server.issuer_url must be an externally-reachable URL in release mode (not empty/localhost); export MXID_SERVER_ISSUER_URL")
 	}
 	return nil
 }

@@ -8,7 +8,10 @@
 edition: ce
 
 # ---------------------------------------------------------------------------
-# Public hostname for the deployment (used in routing rules).
+# Public hostname for the deployment. Drives routing rules AND — unless
+# overridden in config.* below — the canonical external URLs (OIDC issuer /
+# SAML EntityID / portal / console) and the CORS allow-list. MUST be your real
+# externally-reachable HTTPS host; the release-mode boot check rejects localhost.
 # Example: id.example.com
 # ---------------------------------------------------------------------------
 host: id.example.com
@@ -115,8 +118,20 @@ config:
   serverMode: release
 
   # Comma-separated list of allowed CORS origins for the portal and console.
-  # Example: "https://id.example.com"
+  # Blank → derived as "https://<host>". Override for split-domain / extra origins.
   allowedOrigins: ""
+
+  # Canonical external URLs. These are the OIDC issuer (`iss`) / SAML EntityID
+  # base / CAS root, plus the portal and console origins that third parties
+  # (Lark and other IdPs/SPs) redirect back to. Blank → derived from `host`:
+  #   issuerUrl  = https://<host>
+  #   portalUrl  = https://<host>
+  #   consoleUrl = https://<host>/admin
+  # Set explicitly for split-domain deployments. MUST be externally-reachable
+  # HTTPS in release mode (localhost is rejected at boot).
+  issuerUrl: ""
+  portalUrl: ""
+  consoleUrl: ""
 
 # ---------------------------------------------------------------------------
 # Database (external — use RDS / CloudSQL / managed PostgreSQL in production)

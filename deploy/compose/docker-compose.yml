@@ -37,6 +37,14 @@ services:
       # CORS/CSRF allow-list — the one origin value that MUST be set at boot
       # (it gates who can even reach the console). Comma-separate multiple.
       - MXID_SERVER_ALLOWED_ORIGINS=${MXID_SERVER_ALLOWED_ORIGINS:?set to your portal/console origin(s), e.g. https://id.example.com}
+      # Canonical external URLs (OIDC issuer / SAML EntityID / CAS root, portal,
+      # console). Third parties (Lark etc.) redirect back to these; must be
+      # externally-reachable HTTPS. Single-domain: portal = issuer, console =
+      # issuer + /admin. Without these the app boots on the config.prod.yaml
+      # placeholder (id.example.com).
+      - MXID_SERVER_ISSUER_URL=${MXID_SERVER_ISSUER_URL:?set to your public URL, e.g. https://id.example.com}
+      - MXID_SERVER_PORTAL_URL=${MXID_SERVER_PORTAL_URL:?set to your portal URL, e.g. https://id.example.com}
+      - MXID_SERVER_CONSOLE_URL=${MXID_SERVER_CONSOLE_URL:?set to your console URL, e.g. https://id.example.com/admin}
       - MXID_DATABASE_HOST=${MXID_DATABASE_HOST:-host.docker.internal}
       - MXID_DATABASE_PORT=${MXID_DATABASE_PORT:-5432}
       - MXID_DATABASE_NAME=${POSTGRES_DB:-mxid}
