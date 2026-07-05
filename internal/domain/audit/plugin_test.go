@@ -94,6 +94,23 @@ func TestPlugin_CaptureFailureAbortsWrite(t *testing.T) {
 	}
 }
 
+func TestPlugin_CaptureCreateWithOmitDoesNotLeak(t *testing.T) {
+	db := newPluginDB(t)
+	// Omit a column on the business write; the nested audit INSERT must NOT
+	// inherit that Omit (it would drop a NOT-NULL audit column and fail).
+	err := db.WithContext(actorCtx()).Omit("name").Create(&widget{ID: 5, PasswordHash: "x"}).Error
+	if err != nil {
+		t.Fatalf("audit capture leaked the business Omit onto the pending insert: %v", err)
+	}
+	var p AuditPending
+	if err := db.First(&p).Error; err != nil {
+		t.Fatalf("no pending row: %v", err)
+	}
+	if p.EventType != "widget.created" {
+		t.Fatalf("bad event: %+v", p)
+	}
+}
+
 func containsStr(h, n string) bool {
 	return len(n) > 0 && len(h) >= len(n) && (func() bool {
 		for i := 0; i+len(n) <= len(h); i++ {

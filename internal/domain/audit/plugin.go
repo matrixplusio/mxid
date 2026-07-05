@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // CapturePlugin is a gorm plugin that captures a tamper-evident audit event for
@@ -60,6 +61,14 @@ func (p *CapturePlugin) captureCreate(cb *gorm.DB) {
 // Model (e.g. *widget) — gorm.(*DB).Create only assigns Model from Dest when
 // Model is nil — so the pending-row insert would re-resolve the OUTER
 // model's schema, re-match Audited, and recurse into captureCreate forever.
+//
+// gorm's clone() also forwards Selects, Omits, and re-populates Clauses from
+// the parent statement's clauses. Left uncleared, a business write done via
+// .Select(...)/.Omit(...)/.Clauses(clause.OnConflict{...}) would leak those
+// column restrictions onto the nested AuditPending INSERT — e.g. an Omit that
+// drops a NOT-NULL audit column, breaking the insert. ConnPool is
+// deliberately NOT cleared: it is the shared transaction that makes the
+// business write and the audit capture atomic.
 func (p *CapturePlugin) emit(cb *gorm.DB, ev Event) error {
 	ctx := cb.Statement.Context
 	nested := cb.Session(&gorm.Session{NewDB: true, Context: ctx})
@@ -69,6 +78,9 @@ func (p *CapturePlugin) emit(cb *gorm.DB, ev Event) error {
 	nested.Statement.Table = ""
 	nested.Statement.TableExpr = nil
 	nested.Statement.ReflectValue = reflect.Value{}
+	nested.Statement.Selects = nil
+	nested.Statement.Omits = nil
+	nested.Statement.Clauses = map[string]clause.Clause{}
 	if err := p.capturer.Capture(ctx, nested, ev); err != nil {
 		return fmt.Errorf("audit capture %s: %w", ev.EventType, err)
 	}
