@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { accessApprovalApi, formatDate, useTranslation, useEdition, AccessRequestStatus } from '@mxid/shared'
+import { accessApprovalApi, formatDate, useTranslation, useEdition, useAuthStore, AccessRequestStatus } from '@mxid/shared'
 import type { AccessRequest } from '@mxid/shared'
 import { pageMotion, Button, Modal, Field, Textarea, Card, DataTable, FilterBar, Select, ConfirmDialog } from '@mxid/shared/ui'
 import type { Column } from '@mxid/shared/ui'
@@ -12,6 +12,10 @@ const STATUSES = ['pending', 'approved', 'rejected', 'cancelled', 'expired', 're
 export default function AccessApprovalsPage() {
   const { t } = useTranslation()
   const edition = useEdition()
+  // Current admin identity — used to pre-empt self-approval in the UI so an
+  // approver never clicks Approve on their own request and hits the backend's
+  // separation-of-duties 403 (which would read as a system error).
+  const myUserId = useAuthStore((s) => s.user?.user_id)
   const [status, setStatus] = useState<string>('pending')
   const [rows, setRows] = useState<AccessRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -131,19 +135,28 @@ export default function AccessApprovalsPage() {
       key: 'actions',
       title: t('common.actions'),
       align: 'right',
-      render: (r) => (
-        <div className="flex items-center justify-end gap-2">
-          {r.status === AccessRequestStatus.Pending && (
-            <>
-              <Button size="sm" onClick={() => handleApprove(r.id)}>{t('approvals.approve')}</Button>
-              <Button size="sm" variant="secondary" onClick={() => openRejectModal(r.id)}>{t('approvals.reject')}</Button>
-            </>
-          )}
-          {r.status === AccessRequestStatus.Approved && (
-            <Button size="sm" variant="danger" onClick={() => setRevokeTargetId(r.id)}>{t('approvals.revoke')}</Button>
-          )}
-        </div>
-      ),
+      render: (r) => {
+        const isOwn = !!myUserId && r.requester_id === myUserId
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {r.status === AccessRequestStatus.Pending && (
+              isOwn ? (
+                // Separation of duties: you can't approve/reject your own request.
+                // Show why instead of a button that would 403.
+                <span className="text-xs text-faint">{t('approvals.ownRequestHint')}</span>
+              ) : (
+                <>
+                  <Button size="sm" onClick={() => handleApprove(r.id)}>{t('approvals.approve')}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => openRejectModal(r.id)}>{t('approvals.reject')}</Button>
+                </>
+              )
+            )}
+            {r.status === AccessRequestStatus.Approved && (
+              <Button size="sm" variant="danger" onClick={() => setRevokeTargetId(r.id)}>{t('approvals.revoke')}</Button>
+            )}
+          </div>
+        )
+      },
     },
   ]
 

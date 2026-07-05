@@ -1837,6 +1837,7 @@ export default {
     approve: 'Approve',
     approved: 'Request approved',
     approveFailed: 'Failed to approve request',
+    ownRequestHint: 'Your request · needs another approver',
     reject: 'Reject',
     rejected: 'Request rejected',
     rejectFailed: 'Failed to reject request',

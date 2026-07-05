@@ -1840,6 +1840,7 @@ export default {
     approve: '批准',
     approved: '申请已批准',
     approveFailed: '批准申请失败',
+    ownRequestHint: '你的申请 · 需他人审批',
     reject: '拒绝',
     rejected: '申请已拒绝',
     rejectFailed: '拒绝申请失败',
