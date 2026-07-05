@@ -100,6 +100,9 @@ type Eligibility struct {
 func (Eligibility) TableName() string { return "mxid_access_eligibility" }
 func (Eligibility) TenantScoped()     {}
 
+// AuditResource implements audit.Audited.
+func (Eligibility) AuditResource() string { return "access_eligibility" }
+
 // DurationAllowed reports whether seconds is in the configured set.
 func (e *Eligibility) DurationAllowed(seconds int) bool {
 	return slices.Contains(e.AllowedDurations, seconds)
@@ -153,6 +156,9 @@ type Request struct {
 
 func (Request) TableName() string { return "mxid_access_request" }
 func (Request) TenantScoped()     {}
+
+// AuditResource implements audit.Audited.
+func (Request) AuditResource() string { return "access_request" }
 
 // ---- DTOs ----
 

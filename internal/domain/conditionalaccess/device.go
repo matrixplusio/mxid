@@ -19,6 +19,9 @@ type KnownDevice struct {
 // TableName binds to the migration's table name.
 func (KnownDevice) TableName() string { return "mxid_known_device" }
 
+// AuditResource implements audit.Audited.
+func (KnownDevice) AuditResource() string { return "known_device" }
+
 // TenantScoped marks mxid_known_device for automatic tenant isolation.
 func (KnownDevice) TenantScoped() {}
 

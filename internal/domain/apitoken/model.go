@@ -35,6 +35,9 @@ type Token struct {
 // TableName binds to the migration's table name.
 func (Token) TableName() string { return "mxid_api_token" }
 
+// AuditResource implements audit.Audited.
+func (Token) AuditResource() string { return "api_token" }
+
 // TenantScoped marks mxid_api_token for automatic tenant isolation.
 func (Token) TenantScoped() {}
 

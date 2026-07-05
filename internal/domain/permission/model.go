@@ -30,6 +30,11 @@ func (Role) TableName() string {
 	return "mxid_role"
 }
 
+// AuditResource implements audit.Audited.
+func (Role) AuditResource() string {
+	return "role"
+}
+
 // TenantScoped marks mxid_role for automatic tenant isolation.
 func (Role) TenantScoped() {}
 
@@ -71,6 +76,11 @@ func (RoleBinding) TableName() string {
 	return "mxid_role_binding"
 }
 
+// AuditResource implements audit.Audited.
+func (RoleBinding) AuditResource() string {
+	return "role_binding"
+}
+
 // Permission represents the mxid_permission table.
 type Permission struct {
 	ID          int64     `gorm:"column:id;primaryKey" json:"id,string"`
@@ -86,6 +96,11 @@ type Permission struct {
 // TableName returns the table name for Permission.
 func (Permission) TableName() string {
 	return "mxid_permission"
+}
+
+// AuditResource implements audit.Audited.
+func (Permission) AuditResource() string {
+	return "permission"
 }
 
 // TenantScoped marks mxid_permission for automatic tenant isolation. Despite
