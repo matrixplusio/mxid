@@ -120,6 +120,34 @@ func TestValidateSecrets_ReleaseRejectsLeakedKEK(t *testing.T) {
 	}
 }
 
+// TestResolveBootIssuer locks the boot-time issuer precedence:
+// MXID_ISSUER override > release server.issuer_url > localhost:3500 default.
+// The release-mode arm is the deployment fix — a prod boot must issue under the
+// configured domain, never the localhost placeholder.
+func TestResolveBootIssuer(t *testing.T) {
+	cases := []struct {
+		name      string
+		mode      string
+		issuerURL string
+		envOver   string
+		want      string
+	}{
+		{"debug ignores config issuer, keeps localhost front", "debug", "http://localhost:10050", "", DevIssuerFallback},
+		{"release uses configured issuer_url", "release", "https://id.acme.com", "", "https://id.acme.com"},
+		{"release with blank issuer falls back to localhost", "release", "", "", DevIssuerFallback},
+		{"MXID_ISSUER override wins in release", "release", "https://id.acme.com", "https://override.example", "https://override.example"},
+		{"MXID_ISSUER override wins in debug", "debug", "", "https://override.example", "https://override.example"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := ServerConfig{Mode: tc.mode, IssuerURL: tc.issuerURL}
+			if got := s.ResolveBootIssuer(tc.envOver); got != tc.want {
+				t.Errorf("ResolveBootIssuer() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateSecrets_ReleaseRequiresCookieSecure(t *testing.T) {
 	cfg := &Config{
 		Server:   ServerConfig{Mode: "release"},

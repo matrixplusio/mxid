@@ -72,6 +72,33 @@ func (s ServerConfig) IsRelease() bool {
 	return s.Mode == "release"
 }
 
+// DevIssuerFallback is the boot-time issuer used in debug mode, where nginx
+// fronts the API on :3500 (distinct from the backend's direct port).
+const DevIssuerFallback = "http://localhost:3500"
+
+// ResolveBootIssuer picks the boot-time external issuer (OIDC `iss` / SAML
+// EntityID base / CAS root) passed to the protocol handlers. Precedence:
+//
+//  1. envOverride (MXID_ISSUER) — explicit, wins everywhere; the dev escape
+//     hatch and back-compat for deploys that already set it.
+//  2. server.issuer_url — but only in release mode, where it is validated
+//     non-empty and non-localhost. In debug it is intentionally ignored so the
+//     nginx-fronted :3500 default holds regardless of the config template.
+//  3. DevIssuerFallback (localhost:3500).
+//
+// The admin ExternalURLs setting still overrides the result per request via
+// urlswap; this only governs the boot-time default.
+func (s ServerConfig) ResolveBootIssuer(envOverride string) string {
+	issuer := DevIssuerFallback
+	if s.IsRelease() && s.IssuerURL != "" {
+		issuer = s.IssuerURL
+	}
+	if envOverride != "" {
+		issuer = envOverride
+	}
+	return issuer
+}
+
 type DatabaseConfig struct {
 	Host         string `mapstructure:"host"`
 	Port         int    `mapstructure:"port"`

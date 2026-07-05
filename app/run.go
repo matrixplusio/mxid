@@ -817,22 +817,10 @@ func registerModules(a *bootstrap.App) {
 	//
 	// Dev default: nginx fronts the API on :3500. Override via env if a
 	// different host/port is canonical.
-	issuer := "http://localhost:3500"
-	// In release mode the canonical external issuer comes from config
-	// (server.issuer_url / MXID_SERVER_ISSUER_URL), which is validated non-empty
-	// and non-localhost at boot — so a prod deploy no longer silently issues
-	// tokens/metadata under the localhost dev default. Debug keeps localhost:3500
-	// (nginx fronts :3500 in dev, distinct from the backend's direct port). The
-	// admin ExternalURLs setting still overrides this per-request via urlswap.
-	if a.Config.Server.IsRelease() && a.Config.Server.IssuerURL != "" {
-		issuer = a.Config.Server.IssuerURL
-	}
-	// MXID_ISSUER stays the highest-priority explicit override (existing deploys
-	// rely on it; also the dev escape hatch when the canonical issuer isn't in
-	// config).
-	if v := os.Getenv("MXID_ISSUER"); v != "" {
-		issuer = v
-	}
+	// Boot-time external issuer: MXID_ISSUER override > release server.issuer_url
+	// > localhost:3500 dev default. See ServerConfig.ResolveBootIssuer. The admin
+	// ExternalURLs setting still overrides this per-request via urlswap.
+	issuer := a.Config.Server.ResolveBootIssuer(os.Getenv("MXID_ISSUER"))
 
 	appResolver := buildAppResolver(appModule, a.Config.Tenant.DefaultID, a.MasterKey, a.Logger)
 	idResolver := buildIdentityResolver(userModule, a)
