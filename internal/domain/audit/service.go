@@ -11,6 +11,7 @@ import (
 	"github.com/imkerbos/mxid/pkg/geoip"
 	"github.com/imkerbos/mxid/pkg/snowflake"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // Service provides business logic for audit logging.
@@ -27,6 +28,10 @@ type Service struct {
 	// blank ActorName — the actor_id is still recorded, so the row stays
 	// attributable. Set via SetUserNameResolver.
 	nameResolver func(ctx context.Context, userID int64) string
+	// chainCapturer/chainDB wire the tamper-proof chain bridge (see bridge.go).
+	// Both nil = legacy-only (no chain writes). Set via SetChainBridge.
+	chainCapturer *Capturer
+	chainDB       *gorm.DB
 }
 
 // NewService creates a new audit service.
@@ -621,6 +626,7 @@ func (s *Service) createLog(ctx context.Context, log *AuditLog) {
 		}
 		s.logger.Error("audit write failed — row dropped, this log line is the fallback record", fields...)
 	}
+	s.bridgeToChain(ctx, log)
 }
 
 // --- helpers ---
