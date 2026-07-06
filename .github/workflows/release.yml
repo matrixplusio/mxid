@@ -34,7 +34,7 @@ jobs:
             image: ghcr.io/imkerbos/mxid-web
             dockerfile: deploy/dockerfile/Dockerfile.web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Build identity stamped into the backend binary (-> /health, /system/info,
       # the console version page). Short SHA + UTC build time, computed once.
