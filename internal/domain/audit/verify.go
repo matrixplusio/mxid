@@ -108,3 +108,53 @@ func VerifyAnchors(ctx context.Context, db *gorm.DB, keys KeyRegistry, tenantID 
 	}
 	return AnchorVerifyResult{OK: true, AnchoredThrough: through}, nil
 }
+
+// VerifyAnchorsWithSink runs the DB-side anchor verification, then cross-checks
+// the external sink so that DELETING a DB anchor row (which VerifyAnchors alone
+// reports only as a coverage gap, and not at all if the whole tail is dropped)
+// is caught: the signed copy in the sink survives a DB compromise.
+func VerifyAnchorsWithSink(ctx context.Context, db *gorm.DB, sink AnchorSink, keys KeyRegistry, tenantID int64, class string) (AnchorVerifyResult, error) {
+	res, err := VerifyAnchors(ctx, db, keys, tenantID, class)
+	if err != nil || !res.OK {
+		return res, err
+	}
+
+	var dbAnchors []AuditAnchor
+	if err := db.WithContext(ctx).
+		Where("tenant_id = ? AND chain_class = ?", tenantID, class).
+		Order("from_seq asc").Find(&dbAnchors).Error; err != nil {
+		return AnchorVerifyResult{}, err
+	}
+	sinkAll, err := sink.List(ctx)
+	if err != nil {
+		return AnchorVerifyResult{}, err
+	}
+	// index the sink by (tenant,class,from,to)
+	type k struct {
+		t    int64
+		c    string
+		f, o int64
+	}
+	sinkIdx := make(map[k]AnchorRecord)
+	for _, r := range sinkAll {
+		if r.TenantID == tenantID && r.ChainClass == class {
+			sinkIdx[k{r.TenantID, r.ChainClass, r.FromSeq, r.ToSeq}] = r
+		}
+	}
+	dbIdx := make(map[k]bool)
+	for i := range dbAnchors {
+		a := &dbAnchors[i]
+		dbIdx[k{a.TenantID, a.ChainClass, a.FromSeq, a.ToSeq}] = true
+		sr, ok := sinkIdx[k{a.TenantID, a.ChainClass, a.FromSeq, a.ToSeq}]
+		if !ok || !bytes.Equal(sr.MerkleRoot, a.MerkleRoot) || !bytes.Equal(sr.Signature, a.Signature) {
+			return AnchorVerifyResult{OK: false, AnchoredThrough: res.AnchoredThrough, FailFromSeq: a.FromSeq, Reason: "sink mismatch"}, nil
+		}
+	}
+	// sink record not present in DB -> a DB anchor row was deleted
+	for key := range sinkIdx {
+		if !dbIdx[key] {
+			return AnchorVerifyResult{OK: false, AnchoredThrough: res.AnchoredThrough, FailFromSeq: key.f, Reason: "sink mismatch"}, nil
+		}
+	}
+	return res, nil
+}
