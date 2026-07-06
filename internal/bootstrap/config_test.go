@@ -74,6 +74,8 @@ func TestValidateSecrets_ReleaseRequiresKEK(t *testing.T) {
 		t.Errorf("missing KEK must fail in release")
 	}
 	cfg.Crypto.KeyEncryptionKey = "non-empty"
+	cfg.Crypto.AuditAnchorKey = "non-empty"
+	cfg.Audit.AnchorEnabled = true
 	if err := cfg.validateSecrets(); err != nil {
 		t.Errorf("release with all secrets set should pass, got %v", err)
 	}
@@ -95,8 +97,38 @@ func TestValidateSecrets_ReleaseRequiresAuditChainKey(t *testing.T) {
 		t.Errorf("missing audit chain key must fail in release")
 	}
 	cfg.Crypto.AuditChainKey = "non-empty"
+	cfg.Crypto.AuditAnchorKey = "non-empty"
+	cfg.Audit.AnchorEnabled = true
 	if err := cfg.validateSecrets(); err != nil {
 		t.Errorf("release with all secrets set should pass, got %v", err)
+	}
+}
+
+func TestValidateSecrets_ReleaseRequiresAnchorKeyWhenEnabled(t *testing.T) {
+	cfg := &Config{
+		Server: ServerConfig{
+			Mode:           "release",
+			AllowedOrigins: []string{"https://id.example.com"},
+			IssuerURL:      "https://id.example.com",
+		},
+		Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
+		Redis:    RedisConfig{Password: "a-real-redis-password"},
+		Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty", AuditChainKey: "non-empty"},
+		Session:  SessionConfig{CookieSecure: true},
+		Audit:    AuditConfig{AnchorEnabled: true},
+	}
+	if err := cfg.validateSecrets(); err == nil {
+		t.Errorf("anchoring enabled with empty audit anchor key must fail in release")
+	}
+	cfg.Crypto.AuditAnchorKey = "non-empty"
+	if err := cfg.validateSecrets(); err != nil {
+		t.Errorf("release with anchor key set should pass, got %v", err)
+	}
+	// Disabling anchoring is a valid opt-out: no anchor key required.
+	cfg.Crypto.AuditAnchorKey = ""
+	cfg.Audit.AnchorEnabled = false
+	if err := cfg.validateSecrets(); err != nil {
+		t.Errorf("release with anchoring disabled should pass without an anchor key, got %v", err)
 	}
 }
 
@@ -111,7 +143,8 @@ func TestValidateSecrets_ReleaseRequiresOriginsAndIssuer(t *testing.T) {
 			Database: DatabaseConfig{Password: "a-real-password-not-on-the-deny-list"},
 			Redis:    RedisConfig{Password: "a-real-redis-password"},
 			Session:  SessionConfig{CookieSecure: true},
-			Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty", AuditChainKey: "non-empty"},
+			Crypto:   CryptoConfig{KeyEncryptionKey: "non-empty", AuditChainKey: "non-empty", AuditAnchorKey: "non-empty"},
+			Audit:    AuditConfig{AnchorEnabled: true},
 		}
 	}
 	if err := base().validateSecrets(); err != nil {

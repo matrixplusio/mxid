@@ -54,6 +54,10 @@ services:
       - MXID_REDIS_PORT=${MXID_REDIS_PORT:-6379}
       - MXID_REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD required}
       - MXID_CRYPTO_KEY_ENCRYPTION_KEY=${MXID_CRYPTO_KEY_ENCRYPTION_KEY:?run openssl rand -base64 32}
+      - MXID_CRYPTO_AUDIT_CHAIN_KEY=${MXID_CRYPTO_AUDIT_CHAIN_KEY:?run openssl rand -base64 32}
+      - MXID_CRYPTO_AUDIT_ANCHOR_KEY=${MXID_CRYPTO_AUDIT_ANCHOR_KEY:?run openssl rand -base64 32}
+      - MXID_AUDIT_ANCHOR_ENABLED=${MXID_AUDIT_ANCHOR_ENABLED:-true}
+      - MXID_AUDIT_ANCHOR_SINK_PATH=${MXID_AUDIT_ANCHOR_SINK_PATH:-data/audit-anchors.log}
     volumes:
       - ../../configs:/app/configs:ro
     extra_hosts:

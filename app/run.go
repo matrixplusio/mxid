@@ -850,6 +850,26 @@ func registerModules(a *bootstrap.App) {
 	chainer := audit.NewChainer(a.DB, auditChainKey, "default", a.Logger)
 	go chainer.Run(context.Background(), 2*time.Second)
 
+	// Audit anchorer — periodically seals the un-anchored tail of each chain
+	// into a signed Merkle root written to an external sink, so a full DB
+	// compromise (including mxid_audit_entry) can still be caught against the
+	// external record. Single goroutine, gated on audit.anchor_enabled;
+	// key decode/validity errors fail startup rather than anchoring silently
+	// with a bad key.
+	if a.Config.Audit.AnchorEnabled {
+		auditAnchorSeed, err := base64.StdEncoding.DecodeString(a.Config.Crypto.AuditAnchorKey)
+		if err != nil {
+			a.Logger.Fatal("decode crypto.audit_anchor_key (set MXID_CRYPTO_AUDIT_ANCHOR_KEY to base64(32-byte ed25519 seed))", zap.Error(err))
+		}
+		auditAnchorPriv, err := crypto.Ed25519FromSeed(auditAnchorSeed)
+		if err != nil {
+			a.Logger.Fatal("crypto.audit_anchor_key invalid", zap.Error(err))
+		}
+		auditAnchorSink := audit.NewFileSink(a.Config.Audit.AnchorSinkPath)
+		anchorer := audit.NewAnchorer(a.DB, auditAnchorPriv, auditAnchorSink, a.IDGen, a.Logger)
+		go anchorer.Run(context.Background(), 60*time.Second)
+	}
+
 	// Mount the per-app provisioning config API on the console group.
 	provisioningModule.RegisterRoutes(a)
 

@@ -34,7 +34,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&AuditPending{}, &AuditEntry{}, &ChainHead{}); err != nil {
+	if err := db.AutoMigrate(&AuditPending{}, &AuditEntry{}, &ChainHead{}, &AuditAnchor{}); err != nil {
 		t.Fatal(err)
 	}
 	// A shared-cache in-memory sqlite database is destroyed the instant its

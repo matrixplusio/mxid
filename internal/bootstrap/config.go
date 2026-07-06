@@ -23,6 +23,7 @@ type Config struct {
 	GeoIP     GeoIPConfig     `mapstructure:"geoip"`
 	Log       LogConfig       `mapstructure:"log"`
 	Snowflake SnowflakeConfig `mapstructure:"snowflake"`
+	Audit     AuditConfig     `mapstructure:"audit"`
 }
 
 type ServerConfig struct {
@@ -206,9 +207,22 @@ type TenantConfig struct {
 // malformed (non-base64) value MUST fail startup in all modes (see
 // app.Run wiring) since silently running with a zero/garbage key would
 // produce a chain nobody can verify.
+//
+// AuditAnchorKey is a base64-encoded ed25519 seed used to sign periodic
+// anchors of the audit hash chain (a Merkle/rolling digest checkpoint
+// written to the anchor sink — see AuditConfig). Same sourcing convention:
+//
+//  1. Env var MXID_CRYPTO_AUDIT_ANCHOR_KEY
+//  2. YAML key crypto.audit_anchor_key
+//
+// Missing key MUST cause server startup to fail fast in release mode when
+// audit.anchor_enabled is true (see validateSecrets), for the same reason
+// as AuditChainKey: an unanchored or unverifiably-anchored chain defeats
+// the tamper-evidence guarantee.
 type CryptoConfig struct {
 	KeyEncryptionKey string `mapstructure:"key_encryption_key"`
 	AuditChainKey    string `mapstructure:"audit_chain_key"`
+	AuditAnchorKey   string `mapstructure:"audit_anchor_key"`
 }
 
 // GeoIPConfig points the audit subsystem at a MaxMind GeoLite2-City
@@ -227,6 +241,21 @@ type LogConfig struct {
 
 type SnowflakeConfig struct {
 	NodeID int64 `mapstructure:"node_id"`
+}
+
+// AuditConfig controls the audit-anchoring subsystem: periodically sealing
+// a checkpoint of the tamper-evident audit hash chain (signed with
+// Crypto.AuditAnchorKey) to an external sink so that even a full DB
+// compromise (which could rewrite entry_hash end-to-end) is detectable
+// against an out-of-band anchor.
+type AuditConfig struct {
+	// AnchorEnabled turns anchoring on. Defaults to true (see
+	// configs/config.yaml); when true in release mode, Crypto.AuditAnchorKey
+	// MUST be set (validateSecrets fails closed otherwise).
+	AnchorEnabled bool `mapstructure:"anchor_enabled"`
+	// AnchorSinkPath is the file the signed anchors are appended to.
+	// Defaults to data/audit-anchors.log.
+	AnchorSinkPath string `mapstructure:"anchor_sink_path"`
 }
 
 // LoadConfig reads configuration from file and environment variables.
@@ -328,6 +357,9 @@ var leakedDevKEKs = map[string]struct{}{
 //   - crypto.key_encryption_key is set AND is not a value that ever leaked
 //     into git history (the MasterKey loader rejects malformed base64
 //     separately)
+//   - crypto.audit_chain_key is set
+//   - crypto.audit_anchor_key is set, when audit.anchor_enabled is true
+//     (the default)
 //   - session.cookie_secure is true (cookies must be Secure over the
 //     public internet)
 //
@@ -351,6 +383,12 @@ func (c *Config) validateSecrets() error {
 	}
 	if strings.TrimSpace(c.Crypto.AuditChainKey) == "" {
 		return fmt.Errorf("crypto.audit_chain_key not set; export MXID_CRYPTO_AUDIT_CHAIN_KEY=$(openssl rand -base64 32)")
+	}
+	if c.Audit.AnchorEnabled {
+		anchorKey := strings.TrimSpace(c.Crypto.AuditAnchorKey)
+		if anchorKey == "" {
+			return fmt.Errorf("crypto.audit_anchor_key not set but audit anchoring is enabled; export MXID_CRYPTO_AUDIT_ANCHOR_KEY=$(openssl rand -base64 32) or set MXID_AUDIT_ANCHOR_ENABLED=false")
+		}
 	}
 	if !c.Session.CookieSecure {
 		return fmt.Errorf("session.cookie_secure must be true in release mode (HTTPS required)")

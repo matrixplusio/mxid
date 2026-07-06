@@ -10,6 +10,7 @@ package audit
 
 import (
 	"context"
+	"crypto/ed25519"
 	"os"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestZZ_E2E_Postgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&e2eWidget{}, &AuditPending{}, &AuditEntry{}, &ChainHead{}); err != nil {
+	if err := db.AutoMigrate(&e2eWidget{}, &AuditPending{}, &AuditEntry{}, &ChainHead{}, &AuditAnchor{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(e2eTrigger).Error; err != nil {
@@ -113,6 +114,30 @@ func TestZZ_E2E_Postgres(t *testing.T) {
 	if len(evtypes) != 3 {
 		t.Fatalf("want 3 event types, got %v", evtypes)
 	}
+
+	// ---- Phase 3: external Merkle + Ed25519 anchoring on real Postgres ----
+	anchorPriv := testKey(t)
+	anchorPub := anchorPriv.Public().(ed25519.PublicKey)
+	anchorer := NewAnchorer(db, anchorPriv, NewFileSink(t.TempDir()+"/anchors.log"), newTestIDGen(t), zap.NewNop())
+	anch, err := anchorer.AnchorChain(ctx, 7, "data")
+	if err != nil || anch == nil || anch.FromSeq != 1 || anch.ToSeq != 3 {
+		t.Fatalf("anchor create failed: anch=%+v err=%v", anch, err)
+	}
+	ares, err := VerifyAnchors(ctx, db, anchorPub, 7, "data")
+	if err != nil || !ares.OK || ares.AnchoredThrough != 3 {
+		t.Fatalf("anchor verify failed: %+v err=%v", ares, err)
+	}
+	t.Logf("E2E anchor OK: verified through seq %d", ares.AnchoredThrough)
+	// tamper the anchor's stored merkle_root (audit_anchor has no trigger) -> the
+	// signature no longer matches the recomputed message -> caught.
+	if err := db.Exec("UPDATE mxid_audit_anchor SET merkle_root = ? WHERE tenant_id = 7 AND chain_class = 'data'", []byte("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")).Error; err != nil {
+		t.Fatal(err)
+	}
+	bad, _ := VerifyAnchors(ctx, db, anchorPub, 7, "data")
+	if bad.OK {
+		t.Fatal("tampered anchor root not caught by VerifyAnchors")
+	}
+	t.Logf("E2E anchor tamper caught: reason=%q", bad.Reason)
 
 	// append-only trigger blocks UPDATE + DELETE on entry
 	updErr := db.Exec("UPDATE mxid_audit_entry SET key_id = 'x' WHERE tenant_id = 7 AND chain_class = 'data'").Error
