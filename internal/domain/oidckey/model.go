@@ -30,3 +30,8 @@ type ProviderKey struct {
 func (ProviderKey) TableName() string {
 	return "mxid_oidc_keyset"
 }
+
+// AuditResource implements audit.Audited.
+func (ProviderKey) AuditResource() string {
+	return "oidc_provider_key"
+}

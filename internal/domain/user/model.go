@@ -71,6 +71,11 @@ func (User) TableName() string {
 	return "mxid_user"
 }
 
+// AuditResource implements audit.Audited.
+func (User) AuditResource() string {
+	return "user"
+}
+
 // TenantScoped marks mxid_user for automatic tenant isolation (see pkg/tenantscope).
 func (User) TenantScoped() {}
 

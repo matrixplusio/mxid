@@ -31,6 +31,9 @@ type Setting struct {
 
 func (Setting) TableName() string { return "mxid_setting" }
 
+// AuditResource implements audit.Audited.
+func (Setting) AuditResource() string { return "setting" }
+
 // TenantScoped marks mxid_setting for automatic tenant isolation.
 func (Setting) TenantScoped() {}
 

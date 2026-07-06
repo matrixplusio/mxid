@@ -45,6 +45,9 @@ type AppRole struct {
 
 func (AppRole) TableName() string { return "mxid_app_role" }
 
+// AuditResource implements audit.Audited.
+func (AppRole) AuditResource() string { return "app_role" }
+
 // TenantScoped marks mxid_app_role for automatic tenant isolation.
 func (AppRole) TenantScoped() {}
 

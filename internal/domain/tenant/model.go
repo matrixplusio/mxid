@@ -37,3 +37,6 @@ type Tenant struct {
 
 // TableName returns the postgres table name.
 func (Tenant) TableName() string { return "mxid_tenant" }
+
+// AuditResource implements audit.Audited.
+func (Tenant) AuditResource() string { return "tenant" }

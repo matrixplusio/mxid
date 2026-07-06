@@ -87,6 +87,18 @@ func Run() {
 		return
 	}
 
+	// Install the audit capture plugin: every write to an Audited model now
+	// emits a before/after event into the tamper-proof chain, inside the
+	// caller's transaction (a capture failure aborts the write). Wired here in
+	// package app — not in bootstrap — because internal/domain/audit imports
+	// internal/bootstrap (register.go), so bootstrap cannot import audit.
+	// Placed after the verify-audit early-return: the read-only verifier needs
+	// no capture. Placed before registerModules so all runtime writes are
+	// captured.
+	if err := a.DB.Use(audit.NewCapturePlugin(audit.NewCapturer(a.IDGen))); err != nil {
+		a.Logger.Fatal("install audit capture plugin", zap.Error(err))
+	}
+
 	// Public portal group MUST be created before registerModules so the
 	// password-reset / magic-link / sms-otp routes wired inside it have a
 	// non-nil group to mount on.

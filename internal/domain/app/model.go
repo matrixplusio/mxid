@@ -112,6 +112,11 @@ func (App) TableName() string {
 	return "mxid_app"
 }
 
+// AuditResource implements audit.Audited.
+func (App) AuditResource() string {
+	return "app"
+}
+
 // TenantScoped marks mxid_app for automatic tenant isolation.
 func (App) TenantScoped() {}
 
