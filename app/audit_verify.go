@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/imkerbos/mxid/internal/bootstrap"
 	"github.com/imkerbos/mxid/internal/domain/audit"
+	"github.com/imkerbos/mxid/pkg/crypto"
 )
 
 // runVerifyAudit walks every (tenant_id, chain_class) chain head recorded in
@@ -28,6 +31,19 @@ func runVerifyAudit(a *bootstrap.App) error {
 		return fmt.Errorf("crypto.audit_chain_key is empty; export MXID_CRYPTO_AUDIT_CHAIN_KEY=$(openssl rand -base64 32)")
 	}
 
+	var anchorPub ed25519.PublicKey
+	if seedB64 := strings.TrimSpace(a.Config.Crypto.AuditAnchorKey); seedB64 != "" {
+		seed, derr := base64.StdEncoding.DecodeString(seedB64)
+		if derr != nil {
+			return fmt.Errorf("decode audit anchor key: %w", derr)
+		}
+		priv, kerr := crypto.Ed25519FromSeed(seed)
+		if kerr != nil {
+			return fmt.Errorf("audit anchor key invalid: %w", kerr)
+		}
+		anchorPub = priv.Public().(ed25519.PublicKey)
+	}
+
 	ctx := context.Background()
 	var heads []audit.ChainHead
 	if err := a.DB.WithContext(ctx).Order("tenant_id, chain_class").Find(&heads).Error; err != nil {
@@ -47,6 +63,20 @@ func runVerifyAudit(a *bootstrap.App) error {
 		}
 		fmt.Printf("chain tenant=%d class=%s: verified through seq %d — %s\n",
 			h.TenantID, h.ChainClass, res.VerifiedThrough, status)
+
+		if anchorPub != nil {
+			ares, aerr := audit.VerifyAnchors(ctx, a.DB, anchorPub, h.TenantID, h.ChainClass)
+			if aerr != nil {
+				return aerr
+			}
+			astatus := "OK"
+			if !ares.OK {
+				failed = true
+				astatus = fmt.Sprintf("FAIL from seq %d (%s)", ares.FailFromSeq, ares.Reason)
+			}
+			fmt.Printf("  anchors tenant=%d class=%s: verified through seq %d — %s\n",
+				h.TenantID, h.ChainClass, ares.AnchoredThrough, astatus)
+		}
 	}
 	if failed {
 		return fmt.Errorf("one or more audit chains failed verification")
