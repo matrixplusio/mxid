@@ -6,6 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"github.com/imkerbos/mxid/pkg/auditctx"
+	"github.com/imkerbos/mxid/pkg/tenantscope"
 	"gorm.io/gorm"
 )
 
@@ -211,6 +212,27 @@ func TestPlugin_DeleteResourceIDFromWhere(t *testing.T) {
 	}
 	if p.ResourceID != 1 {
 		t.Fatalf("resource_id not resolved from before-snapshot: got %d, want 1", p.ResourceID)
+	}
+}
+
+// TestPlugin_CoexistsWithTenantscope verifies the audit capture plugin and
+// the tenant-isolation plugin can both be registered on the same *gorm.DB
+// without one clobbering the other's callbacks. widget does not implement
+// tenantscope.Tenanted, so tenantscope is a no-op here; the point of this
+// test is that db.Use() with both plugins installed doesn't error and the
+// audit capture still fires normally.
+func TestPlugin_CoexistsWithTenantscope(t *testing.T) {
+	db := newPluginDB(t) // already has the audit capture plugin
+	if err := db.Use(tenantscope.NewPlugin()); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(actorCtx()).Create(&widget{ID: 77, Name: "w"}).Error; err != nil {
+		t.Fatalf("coexistence create failed: %v", err)
+	}
+	var n int64
+	db.Model(&AuditPending{}).Count(&n)
+	if n != 1 {
+		t.Fatalf("want 1 audit row with both plugins, got %d", n)
 	}
 }
 
