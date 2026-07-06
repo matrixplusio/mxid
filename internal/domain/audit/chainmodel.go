@@ -35,7 +35,13 @@ type AuditEntry struct {
 	PrevHash   []byte          `gorm:"column:prev_hash;not null"`
 	EntryHash  []byte          `gorm:"column:entry_hash;not null"`
 	KeyID      string          `gorm:"column:key_id;not null;size:64"`
-	Payload    json.RawMessage `gorm:"column:payload;type:jsonb;not null"`
+	// Payload is BYTEA, not jsonb: it stores the exact canonical bytes that were
+	// HMAC-hashed. jsonb normalizes (reorders keys, adds whitespace) on read-back,
+	// breaking VerifyChain's recompute of entry_hash; TEXT would round-trip the
+	// bytes but the pg driver returns it as a string that json.RawMessage cannot
+	// Scan. BYTEA returns []byte verbatim. Use convert_from(payload,'UTF8')::jsonb
+	// in queries if JSON access is needed.
+	Payload    json.RawMessage `gorm:"column:payload;type:bytea;not null"`
 	Imported   bool            `gorm:"column:imported;not null"`
 	CreatedAt  time.Time       `gorm:"column:created_at;not null"`
 }
