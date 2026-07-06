@@ -95,6 +95,17 @@ crypto:
   # Injected via MXID_CRYPTO_AUDIT_CHAIN_KEY (.env in dev, secret manager in
   # prod). Generate: openssl rand -base64 32
   audit_chain_key: ""
+  # Base64-encoded ed25519 seed signing audit-anchor checkpoints — NEVER
+  # committed. Injected via MXID_CRYPTO_AUDIT_ANCHOR_KEY (.env in dev, secret
+  # manager in prod). Generate: openssl rand -base64 32
+  audit_anchor_key: ""
+
+# Periodic signed checkpoints of the audit hash chain, written to an
+# out-of-band sink so a full DB compromise (which could rewrite
+# entry_hash end-to-end) is still detectable.
+audit:
+  anchor_enabled: true
+  anchor_sink_path: data/audit-anchors.log
 
 log:
   level: info # debug/info/warn/error
