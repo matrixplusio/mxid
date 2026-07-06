@@ -23,6 +23,29 @@ import (
 // registry and a nil error rather than an error, so verify-audit / audit-export
 // degrade gracefully (VerifyAnchorsWithSink and BuildExport both tolerate an
 // empty registry — there's simply nothing to anchor/prove).
+// parsePubKeys decodes a comma-separated list of base64 raw ed25519 public keys,
+// skipping blanks. Each key must be exactly ed25519.PublicKeySize bytes so a
+// fat-fingered value fails here with a clear error instead of panicking later
+// inside ed25519.Verify.
+func parsePubKeys(csv string) ([]ed25519.PublicKey, error) {
+	var pubs []ed25519.PublicKey
+	for _, raw := range strings.Split(csv, ",") {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		b, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			return nil, fmt.Errorf("decode audit anchor pubkey %q: %w", s, err)
+		}
+		if len(b) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("audit anchor pubkey %q is %d bytes, want %d", s, len(b), ed25519.PublicKeySize)
+		}
+		pubs = append(pubs, ed25519.PublicKey(b))
+	}
+	return pubs, nil
+}
+
 func anchorKeyRegistry(a *bootstrap.App) (audit.KeyRegistry, error) {
 	var pubs []ed25519.PublicKey
 
@@ -38,17 +61,11 @@ func anchorKeyRegistry(a *bootstrap.App) (audit.KeyRegistry, error) {
 		pubs = append(pubs, priv.Public().(ed25519.PublicKey))
 	}
 
-	for _, raw := range strings.Split(a.Config.Crypto.AuditAnchorRetiredPubKeys, ",") {
-		s := strings.TrimSpace(raw)
-		if s == "" {
-			continue
-		}
-		pub, err := base64.StdEncoding.DecodeString(s)
-		if err != nil {
-			return nil, fmt.Errorf("decode retired audit anchor pubkey %q: %w", s, err)
-		}
-		pubs = append(pubs, ed25519.PublicKey(pub))
+	retired, err := parsePubKeys(a.Config.Crypto.AuditAnchorRetiredPubKeys)
+	if err != nil {
+		return nil, err
 	}
+	pubs = append(pubs, retired...)
 
 	return audit.NewKeyRegistry(pubs...), nil
 }
@@ -180,17 +197,9 @@ func runVerifyExport(args []string) error {
 		return fmt.Errorf("--dir is required")
 	}
 
-	var pubs []ed25519.PublicKey
-	for _, raw := range strings.Split(*trust, ",") {
-		s := strings.TrimSpace(raw)
-		if s == "" {
-			continue
-		}
-		pub, err := base64.StdEncoding.DecodeString(s)
-		if err != nil {
-			return fmt.Errorf("decode --trust pubkey %q: %w", s, err)
-		}
-		pubs = append(pubs, ed25519.PublicKey(pub))
+	pubs, err := parsePubKeys(*trust)
+	if err != nil {
+		return err
 	}
 	reg := audit.NewKeyRegistry(pubs...)
 
