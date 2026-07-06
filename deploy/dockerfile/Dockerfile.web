@@ -34,7 +34,12 @@ COPY web/ .
 RUN pnpm -r build
 
 # ---- Runtime stage: nginx serving the baked SPAs ----
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
+
+# Pull the latest patched OS packages on top of the base image — the nginx image
+# lags the Alpine repo by a few package revisions, so this closes known-fixed
+# CVEs (openssl / expat / libxml2 / nghttp2, …) without waiting for a base rebuild.
+RUN apk upgrade --no-cache
 
 # Config is a template: the nginx image's entrypoint runs envsubst on
 # /etc/nginx/templates/*.template at startup. NGINX_ENVSUBST_FILTER restricts

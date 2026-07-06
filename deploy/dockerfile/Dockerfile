@@ -25,9 +25,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /app/bin/mxid ./cmd/server
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates tzdata wget
+# apk upgrade first pulls the latest patched packages (closes any base-image lag
+# CVEs), then install the runtime deps.
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
