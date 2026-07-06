@@ -139,6 +139,23 @@ func TestZZ_E2E_Postgres(t *testing.T) {
 	}
 	t.Logf("E2E anchor tamper caught: reason=%q", bad.Reason)
 
+	// ---- Phase 4: an auth event bridged into the chain, on real Postgres ----
+	svc := NewService(&captureRepo{}, newTestIDGen(t), nil, zap.NewNop(), 0)
+	// nil event bus is fine; we call bridgeToChain directly (SubscribeEvents not needed).
+	svc.SetChainBridge(db, NewCapturer(newTestIDGen(t)))
+	aid := int64(42)
+	svc.bridgeToChain(ctx, &AuditLog{TenantID: 7, ActorID: &aid, ActorType: "user", EventType: "login.success"})
+	// chain the auth pending row
+	nAuth, err := chainer.ProcessBatch(ctx, 100)
+	if err != nil || nAuth < 1 {
+		t.Fatalf("auth chain: n=%d err=%v", nAuth, err)
+	}
+	authRes, err := VerifyChain(ctx, db, key, 7, "auth")
+	if err != nil || !authRes.OK || authRes.VerifiedThrough < 1 {
+		t.Fatalf("auth chain verify failed: %+v err=%v", authRes, err)
+	}
+	t.Logf("E2E auth event chained + verified: through seq %d", authRes.VerifiedThrough)
+
 	// append-only trigger blocks UPDATE + DELETE on entry
 	updErr := db.Exec("UPDATE mxid_audit_entry SET key_id = 'x' WHERE tenant_id = 7 AND chain_class = 'data'").Error
 	if updErr == nil {
