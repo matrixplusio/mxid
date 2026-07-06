@@ -3,6 +3,7 @@ package audit
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 
 	"gorm.io/gorm"
 )
@@ -44,4 +45,49 @@ func VerifyChain(ctx context.Context, db *gorm.DB, key []byte, tenantID int64, c
 		expectedSeq++
 	}
 	return VerifyResult{OK: true, VerifiedThrough: expectedSeq - 1}, nil
+}
+
+// AnchorVerifyResult reports the outcome of checking a chain's anchors.
+type AnchorVerifyResult struct {
+	OK              bool
+	AnchoredThrough int64
+	FailFromSeq     int64
+	Reason          string // "", "root mismatch", "bad signature", "missing entries"
+}
+
+// VerifyAnchors recomputes each anchor's Merkle root from the stored entries and
+// checks its Ed25519 signature. Detects tampering even by a holder of the HMAC
+// chain key, provided they do not also hold the anchor private key.
+func VerifyAnchors(ctx context.Context, db *gorm.DB, pub ed25519.PublicKey, tenantID int64, class string) (AnchorVerifyResult, error) {
+	var anchors []AuditAnchor
+	if err := db.WithContext(ctx).
+		Where("tenant_id = ? AND chain_class = ?", tenantID, class).
+		Order("from_seq asc").Find(&anchors).Error; err != nil {
+		return AnchorVerifyResult{}, err
+	}
+	var through int64
+	for i := range anchors {
+		a := &anchors[i]
+		if !VerifyAnchorSig(pub, a) {
+			return AnchorVerifyResult{OK: false, AnchoredThrough: through, FailFromSeq: a.FromSeq, Reason: "bad signature"}, nil
+		}
+		var entries []AuditEntry
+		if err := db.WithContext(ctx).
+			Where("tenant_id = ? AND chain_class = ? AND seq >= ? AND seq <= ?", tenantID, class, a.FromSeq, a.ToSeq).
+			Order("seq asc").Find(&entries).Error; err != nil {
+			return AnchorVerifyResult{}, err
+		}
+		if int64(len(entries)) != a.ToSeq-a.FromSeq+1 {
+			return AnchorVerifyResult{OK: false, AnchoredThrough: through, FailFromSeq: a.FromSeq, Reason: "missing entries"}, nil
+		}
+		leaves := make([][]byte, len(entries))
+		for j := range entries {
+			leaves[j] = entries[j].EntryHash
+		}
+		if !bytes.Equal(MerkleRoot(leaves), a.MerkleRoot) {
+			return AnchorVerifyResult{OK: false, AnchoredThrough: through, FailFromSeq: a.FromSeq, Reason: "root mismatch"}, nil
+		}
+		through = a.ToSeq
+	}
+	return AnchorVerifyResult{OK: true, AnchoredThrough: through}, nil
 }
