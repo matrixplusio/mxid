@@ -66,3 +66,30 @@ func TestVerifyAnchors_MissingEntryDetected(t *testing.T) {
 		t.Fatalf("missing entry not caught: %+v", res)
 	}
 }
+
+func TestVerifyAnchors_DeletedAnchorRowDetected(t *testing.T) {
+	db := newTestDB(t)
+	gen := newTestIDGen(t)
+	for i := 0; i < 3; i++ {
+		seedPending(t, db, gen, 7, "data", "e")
+	}
+	NewChainer(db, []byte("k"), "default", zap.NewNop()).ProcessBatch(context.Background(), 100)
+	priv := testKey(t)
+	an := NewAnchorer(db, priv, NewFileSink(t.TempDir()+"/a.log"), gen, zap.NewNop())
+	if _, err := an.AnchorChain(context.Background(), 7, "data"); err != nil { // [1,3]
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		seedPending(t, db, gen, 7, "data", "e")
+	}
+	NewChainer(db, []byte("k"), "default", zap.NewNop()).ProcessBatch(context.Background(), 100)
+	if _, err := an.AnchorChain(context.Background(), 7, "data"); err != nil { // [4,5]
+		t.Fatal(err)
+	}
+	// delete the first anchor -> coverage now starts at seq 4 -> gap
+	db.Where("tenant_id = ? AND chain_class = ? AND from_seq = ?", 7, "data", 1).Delete(&AuditAnchor{})
+	res, _ := VerifyAnchors(context.Background(), db, priv.Public().(ed25519.PublicKey), 7, "data")
+	if res.OK || res.Reason != "anchor gap" {
+		t.Fatalf("deleted anchor row not detected: %+v", res)
+	}
+}
