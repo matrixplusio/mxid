@@ -23,6 +23,11 @@ org; canonical namespace stays `imkerbos/mxid` (images `ghcr.io/imkerbos/...`).
   scopes like `feat(ee):`). Subject in English.
 - **Do not auto-commit.** Implement first; commit only when the user asks.
 - Default branch is `main`. Don't force-push shared branches without asking.
+- **Squash-merge feature branches.** A feature branch collapses into ONE
+  Conventional-Commit summary on the target branch — not `--no-ff` that
+  preserves every intermediate TDD/fix commit. Keep granular commits while
+  working; squash at merge so `main`/`dev` history reads as one line per
+  feature. Promote `dev` → `main` as usual.
 
 ## Working style
 
