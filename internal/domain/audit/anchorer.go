@@ -94,3 +94,20 @@ func (a *Anchorer) AnchorAll(ctx context.Context) (int, error) {
 	}
 	return n, nil
 }
+
+// Run ticks AnchorAll every interval until ctx is cancelled. Single-writer:
+// run exactly one of these per process (mirrors Chainer.Run's invariant).
+func (a *Anchorer) Run(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if _, err := a.AnchorAll(ctx); err != nil {
+			a.logger.Warn("audit anchorer: batch failed", zap.Error(err))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
