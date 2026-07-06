@@ -47,3 +47,22 @@ func TestBridge_NilWhenUnwired(t *testing.T) {
 	// no SetChainBridge -> bridgeToChain must be a safe no-op (no panic)
 	svc.bridgeToChain(context.Background(), &AuditLog{EventType: "login.success"})
 }
+
+func TestBridge_SurvivesCanceledContext(t *testing.T) {
+	db := newTestDB(t)
+	svc := NewService(&captureRepo{}, newTestIDGen(t), event.NewBus(zap.NewNop()), zap.NewNop(), 0)
+	svc.SetChainBridge(db, NewCapturer(newTestIDGen(t)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // simulate the request ctx already canceled when the async handler runs
+	actorID := int64(42)
+	svc.bridgeToChain(ctx, &AuditLog{TenantID: 7, ActorID: &actorID, ActorType: "user", EventType: "login.success"})
+
+	var p AuditPending
+	if err := db.First(&p).Error; err != nil {
+		t.Fatalf("auth event not chained under a canceled ctx (WithoutCancel missing?): %v", err)
+	}
+	if p.ChainClass != "auth" || p.TenantID != 7 {
+		t.Fatalf("bad chained event: %+v", p)
+	}
+}

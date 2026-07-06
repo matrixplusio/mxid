@@ -36,6 +36,9 @@ func (s *Service) bridgeToChain(ctx context.Context, log *AuditLog) {
 		actor.ActorID = *log.ActorID
 	}
 	if log.ActorName != nil {
+		// Currently unused: AuditPending has no actor_name column, so
+		// Capturer.Capture never persists this. Kept for forward compat /
+		// if the chain schema grows an actor_name field.
 		actor.ActorName = *log.ActorName
 	}
 	if log.IP != nil {
@@ -55,7 +58,13 @@ func (s *Service) bridgeToChain(ctx context.Context, log *AuditLog) {
 	if log.ResourceID != nil {
 		ev.ResourceID = *log.ResourceID
 	}
-	if err := s.chainCapturer.Capture(auditctx.With(ctx, actor), s.chainDB, ev); err != nil {
+	// The originating HTTP request ctx is frequently already canceled by the
+	// time the async audit handler runs this (event.Bus dispatches detached
+	// from the request lifecycle). Detach cancellation but keep values (e.g.
+	// auditctx) alive for Capture's tx.WithContext — same hazard the legacy
+	// repo.Create / nameResolver paths in this package already guard against.
+	writeCtx := context.WithoutCancel(ctx)
+	if err := s.chainCapturer.Capture(auditctx.With(writeCtx, actor), s.chainDB, ev); err != nil {
 		// Like the legacy-write-failure marker: a dropped chain write is a
 		// security-relevant gap, but the action already happened — log + alert.
 		s.logger.Error("audit chain bridge failed",
