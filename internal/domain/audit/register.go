@@ -15,6 +15,8 @@ func Register(app *bootstrap.App) *Module {
 	repo := NewGormRepository(app.DB)
 	svc := NewService(repo, app.IDGen, app.EventBus, app.Logger, app.Config.Tenant.DefaultID)
 
+	svc.SetChainBridge(app.DB, NewCapturer(app.IDGen))
+
 	svc.SubscribeEvents()
 
 	h := NewHandler(svc, app.Config.Tenant.DefaultID)
