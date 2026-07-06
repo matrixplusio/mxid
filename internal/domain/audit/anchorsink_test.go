@@ -76,3 +76,18 @@ func TestFileSink_ListEmptyWhenNoFile(t *testing.T) {
 		t.Fatalf("want empty, got %d", len(got))
 	}
 }
+
+func TestFileSink_CreatesMissingParentDir(t *testing.T) {
+	// path whose parent dir does NOT exist yet (the production default is a
+	// relative "data/..." that fails on a fresh deploy without this).
+	dir := t.TempDir()
+	path := dir + "/nested/sub/anchors.log"
+	sink := NewFileSink(path)
+	if _, err := sink.Put(context.Background(), AnchorRecord{TenantID: 7, ChainClass: "data", FromSeq: 1, ToSeq: 1, MerkleRoot: []byte{1}, Signature: []byte{2}, KeyID: "k1"}); err != nil {
+		t.Fatalf("Put should create the missing parent dir, got: %v", err)
+	}
+	got, err := sink.List(context.Background())
+	if err != nil || len(got) != 1 {
+		t.Fatalf("list after auto-mkdir: n=%d err=%v", len(got), err)
+	}
+}

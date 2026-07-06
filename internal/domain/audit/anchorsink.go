@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -45,6 +46,15 @@ func NewFileSink(path string) *FileSink { return &FileSink{path: path} }
 func (s *FileSink) Put(_ context.Context, rec AnchorRecord) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Ensure the parent directory exists — O_CREATE creates the file but not
+	// missing parent dirs, so a relative default like "data/audit-anchors.log"
+	// fails on a fresh deploy where data/ doesn't exist yet (the anchorer then
+	// never writes and non-repudiation silently doesn't work).
+	if dir := filepath.Dir(s.path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return "", fmt.Errorf("create anchor sink dir: %w", err)
+		}
+	}
 	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return "", fmt.Errorf("open anchor sink: %w", err)
