@@ -25,7 +25,10 @@ type Module struct {
 // caller's bindings.
 func Register(app *bootstrap.App) *Module {
 	repo := NewRepository(app.DB)
-	svc := NewService(repo, app.IDGen, app.EventBus)
+	svc := NewService(repo, app.IDGen, app.EventBus, app.Logger)
+	// React to org membership changes: recompute dynamic groups whose rule keys
+	// on org membership so the roster stays live without a manual re-sync.
+	svc.SubscribeEvents()
 	handler := NewHandler(svc, app.Config.Tenant.DefaultID)
 
 	groups := app.ConsoleGroup.Group("/groups")

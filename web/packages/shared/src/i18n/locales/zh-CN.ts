@@ -305,6 +305,7 @@ export default {
       tabs: {
         basic: '基础信息',
         detail: '详细信息',
+        orgs: '所属组织',
         groups: '用户组',
         roles: '有效角色',
         identities: '身份绑定',
@@ -368,6 +369,10 @@ export default {
         address: '联系地址',
         addressHint: '个人通讯地址，仅用于资料填充',
         lastUpdated: '最近更新于 {{date}}',
+      },
+      orgsTab: {
+        empty: '该用户未挂在任何组织',
+        primary: '主组织',
       },
       groupsTab: {
         empty: '该用户未加入任何用户组',

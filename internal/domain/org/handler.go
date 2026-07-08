@@ -180,3 +180,23 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 
 	response.OK(c, nil)
 }
+
+// ListUserOrgs returns every org the given user belongs to.
+//
+// Routed as GET /users/:id/orgs in the user-scoped section of the API (mirrors
+// /users/:id/groups) so the user detail page can surface org membership — which
+// previously had no display surface at all.
+func (h *Handler) ListUserOrgs(c *gin.Context) {
+	userID, ok := ginutil.ParseInt64Param(c, "id")
+	if !ok {
+		return
+	}
+
+	orgs, err := h.service.GetUserOrgs(c.Request.Context(), tenantctx.FromContext(c, h.tenantID), userID)
+	if err != nil {
+		response.InternalError(c, "failed to list organizations for user", err)
+		return
+	}
+
+	response.OK(c, orgs)
+}

@@ -270,8 +270,16 @@ func compileCondition(def ruleField, c RuleCondition) (string, []any, error) {
 	case "in_subtree":
 		// org_id ∈ subtree(rootOrgID). Uses ltree GIST: o.path <@ root.path.
 		// Implemented by a sub-select to avoid yet another join.
+		//
+		// Both root and child are fenced to the querying tenant by correlating
+		// to the outer mxid_user alias (u.tenant_id) — defence in depth so a
+		// rule value naming another tenant's org id can never pull that tenant's
+		// subtree into the match set.
 		rootID := toInt64(c.Value)
-		return "uo.org_id IN (SELECT child.id FROM mxid_organization child, mxid_organization root WHERE root.id = ? AND child.path <@ root.path AND child.deleted_at IS NULL)",
+		return "uo.org_id IN (SELECT child.id FROM mxid_organization child, mxid_organization root " +
+				"WHERE root.id = ? AND child.path <@ root.path " +
+				"AND child.deleted_at IS NULL AND root.deleted_at IS NULL " +
+				"AND root.tenant_id = u.tenant_id AND child.tenant_id = u.tenant_id)",
 			[]any{rootID}, nil
 	}
 	return "", nil, fmt.Errorf("compileCondition: unhandled cmp %q", c.Cmp)

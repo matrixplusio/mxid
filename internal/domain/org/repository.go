@@ -18,7 +18,11 @@ type Repository interface {
 	AddMember(ctx context.Context, rel *UserOrg) error
 	RemoveMember(ctx context.Context, userID, orgID int64) error
 	GetMembers(ctx context.Context, orgID int64, page, pageSize int) ([]int64, int64, error)
-	GetUserOrgs(ctx context.Context, userID int64) ([]*UserOrg, error)
+	// GetUserOrgs returns the orgs a user belongs to, enriched with name/code/path
+	// for display. Tenant-scoped: the join onto mxid_organization filters by
+	// tenant_id (mxid_user_org itself carries no tenant column), so a membership
+	// row pointing at another tenant's org is never returned.
+	GetUserOrgs(ctx context.Context, tenantID, userID int64) ([]*UserOrgInfo, error)
 	// AncestorIDsForUser returns every org_id the user belongs to, expanded
 	// along the ltree path so each membership pulls in its ancestors. Used by
 	// the permission resolver to climb org-inherited role bindings.

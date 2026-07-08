@@ -14,6 +14,9 @@ type Repository interface {
 	// rarely belongs to enough groups for this to matter, and the console renders
 	// them inline on the user detail page).
 	ListByUserID(ctx context.Context, tenantID, userID int64) ([]*UserGroup, error)
+	// ListDynamicGroupIDs returns the IDs of every dynamic (rule-driven) group
+	// in the tenant. Used to fan out a re-sync when org membership changes.
+	ListDynamicGroupIDs(ctx context.Context, tenantID int64) ([]int64, error)
 
 	// Members
 	AddMember(ctx context.Context, m *UserGroupMember) error

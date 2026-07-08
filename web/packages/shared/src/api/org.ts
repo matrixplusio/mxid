@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { ApiResponse, PaginatedData, OrgNode } from '../types'
+import type { ApiResponse, PaginatedData, OrgNode, UserOrgInfo } from '../types'
 
 export const orgApi = {
   tree: () =>
@@ -18,4 +18,7 @@ export const orgApi = {
     client.post<ApiResponse<null>>(`/orgs/${id}/members`, { user_id, is_primary }).then(r => r.data),
   removeMember: (id: string, userId: string) =>
     client.delete<ApiResponse<null>>(`/orgs/${id}/members/${userId}`).then(r => r.data),
+  // List every org a user belongs to (feeds the user-detail Org tab).
+  listByUser: (userId: string) =>
+    client.get<ApiResponse<UserOrgInfo[]>>(`/users/${userId}/orgs`).then(r => r.data.data),
 }

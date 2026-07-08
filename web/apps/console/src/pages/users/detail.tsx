@@ -19,6 +19,7 @@ import {
 import {
   userApi,
   groupApi,
+  orgApi,
   formatDate,
   statusColor,
   statusLabel,
@@ -35,6 +36,7 @@ import type {
   UserSession,
   EffectiveRole,
   Group,
+  UserOrgInfo,
   PaginatedData,
 } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -42,13 +44,14 @@ import { useTabParam } from '../../hooks/useTabParam'
 import { Field, pageMotion, Button, ConfirmDialog, AvatarUpload, avatarTexts } from '../../components/ui'
 import { toast, extractMessage } from '../../components/ui/toast'
 
-type Tab = 'basic' | 'detail' | 'groups' | 'roles' | 'identities' | 'mfa' | 'sessions' | 'history'
+type Tab = 'basic' | 'detail' | 'orgs' | 'groups' | 'roles' | 'identities' | 'mfa' | 'sessions' | 'history'
 
-const TAB_VALUES = ['basic', 'detail', 'groups', 'roles', 'identities', 'mfa', 'sessions', 'history'] as const
+const TAB_VALUES = ['basic', 'detail', 'orgs', 'groups', 'roles', 'identities', 'mfa', 'sessions', 'history'] as const
 
 const TAB_KEYS: { key: Tab; i18nKey: string }[] = [
   { key: 'basic', i18nKey: 'users.detail.tabs.basic' },
   { key: 'detail', i18nKey: 'users.detail.tabs.detail' },
+  { key: 'orgs', i18nKey: 'users.detail.tabs.orgs' },
   { key: 'groups', i18nKey: 'users.detail.tabs.groups' },
   { key: 'roles', i18nKey: 'users.detail.tabs.roles' },
   { key: 'identities', i18nKey: 'users.detail.tabs.identities' },
@@ -211,6 +214,7 @@ export default function UserDetailPage() {
         <div className="p-6">
           {tab === 'basic' && user && <BasicTab user={user} onSaved={loadUser} />}
           {tab === 'detail' && user && <DetailTab userID={userID} />}
+          {tab === 'orgs' && user && <OrgsTab userID={userID} />}
           {tab === 'groups' && user && <GroupsTab userID={userID} />}
           {tab === 'roles' && user && <RolesTab userID={userID} />}
           {tab === 'identities' && user && <IdentitiesTab userID={userID} />}
@@ -483,6 +487,51 @@ function DetailTab({ userID }: { userID: string }) {
         <p className="text-xs text-faint">{t('users.detail.profile.lastUpdated', { date: formatDate(detail.birthday ? new Date().toISOString() : new Date().toISOString()) })}</p>
       )}
     </form>
+  )
+}
+
+/* ─────────────────────────── Orgs tab ───────────────────────────────── */
+
+function OrgsTab({ userID }: { userID: string }) {
+  const { t } = useTranslation()
+  const [orgs, setOrgs] = useState<UserOrgInfo[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    orgApi
+      .listByUser(userID)
+      .then((items) => alive && setOrgs(items ?? []))
+      .catch(() => {})
+      .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+  }, [userID])
+
+  if (loading) {
+    return <div className="py-8 text-center text-sm text-faint"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+  }
+  if (orgs.length === 0) {
+    return <div className="py-8 text-center text-sm text-faint">{t('users.detail.orgsTab.empty')}</div>
+  }
+  return (
+    <div className="space-y-2">
+      {orgs.map((o) => (
+        <div key={o.org_id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3 hover:bg-surface-muted">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-ink">{o.name}</span>
+              <code className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-muted">{o.code}</code>
+              {o.is_primary && (
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{t('users.detail.orgsTab.primary')}</span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted">{o.path}</p>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 

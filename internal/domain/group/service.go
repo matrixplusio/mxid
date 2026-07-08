@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"go.uber.org/zap"
+
 	"github.com/imkerbos/mxid/pkg/dberr"
 	"github.com/imkerbos/mxid/pkg/event"
 	"github.com/imkerbos/mxid/pkg/snowflake"
@@ -36,14 +38,19 @@ type Service struct {
 	idGen         *snowflake.Generator
 	eventBus      *event.Bus
 	userValidator EntityValidator
+	logger        *zap.Logger
 }
 
 // NewService creates a new user group service.
-func NewService(repo Repository, idGen *snowflake.Generator, eventBus *event.Bus) *Service {
+func NewService(repo Repository, idGen *snowflake.Generator, eventBus *event.Bus, logger *zap.Logger) *Service {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &Service{
 		repo:     repo,
 		idGen:    idGen,
 		eventBus: eventBus,
+		logger:   logger,
 	}
 }
 

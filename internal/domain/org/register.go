@@ -41,6 +41,10 @@ func Register(app *bootstrap.App) *Module {
 		orgs.DELETE("/:id/members/:uid", authz.Require("org.member.remove", scopeOrgID), handler.RemoveMember)
 	}
 
+	// Cross-domain: list orgs a user belongs to. Gated by user.read because it
+	// lives on the /users path and feeds the user-detail page's Org tab.
+	app.ConsoleGroup.GET("/users/:id/orgs", authz.Require("user.read", nil), handler.ListUserOrgs)
+
 	return &Module{Repo: repo, Service: svc, Handler: handler}
 }
 

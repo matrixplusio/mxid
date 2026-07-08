@@ -122,6 +122,7 @@ var consoleProtectedRoutes = [][2]string{
 	{http.MethodGet, "/api/v1/console/users/:id/identities"},
 	{http.MethodGet, "/api/v1/console/users/:id/login-history"},
 	{http.MethodGet, "/api/v1/console/users/:id/mfa"},
+	{http.MethodGet, "/api/v1/console/users/:id/orgs"},
 	{http.MethodGet, "/api/v1/console/users/:id/roles"},
 	{http.MethodGet, "/api/v1/console/users/:id/sessions"},
 	{http.MethodPost, "/api/v1/console/access-eligibilities"},

@@ -236,7 +236,9 @@ func (s *Service) Move(ctx context.Context, id int64, req *MoveOrgRequest) error
 // AddMember adds a user to an organization.
 func (s *Service) AddMember(ctx context.Context, orgID int64, req *AddMemberRequest) error {
 	// Tenant-ownership guard on the parent org before planting a membership.
-	if err := s.requireOrg(ctx, orgID); err != nil {
+	// fetchOrg (not requireOrg) so we can read tenant_id for the event payload.
+	org, err := s.fetchOrg(ctx, orgID)
+	if err != nil {
 		return err
 	}
 	// Referenced-entity guard: the user id comes from the request body. Reject
@@ -257,19 +259,36 @@ func (s *Service) AddMember(ctx context.Context, orgID int64, req *AddMemberRequ
 		return fmt.Errorf("add member: %w", err)
 	}
 
+	s.publishMemberChange(ctx, event.OrgMemberAdded, org.TenantID, req.UserID, orgID)
 	return nil
 }
 
 // RemoveMember removes a user from an organization.
 func (s *Service) RemoveMember(ctx context.Context, userID, orgID int64) error {
 	// Tenant-ownership guard on the parent org before the delete.
-	if err := s.requireOrg(ctx, orgID); err != nil {
+	org, err := s.fetchOrg(ctx, orgID)
+	if err != nil {
 		return err
 	}
 	if err := s.repo.RemoveMember(ctx, userID, orgID); err != nil {
 		return fmt.Errorf("remove member: %w", err)
 	}
+	s.publishMemberChange(ctx, event.OrgMemberRemoved, org.TenantID, userID, orgID)
 	return nil
+}
+
+// publishMemberChange emits an org membership event so downstream subscribers
+// (dynamic user-group re-sync) can react. Carries tenant_id explicitly so an
+// async handler need not rely on the request-scoped tenant context.
+func (s *Service) publishMemberChange(ctx context.Context, eventType string, tenantID, userID, orgID int64) {
+	s.eventBus.Publish(ctx, event.Event{
+		Type: eventType,
+		Payload: map[string]any{
+			"tenant_id": tenantID,
+			"user_id":   userID,
+			"org_id":    orgID,
+		},
+	})
 }
 
 // IsAncestorOrSelf delegates to the repo's ltree-based check. Used by the
@@ -310,6 +329,20 @@ func (s *Service) GetMembers(ctx context.Context, orgID int64, page, pageSize in
 		ids = []int64{}
 	}
 	return ids, total, nil
+}
+
+// GetUserOrgs returns the orgs a user belongs to, enriched for display on the
+// user detail page. Tenant-scoped via the repo join. Returns an empty (non-nil)
+// slice so the JSON response is `[]`, not `null`.
+func (s *Service) GetUserOrgs(ctx context.Context, tenantID, userID int64) ([]*UserOrgInfo, error) {
+	infos, err := s.repo.GetUserOrgs(ctx, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if infos == nil {
+		infos = []*UserOrgInfo{}
+	}
+	return infos, nil
 }
 
 // buildTree converts a flat list of organizations (ordered by path) into a tree.

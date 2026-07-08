@@ -47,6 +47,16 @@ function useStatusOptions() {
   ]
 }
 
+// pickDefaultCmp chooses the initial operator when a field is (re)selected.
+// For org_id we default to in_subtree ("包含子部门") rather than the allow-list's
+// first entry (eq): the common intent "该部门下的所有人" must include members
+// pinned to sub-departments. Plain eq matches only the exact node and silently
+// excludes sub-org members — the classic "0 members" surprise.
+function pickDefaultCmp(field: string, allowed: string[]): string {
+  if (field === 'org_id' && allowed.includes('in_subtree')) return 'in_subtree'
+  return allowed[0] ?? 'eq'
+}
+
 export interface RuleEditorProps {
   value: RuleExpr
   onChange: (v: RuleExpr) => void
@@ -72,7 +82,7 @@ export default function RuleEditor({ value, onChange }: RuleEditorProps) {
 
   const addCondition = () => {
     const firstField = fieldKeys[0] ?? 'email'
-    const firstCmp = fields[firstField]?.[0] ?? 'eq'
+    const firstCmp = pickDefaultCmp(firstField, fields[firstField] ?? [])
     onChange({
       op: 'and',
       conditions: [...value.conditions, { field: firstField, cmp: firstCmp, value: '' }],
@@ -115,7 +125,7 @@ export default function RuleEditor({ value, onChange }: RuleEditorProps) {
                   const allowed = fields[newField] ?? []
                   updateCondition(i, {
                     field: newField,
-                    cmp: allowed.includes(c.cmp) ? c.cmp : (allowed[0] ?? 'eq'),
+                    cmp: allowed.includes(c.cmp) ? c.cmp : pickDefaultCmp(newField, allowed),
                     value: newField === 'status' ? 1 : '',
                   })
                 }}

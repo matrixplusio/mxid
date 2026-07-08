@@ -302,6 +302,7 @@ export default {
       tabs: {
         basic: 'Basic',
         detail: 'Profile',
+        orgs: 'Organizations',
         groups: 'Groups',
         roles: 'Effective roles',
         identities: 'Identities',
@@ -365,6 +366,10 @@ export default {
         address: 'Contact address',
         addressHint: 'Personal mailing address, used only for profile data',
         lastUpdated: 'Last updated {{date}}',
+      },
+      orgsTab: {
+        empty: 'This user does not belong to any organization',
+        primary: 'Primary',
       },
       groupsTab: {
         empty: 'This user is not a member of any group',

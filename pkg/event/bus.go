@@ -119,6 +119,12 @@ const (
 	OrgUpdated     = "org.updated"
 	OrgDeleted     = "org.deleted"
 	OrgMemberMoved = "org.member_moved"
+	// OrgMemberAdded / OrgMemberRemoved fire when a user is planted into /
+	// removed from an org. They drive dynamic-group re-sync: a group whose rule
+	// keys on org membership (org_id eq/in/in_subtree) must recompute when the
+	// org's roster changes. Carry {tenant_id, user_id, org_id}.
+	OrgMemberAdded   = "org.member_added"
+	OrgMemberRemoved = "org.member_removed"
 
 	GroupCreated       = "group.created"
 	GroupUpdated       = "group.updated"

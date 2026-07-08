@@ -194,6 +194,15 @@ export interface OrgNode {
   children?: OrgNode[]
 }
 
+// One org-membership row for the user-detail Org tab.
+export interface UserOrgInfo {
+  org_id: string
+  name: string
+  code: string
+  path: string
+  is_primary: boolean
+}
+
 // Group
 //
 // type: 1 = static (members managed manually); 2 = dynamic (members derived

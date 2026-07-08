@@ -54,6 +54,16 @@ type OrgTreeResponse struct {
 	Items []*OrgResponse `json:"items"`
 }
 
+// UserOrgInfo is one org-membership row enriched for display on the user
+// detail page: which org the user is planted in, plus whether it's primary.
+type UserOrgInfo struct {
+	OrgID     int64  `json:"org_id,string"`
+	Name      string `json:"name"`
+	Code      string `json:"code"`
+	Path      string `json:"path"`
+	IsPrimary bool   `json:"is_primary"`
+}
+
 // ToOrgResponse converts an Organization model to an OrgResponse.
 func ToOrgResponse(org *Organization) *OrgResponse {
 	return &OrgResponse{

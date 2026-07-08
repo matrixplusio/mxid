@@ -173,14 +173,23 @@ func (r *repository) GetMembers(ctx context.Context, orgID int64, page, pageSize
 	return userIDs, total, nil
 }
 
-func (r *repository) GetUserOrgs(ctx context.Context, userID int64) ([]*UserOrg, error) {
-	var rels []*UserOrg
+func (r *repository) GetUserOrgs(ctx context.Context, tenantID, userID int64) ([]*UserOrgInfo, error) {
+	out := make([]*UserOrgInfo, 0)
+	// Explicit tenant filter on the JOINed org table: mxid_user_org has no
+	// tenant column, so a bare WHERE user_id=? would leak any org row the
+	// membership points at. The join fences it to the caller's tenant.
 	if err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Find(&rels).Error; err != nil {
+		Raw(`
+SELECT o.id AS org_id, o.name, o.code, o.path, uo.is_primary
+FROM mxid_user_org uo
+JOIN mxid_organization o ON o.id = uo.org_id AND o.deleted_at IS NULL AND o.tenant_id = ?
+WHERE uo.user_id = ?
+ORDER BY uo.is_primary DESC, o.path
+`, tenantID, userID).
+		Scan(&out).Error; err != nil {
 		return nil, fmt.Errorf("get user organizations: %w", err)
 	}
-	return rels, nil
+	return out, nil
 }
 
 // AncestorIDsForUser returns every org_id a user belongs to, expanded along

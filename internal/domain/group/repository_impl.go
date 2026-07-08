@@ -69,6 +69,17 @@ func (r *repository) List(ctx context.Context, tenantID int64, keyword string, p
 	return groups, total, nil
 }
 
+func (r *repository) ListDynamicGroupIDs(ctx context.Context, tenantID int64) ([]int64, error) {
+	ids := make([]int64, 0)
+	if err := r.db.WithContext(ctx).
+		Model(&UserGroup{}).
+		Where("tenant_id = ? AND type = ?", tenantID, TypeDynamic).
+		Pluck("id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("list dynamic group ids: %w", err)
+	}
+	return ids, nil
+}
+
 func (r *repository) ListByUserID(ctx context.Context, tenantID, userID int64) ([]*UserGroup, error) {
 	groups := make([]*UserGroup, 0)
 	err := r.db.WithContext(ctx).
