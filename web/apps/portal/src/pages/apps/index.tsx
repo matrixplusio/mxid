@@ -174,7 +174,7 @@ export default function AppsPage() {
     try {
       const { launch_url } = await portalApi.launchApp(app.id)
       if (win) win.location.replace(launch_url)
-      else window.location.href = launch_url // popup blocked → same-tab fallback
+      else window.location.assign(launch_url) // popup blocked → same-tab fallback
       // Best-effort refresh of recent — server has logged the launch.
       portalApi
         .listRecentApps(4)
