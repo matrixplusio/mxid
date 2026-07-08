@@ -10,9 +10,23 @@ data:
   # It contains NO custom ${VAR} placeholders — only standard nginx variables
   # ($uri, $host, etc.) — so envsubst will pass them through unchanged.
   default.conf.template: |
+    # Mute access logs for health-check probes — the GKE load balancer
+    # (User-Agent "GoogleHC/1.x") and Kubernetes liveness/readiness probes
+    # ("kube-probe/1.x") hit "/" every few seconds and otherwise drown the real
+    # request logs. $mxid_log = 0 → the access_log `if=` skips the line.
+    map $http_user_agent $mxid_log {
+        default          1;
+        "~*^GoogleHC"    0;
+        "~*^kube-probe"  0;
+    }
+
     server {
         listen 80;
         server_name _;
+
+        # Skip health-check probe lines (see the $mxid_log map above); same log
+        # target as the image default (symlinked to stdout), gated by the map.
+        access_log /var/log/nginx/access.log main if=$mxid_log;
 
         root /var/www/mxid;
         index index.html;
