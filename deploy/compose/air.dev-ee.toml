@@ -1,0 +1,41 @@
+# Air config for the dev-EE backend (see docker-compose.dev-ee.yml).
+#
+# Runs from /workspace — the parent directory that holds BOTH mxid/ (CE) and
+# mxid-ee/ — so a change in either repo triggers a rebuild. EE's go.mod
+# `replace github.com/imkerbos/mxid => ../mxid` pulls the CE source (app/,
+# pkg/session, …) straight from /workspace/mxid, so fixes there (e.g. the
+# session mandatory-MFA gate) are compiled into the EE binary too.
+#
+# The EE entrypoint (mxid-ee/cmd/server) blank-imports the EE feature packages
+# (external-IdP / Lark, SCIM, …), so this build — unlike the CE cmd/server —
+# mounts those routes.
+root = "."
+tmp_dir = "mxid-ee/tmp"
+
+[build]
+  # Build the EE entrypoint. cd into the EE module so `go build` uses its
+  # go.mod (with the replace directive) rather than the CE one.
+  cmd = "cd mxid-ee && go build -o tmp/mxid-ee ./cmd/server"
+  bin = "./mxid-ee/tmp/mxid-ee"
+  # Launch via a wrapper that cd's into the CE repo first, so relative paths the
+  # app resolves against CWD (migrations source + configs dir) point at
+  # /workspace/mxid — exactly as the CE dev build sees them.
+  full_bin = "sh mxid/deploy/compose/run-ee.sh"
+  delay = 1000
+  # Watch both repos; skip build output, web assets, and vendored/generated dirs.
+  exclude_dir = ["mxid-ee/tmp", "mxid-ee/bin", "mxid-ee/build", "mxid-ee/deploy", "mxid/tmp", "mxid/web", "mxid/node_modules", "mxid/deploy", "mxid/docs", "mxid/migrations", "mxid/bin", "mxid/topiam", ".git", ".github"]
+  exclude_regex = ["_test.go"]
+  include_ext = ["go", "yaml", "yml", "json"]
+  poll = true
+  poll_interval = 500
+  kill_delay = "2s"
+  send_interrupt = true
+  stop_on_error = true
+  log = "build-errors.log"
+
+[misc]
+  clean_on_exit = true
+
+[log]
+  main_only = false
+  time = false

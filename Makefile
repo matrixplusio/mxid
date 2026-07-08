@@ -35,11 +35,28 @@ dev-web:
 # Development — Docker (air hot reload + external pg/redis)
 DEV_COMPOSE := docker compose --env-file .env -f deploy/compose/docker-compose.dev.yml
 
+# Dev-EE: same stack, but the backend is built from the Enterprise entrypoint
+# (mxid-ee/cmd/server → external-IdP / Lark, SCIM, …). Requires the private
+# mxid-ee repo checked out as ../mxid-ee. See docker-compose.dev-ee.yml.
+DEV_COMPOSE_EE := $(DEV_COMPOSE) -f deploy/compose/docker-compose.dev-ee.yml
+
 dev-docker-up:
 	$(DEV_COMPOSE) up
 
 dev-docker-up-d:
 	$(DEV_COMPOSE) up -d
+
+dev-docker-up-ee:
+	$(DEV_COMPOSE_EE) up
+
+dev-docker-up-ee-d:
+	$(DEV_COMPOSE_EE) up -d
+
+dev-docker-down-ee:
+	$(DEV_COMPOSE_EE) down
+
+dev-docker-logs-ee:
+	$(DEV_COMPOSE_EE) logs -f mxid
 
 dev-docker-down:
 	$(DEV_COMPOSE) down

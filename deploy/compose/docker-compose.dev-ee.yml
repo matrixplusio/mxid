@@ -1,0 +1,31 @@
+# Dev-EE override — rebuilds the backend from the Enterprise entrypoint
+# (mxid-ee/cmd/server, which blank-imports the EE feature packages incl.
+# external-IdP / Lark) instead of the CE cmd/server. Everything else — nginx,
+# the vite dev servers, DB/redis env, ports, healthcheck — is inherited from
+# docker-compose.dev.yml.
+#
+# Layered ON TOP of docker-compose.dev.yml:
+#   make dev-docker-up-ee            # foreground
+#   make dev-docker-up-ee-d          # detached
+# or manually:
+#   docker compose --env-file .env \
+#     -f deploy/compose/docker-compose.dev.yml \
+#     -f deploy/compose/docker-compose.dev-ee.yml up
+#
+# Requires the private mxid-ee repo checked out as a SIBLING of mxid
+# (../mxid-ee) — the same layout EE's go.mod `replace => ../mxid` expects. The
+# whole parent dir is mounted at /workspace so `go build` sees both modules and
+# air rebuilds on a change in either.
+name: mxid-dev
+
+services:
+  mxid:
+    # Run from the parent of both repos so the EE module's replace directive
+    # (../mxid) resolves and air can watch CE + EE together.
+    working_dir: /workspace
+    command: >
+      sh -c "which air >/dev/null 2>&1 || go install github.com/air-verse/air@v1.61.7 && air -c mxid/deploy/compose/air.dev-ee.toml"
+    volumes:
+      # Mount the parent dir (holds mxid/ + mxid-ee/). Merges with the base
+      # ../..:/app mount; the EE build only uses /workspace.
+      - ../../..:/workspace
