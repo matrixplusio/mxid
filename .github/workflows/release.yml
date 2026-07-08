@@ -7,9 +7,10 @@
 #
 #   git tag v0.1.0 && git push origin v0.1.0
 #
-# Images (tag scheme documented in docs/DEPLOYMENT.md):
-#   ghcr.io/imkerbos/mxid       — Go backend
-#   ghcr.io/imkerbos/mxid-web   — nginx + baked SPAs
+# Images (tag scheme documented in docs/DEPLOYMENT.md); <owner> = repo owner
+# (imkerbos personal / matrixplusio org), so each mirror publishes to its own GHCR:
+#   ghcr.io/<owner>/mxid       — Go backend
+#   ghcr.io/<owner>/mxid-web   — nginx + baked SPAs
 name: release
 
 on:
@@ -27,11 +28,17 @@ jobs:
     strategy:
       matrix:
         include:
+          # Registry namespace follows the repo owner, so both the personal
+          # (imkerbos) and org (matrixplusio) mirrors publish to THEIR OWN GHCR
+          # on a tag push — each repo's GITHUB_TOKEN can only write its own
+          # namespace, so a hardcoded owner made the mirror's release fail with
+          # "permission_denied". Consumers pick the registry via Helm
+          # image.registry.
           - name: backend
-            image: ghcr.io/imkerbos/mxid
+            image: ghcr.io/${{ github.repository_owner }}/mxid
             dockerfile: deploy/dockerfile/Dockerfile
           - name: web
-            image: ghcr.io/imkerbos/mxid-web
+            image: ghcr.io/${{ github.repository_owner }}/mxid-web
             dockerfile: deploy/dockerfile/Dockerfile.web
     steps:
       - uses: actions/checkout@v5
