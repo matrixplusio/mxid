@@ -80,7 +80,7 @@ Backend image repository — switches between CE and EE based on .Values.edition
 */}}
 {{- define "mxid.backendImage" -}}
 {{- $reg := include "mxid.imageRegistry" . }}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion }}
+{{- $tag := .Values.image.backendTag | default .Values.image.tag | default .Chart.AppVersion }}
 {{- if eq .Values.edition "ee" }}
 {{- printf "%s/mxid-ee:%s" $reg $tag }}
 {{- else }}
@@ -89,10 +89,11 @@ Backend image repository — switches between CE and EE based on .Values.edition
 {{- end }}
 
 {{/*
-Web image.
+Web image. Falls back to the global image.tag; override with image.webTag to pin
+the web image independently (e.g. skip re-tagging an unchanged SPA build).
 */}}
 {{- define "mxid.webImage" -}}
-{{- printf "%s/mxid-web:%s" (include "mxid.imageRegistry" .) (.Values.image.tag | default .Chart.AppVersion) }}
+{{- printf "%s/mxid-web:%s" (include "mxid.imageRegistry" .) (.Values.image.webTag | default .Values.image.tag | default .Chart.AppVersion) }}
 {{- end }}
 
 {{/*
