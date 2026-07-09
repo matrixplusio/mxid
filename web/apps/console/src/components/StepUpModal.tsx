@@ -65,7 +65,7 @@ export default function StepUpModal() {
   }
 
   return (
-    <Modal open={open} title={t('stepup.title')} onClose={() => settle(false)} size="sm">
+    <Modal open={open} title={t('stepup.title')} onClose={() => settle(false)} size="sm" elevated>
       <div className="space-y-4">
         <p className="text-sm text-muted">{t('stepup.hint')}</p>
         <Input

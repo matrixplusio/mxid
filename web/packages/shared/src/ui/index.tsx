@@ -2,6 +2,7 @@
 // hand-rolling button / modal / form classes. Keeps the look consistent
 // without us having to police it in code review.
 import { motion } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import { Loader2, Moon, Sun, X } from 'lucide-react'
 import { cn, useTheme } from '@mxid/shared'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes } from 'react'
@@ -127,12 +128,18 @@ export function Modal({
   onClose,
   children,
   size = 'md',
+  elevated = false,
 }: {
   open: boolean
   title: string
   onClose: () => void
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  // elevated raises the modal above other z-50 overlays (regular modals,
+  // confirm dialogs, drawers). Use for a global interrupt that must always be
+  // topmost — notably the step-up MFA prompt, which pops on top of whatever
+  // (e.g. a delete-confirm dialog) triggered the sensitive action.
+  elevated?: boolean
 }) {
   if (!open) return null
   const widths = {
@@ -141,8 +148,19 @@ export function Modal({
     lg: 'max-w-lg',
     xl: 'max-w-2xl',
   }
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+  // Portal to <body> so the overlay escapes the layout's stacking contexts
+  // (the page-transition motion.div in MainLayout uses transform/opacity, which
+  // creates a stacking context that would otherwise trap z-index). All Modal
+  // instances then become body-level siblings, so `elevated` (z-[100]) reliably
+  // paints above regular z-50 modals/confirm dialogs.
+  return createPortal(
+    <div
+      className={cn(
+        'fixed inset-0 flex items-center justify-center bg-black/40',
+        elevated ? 'z-[100]' : 'z-50',
+      )}
+      onClick={onClose}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -161,7 +179,8 @@ export function Modal({
         </div>
         {children}
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
