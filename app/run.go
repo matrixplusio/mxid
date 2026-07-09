@@ -987,6 +987,10 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 	// the AccessChecker adapter to gate code issuance.
 	accessRepo := appaccess.NewRepository(a.DB)
 	accessSvc := appaccess.NewService(accessRepo, a.IDGen, a.EventBus)
+	accessSvc.SetLogger(a.Logger)
+	// Clean up access policies whose subject group/org/role is deleted, so they
+	// don't dangle as "(unknown)" rows or phantom allow/deny rules.
+	accessSvc.SubscribeEvents()
 	appaccess.SetMatcher(newAccessMatcher(a))
 	accessHandler := appaccess.NewHandler(accessSvc, newAccessSubjectResolver(a), a.Config.Tenant.DefaultID)
 	accessHandler.Register(a.ConsoleGroup)

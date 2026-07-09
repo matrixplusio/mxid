@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"maps"
 
+	"go.uber.org/zap"
+
 	"github.com/imkerbos/mxid/pkg/event"
 	"github.com/imkerbos/mxid/pkg/snowflake"
 )
@@ -47,6 +49,7 @@ type Service struct {
 	idGen      *snowflake.Generator
 	eventBus   *event.Bus
 	validators RefValidators
+	logger     *zap.Logger
 }
 
 func NewService(repo Repository, idGen *snowflake.Generator, eventBus *event.Bus) *Service {

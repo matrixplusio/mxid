@@ -21,6 +21,12 @@ type Repository interface {
 	Create(ctx context.Context, p *Policy) error
 	GetByID(ctx context.Context, id, tenantID int64) (*Policy, error)
 	Delete(ctx context.Context, id int64) error
+	// DeleteBySubject hard-deletes every policy whose subject is (subjectType,
+	// subjectID). Called when the referenced subject entity (group/org/role) is
+	// deleted, so its access rules don't linger as orphans — a dangling rule
+	// renders as "unknown" in the console and stays a phantom allow/deny entry.
+	// Returns the number of rows removed.
+	DeleteBySubject(ctx context.Context, subjectType string, subjectID int64) (int64, error)
 	// AppsForUser returns the set of app_ids the user is allowed to launch
 	// based on combined allow/deny rules across all access subjects (user
 	// itself + groups + orgs + roles) AND any app_group the app belongs to.
@@ -91,6 +97,18 @@ func (r *repo) GetByID(ctx context.Context, id, tenantID int64) (*Policy, error)
 
 func (r *repo) Delete(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Delete(&Policy{}, "id = ?", id).Error
+}
+
+// DeleteBySubject removes all policies referencing the given subject. subject_id
+// is a globally-unique snowflake, so matching on (subject_type, subject_id)
+// alone is precise across tenants — the caller runs this cross-tenant (a deleted
+// entity's home tenant is not always on the event payload) without risk of
+// touching another tenant's rows.
+func (r *repo) DeleteBySubject(ctx context.Context, subjectType string, subjectID int64) (int64, error) {
+	res := r.db.WithContext(ctx).
+		Where("subject_type = ? AND subject_id = ?", subjectType, subjectID).
+		Delete(&Policy{})
+	return res.RowsAffected, res.Error
 }
 
 // AppsForUser implements the SQL-side eval. Computed as:
