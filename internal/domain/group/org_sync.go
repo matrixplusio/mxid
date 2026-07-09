@@ -26,6 +26,10 @@ func (s *Service) SubscribeEvents() {
 	// per-user event, so in_subtree rules would otherwise go stale. Same handler
 	// — it recomputes every dynamic group in the org's tenant.
 	s.eventBus.Subscribe(event.OrgMoved, s.handleOrgMemberChange)
+	// A user attribute change (status / department / job_title …) can flip a
+	// dynamic group whose rule keys on it. UserUpdated now carries tenant_id, so
+	// the same tenant-wide recompute applies.
+	s.eventBus.Subscribe(event.UserUpdated, s.handleOrgMemberChange)
 }
 
 // handleOrgMemberChange recomputes every dynamic group in the affected tenant.

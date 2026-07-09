@@ -424,9 +424,11 @@ func (s *Service) Update(ctx context.Context, id int64, tenantID int64, req *Upd
 		return nil, fmt.Errorf("update user: %w", err)
 	}
 
+	// tenant_id lets the dynamic-group resync handler recompute the right
+	// tenant's rules when a user attribute a rule keys on (status, etc.) changes.
 	s.eventBus.Publish(ctx, event.Event{
 		Type:    event.UserUpdated,
-		Payload: map[string]any{"user_id": user.ID},
+		Payload: map[string]any{"user_id": user.ID, "tenant_id": user.TenantID},
 	})
 
 	return user, nil
@@ -479,9 +481,15 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, status int) error 
 		eventType = event.UserUnlocked
 	}
 
+	// Carry tenant_id so a status-keyed dynamic group can resync. Best-effort:
+	// a lookup miss just omits it (the resync handler no-ops on tenant 0).
+	var tenantID int64
+	if u, err := s.repo.GetByID(ctx, id); err == nil {
+		tenantID = u.TenantID
+	}
 	s.eventBus.Publish(ctx, event.Event{
 		Type:    eventType,
-		Payload: map[string]any{"user_id": id, "status": status},
+		Payload: map[string]any{"user_id": id, "status": status, "tenant_id": tenantID},
 	})
 
 	return nil
@@ -648,7 +656,8 @@ func (s *Service) UpdateDetail(ctx context.Context, detail *UserDetail) error {
 // have one yet. Pointer fields are treated as patch semantics: nil leaves
 // the existing value untouched; explicit "" clears the field.
 func (s *Service) UpsertDetail(ctx context.Context, userID int64, req *UpdateDetailRequest) (*UserDetail, error) {
-	if _, err := s.repo.GetByID(ctx, userID); err != nil {
+	usr, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
 		if dberr.IsNotFound(err) {
 			return nil, ErrUserNotFound
 		}
@@ -725,6 +734,16 @@ func (s *Service) UpsertDetail(ctx context.Context, userID int64, req *UpdateDet
 			return nil, fmt.Errorf("update user detail: %w", err)
 		}
 	}
+
+	// A detail change (department / job_title / employee_no) can flip membership
+	// of a dynamic group whose rule keys on it. Emit UserUpdated so the group
+	// resync handler recomputes; without this the group stays stale until an
+	// unrelated org event or a manual re-sync.
+	s.eventBus.Publish(ctx, event.Event{
+		Type:    event.UserUpdated,
+		Payload: map[string]any{"user_id": userID, "tenant_id": usr.TenantID},
+	})
+
 	return detail, nil
 }
 
