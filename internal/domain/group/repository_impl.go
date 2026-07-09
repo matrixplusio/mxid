@@ -253,8 +253,8 @@ func (r *repository) CountMembersByGroupIDs(ctx context.Context, groupIDs []int6
 		return out, nil
 	}
 	var rows []struct {
-		GroupID int64
-		Cnt     int64
+		GroupID int64 `gorm:"column:group_id"`
+		Cnt     int64 `gorm:"column:cnt"`
 	}
 	if err := r.db.WithContext(ctx).
 		Model(&UserGroupMember{}).

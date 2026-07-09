@@ -16,7 +16,7 @@ cd "$ROOT"
 # Only run Go gates when Go files / go.mod actually changed.
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 if echo "$staged" | grep -qE '\.go$|^go\.(mod|sum)$'; then
-  make verify-mod verify-vet verify-build
+  make verify-mod verify-vet verify-build verify-gormtags
 fi
 
 # verify-exports is dirt cheap; run if any web/ file changed.

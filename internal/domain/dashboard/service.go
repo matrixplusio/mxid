@@ -156,9 +156,9 @@ func (s *Service) distinctActors(ctx context.Context, tenantID int64, since time
 
 func (s *Service) loginTrend(ctx context.Context, tenantID int64, rangeDays int) ([]TrendPoint, error) {
 	type row struct {
-		Date    string
-		Success int64
-		Failed  int64
+		Date    string `gorm:"column:date"`
+		Success int64  `gorm:"column:success"`
+		Failed  int64  `gorm:"column:failed"`
 	}
 	var rows []row
 	since := time.Now().AddDate(0, 0, -int(rangeDays))
@@ -200,8 +200,8 @@ func (s *Service) distribution(ctx context.Context, tenantID int64, rangeStart t
 
 func (s *Service) topApps(ctx context.Context, tenantID int64, rangeStart time.Time) ([]NameValue, error) {
 	type row struct {
-		ResourceID int64
-		Value      int64
+		ResourceID int64 `gorm:"column:resource_id"`
+		Value      int64 `gorm:"column:value"`
 	}
 	var rows []row
 	err := s.db.WithContext(ctx).Table("mxid_audit_log").
@@ -221,8 +221,8 @@ func (s *Service) topApps(ctx context.Context, tenantID int64, rangeStart time.T
 	}
 	// Resolve app names in one query; fall back to the id for deleted apps.
 	type nameRow struct {
-		ID   int64
-		Name string
+		ID   int64  `gorm:"column:id"`
+		Name string `gorm:"column:name"`
 	}
 	var names []nameRow
 	if err := s.db.WithContext(ctx).Table("mxid_app").Select("id, name").Where("id IN ?", ids).Scan(&names).Error; err != nil {
@@ -245,14 +245,14 @@ func (s *Service) topApps(ctx context.Context, tenantID int64, rangeStart time.T
 
 // AuditExportRow is a flat projection of an audit row for CSV export.
 type AuditExportRow struct {
-	CreatedAt    time.Time
-	EventType    string
-	EventStatus  int
-	ActorName    *string
-	ResourceType *string
-	ResourceID   *int64
-	IP           *string
-	GeoCountry   *string
+	CreatedAt    time.Time `gorm:"column:created_at"`
+	EventType    string    `gorm:"column:event_type"`
+	EventStatus  int       `gorm:"column:event_status"`
+	ActorName    *string   `gorm:"column:actor_name"`
+	ResourceType *string   `gorm:"column:resource_type"`
+	ResourceID   *int64    `gorm:"column:resource_id"`
+	IP           *string   `gorm:"column:ip"`
+	GeoCountry   *string   `gorm:"column:geo_country"`
 }
 
 // ExportAudit returns the tenant's audit rows since `since`, newest first,
@@ -291,10 +291,10 @@ func (s *Service) fillSecurity(ctx context.Context, tenantID int64, rangeStart t
 
 	secTypes := []string{event.LoginRisk, event.UserLocked, event.OIDCTokenReuse, event.UserSuperAdminGrant, event.UserPIIView}
 	type row struct {
-		CreatedAt time.Time
-		EventType string
-		ActorName *string
-		IP        *string
+		CreatedAt time.Time `gorm:"column:created_at"`
+		EventType string    `gorm:"column:event_type"`
+		ActorName *string   `gorm:"column:actor_name"`
+		IP        *string   `gorm:"column:ip"`
 	}
 	var rows []row
 	if err := db.Table("mxid_audit_log").

@@ -54,8 +54,8 @@ type TrendPoint struct {
 
 // NameValue is a generic label/count pair for donut + bar charts.
 type NameValue struct {
-	Name  string `json:"name"`
-	Value int64  `json:"value"`
+	Name  string `json:"name" gorm:"column:name"`
+	Value int64  `json:"value" gorm:"column:value"`
 }
 
 // SecurityPanel summarizes security-relevant events over the range plus a

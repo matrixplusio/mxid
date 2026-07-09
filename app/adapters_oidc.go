@@ -100,14 +100,30 @@ type appLabelResolver struct{ app *bootstrap.App }
 
 func newAppLabelResolver(app *bootstrap.App) *appLabelResolver { return &appLabelResolver{app: app} }
 
+// nameCodeRow / userNameRow are GORM scan targets carrying EXPLICIT gorm column
+// tags. They must never rely on field-name→column inference: the EE binary is
+// built with garble, which renames struct fields, so an untagged field silently
+// scans as empty (this shipped as the access-policy "(未知)" bug). They also
+// deliberately do NOT implement TenantScoped() — these label lookups run without
+// a request tenant in context and must bypass the tenantscope plugin.
+type nameCodeRow struct {
+	Name string `gorm:"column:name"`
+	Code string `gorm:"column:code"`
+}
+
+type userNameRow struct {
+	Username    string `gorm:"column:username"`
+	DisplayName string `gorm:"column:display_name"`
+}
+
 func (r *appLabelResolver) App(_ *gin.Context, id int64) (string, string) {
-	var row struct{ Name, Code string }
+	var row nameCodeRow
 	_ = r.app.DB.Table("mxid_app").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
 	return row.Name, row.Code
 }
 
 func (r *appLabelResolver) AppGroup(_ *gin.Context, id int64) (string, string) {
-	var row struct{ Name, Code string }
+	var row nameCodeRow
 	_ = r.app.DB.Table("mxid_app_group").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
 	return row.Name, row.Code
 }
@@ -121,22 +137,22 @@ func newAccessSubjectResolver(app *bootstrap.App) *accessSubjectResolver {
 func (r *accessSubjectResolver) Resolve(_ *gin.Context, subjectType string, id int64) (string, string) {
 	switch subjectType {
 	case appaccess.SubjectUser:
-		var row struct{ Username, DisplayName string }
+		var row userNameRow
 		_ = r.app.DB.Table("mxid_user").Select("username, COALESCE(display_name, '') as display_name").Where("id = ?", id).Take(&row).Error
 		if row.DisplayName != "" {
 			return row.DisplayName, row.Username
 		}
 		return row.Username, row.Username
 	case appaccess.SubjectGroup:
-		var row struct{ Name, Code string }
+		var row nameCodeRow
 		_ = r.app.DB.Table("mxid_user_group").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
 		return row.Name, row.Code
 	case appaccess.SubjectOrg:
-		var row struct{ Name, Code string }
+		var row nameCodeRow
 		_ = r.app.DB.Table("mxid_organization").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
 		return row.Name, row.Code
 	case appaccess.SubjectRole:
-		var row struct{ Name, Code string }
+		var row nameCodeRow
 		_ = r.app.DB.Table("mxid_role").Where("id = ? AND deleted_at IS NULL", id).Take(&row).Error
 		return row.Name, row.Code
 	}

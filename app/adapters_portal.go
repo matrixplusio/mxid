@@ -247,8 +247,8 @@ func (a *portalAppQuerierAdapter) ListAuthorizedApps(ctx context.Context, userID
 	groupsByApp := map[int64][]int64{}
 	if len(candidateIDs) > 0 {
 		type rel struct {
-			AppID   int64
-			GroupID int64
+			AppID   int64 `gorm:"column:app_id"`
+			GroupID int64 `gorm:"column:group_id"`
 		}
 		var rels []rel
 		if err := a.app.DB.WithContext(ctx).
@@ -321,8 +321,8 @@ func (a *portalAppQuerierAdapter) ListAuthorizedAppGroups(ctx context.Context, u
 	}
 	// Pull group → app_ids in one shot.
 	type rel struct {
-		GroupID int64
-		AppID   int64
+		GroupID int64 `gorm:"column:group_id"`
+		AppID   int64 `gorm:"column:app_id"`
 	}
 	var rels []rel
 	if len(groups) > 0 {
@@ -418,7 +418,7 @@ func (a *portalAppQuerierAdapter) ListRecentAppIDs(ctx context.Context, userID, 
 	// resource_id matched in the ORDER BY, so we collapse repeat launches
 	// to "last launched per app" in one pass without a window function.
 	type row struct {
-		AppID int64
+		AppID int64 `gorm:"column:app_id"`
 	}
 	var rows []row
 	q := a.app.DB.WithContext(ctx).

@@ -57,11 +57,11 @@ type OrgTreeResponse struct {
 // UserOrgInfo is one org-membership row enriched for display on the user
 // detail page: which org the user is planted in, plus whether it's primary.
 type UserOrgInfo struct {
-	OrgID     int64  `json:"org_id,string"`
-	Name      string `json:"name"`
-	Code      string `json:"code"`
-	Path      string `json:"path"`
-	IsPrimary bool   `json:"is_primary"`
+	OrgID     int64  `json:"org_id,string" gorm:"column:org_id"`
+	Name      string `json:"name" gorm:"column:name"`
+	Code      string `json:"code" gorm:"column:code"`
+	Path      string `json:"path" gorm:"column:path"`
+	IsPrimary bool   `json:"is_primary" gorm:"column:is_primary"`
 }
 
 // ToOrgResponse converts an Organization model to an OrgResponse.

@@ -224,9 +224,9 @@ GROUP BY code
 ORDER BY is_jit DESC, sort_order ASC, code ASC`
 
 	type row struct {
-		Code      string
-		SortOrder int
-		IsJit     bool
+		Code      string `gorm:"column:code"`
+		SortOrder int    `gorm:"column:sort_order"`
+		IsJit     bool   `gorm:"column:is_jit"`
 	}
 	var rows []row
 	if err := r.db.WithContext(ctx).Raw(q,

@@ -21,8 +21,8 @@ type loginHistoryAdapter struct{ db *gorm.DB }
 
 func (l loginHistoryAdapter) RecentSuccessful(ctx context.Context, userID int64, limit int) ([]conditionalaccess.LoginEvent, error) {
 	var rows []struct {
-		IP        *string
-		CreatedAt time.Time
+		IP        *string   `gorm:"column:ip"`
+		CreatedAt time.Time `gorm:"column:created_at"`
 	}
 	err := l.db.WithContext(ctx).
 		Table("mxid_login_record").

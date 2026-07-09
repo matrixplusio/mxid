@@ -179,7 +179,7 @@ clean:
 
 # Verify — invariant gates. Run before commit / in CI.
 # Each sub-target is independently runnable to localize failures.
-verify: verify-mod verify-vet verify-build verify-lint verify-exports verify-web
+verify: verify-mod verify-vet verify-build verify-gormtags verify-lint verify-exports verify-web
 	@echo "✓ verify OK"
 
 # go.mod / go.sum must match the import graph. Catches indirect-vs-direct drift.
@@ -203,6 +203,17 @@ verify-build:
 	@echo "==> verify-build (./...)"
 	go build ./...
 
+# gormtaglint — every struct a GORM query scans into must carry explicit
+# `gorm:"column:.."` tags on its exported fields. The EE binary is built with
+# garble, which renames Go field names; an untagged field then maps to the wrong
+# column and silently scans EMPTY (this shipped as the access-policy "(未知)"
+# prod bug). This gate makes that class fail at commit time, on the CE build,
+# long before an (untested) EE garble build.
+verify-gormtags:
+	@echo "==> verify-gormtags (garble-safe GORM scan structs)"
+	@cd tools/gormtaglint && go build -o "$(CURDIR)/bin/gormtaglint" .
+	@./bin/gormtaglint ./app/... ./internal/... ./cmd/...
+
 # golangci-lint — exhaustruct on cmd/server/adapters_*, nilness, errcheck, staticcheck.
 verify-lint:
 	@echo "==> verify-lint"
@@ -223,6 +234,15 @@ verify-web:
 smoke:
 	@echo "==> smoke"
 	./scripts/smoke-test.sh
+
+# EE garble smoke — compiles reflection-sensitive paths UNDER GARBLE (the EE
+# obfuscator) and asserts they return real values. Catches untagged GORM/JSON
+# scan structs that read empty only in the garbled EE binary. The mxid-ee repo
+# has no CI, so this is the mandatory local gate before an EE tag/push; its
+# pre-push hook calls `make -C ../mxid ee-smoke`.
+ee-smoke:
+	@echo "==> ee-smoke"
+	./scripts/ee-smoke.sh
 
 # Idempotent: link .git/hooks/pre-commit -> scripts/pre-commit.sh
 install-hooks:

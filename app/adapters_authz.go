@@ -74,7 +74,7 @@ func newAuthzBindingProvider(app *bootstrap.App, perm *permission.Module, grp *g
 // on a magic role ID surviving data import / restore.
 func (a *authzBindingProvider) EffectiveBindingsForUser(ctx context.Context, tenantID, userID int64) ([]authz.EffectiveBinding, error) {
 	var superAdmin struct {
-		IsSuperAdmin bool
+		IsSuperAdmin bool `gorm:"column:is_super_admin"`
 	}
 	if err := a.app.DB.WithContext(ctx).
 		Table("mxid_user").
@@ -100,12 +100,12 @@ func (a *authzBindingProvider) EffectiveBindingsForUser(ctx context.Context, ten
 	orgIDs, _ := a.orgModule.Service.AncestorIDsForUser(ctx, tenantID, userID)
 
 	type row struct {
-		RoleID    int64
-		ScopeType *string
-		ScopeID   *int64
-		Source    string
-		SourceID  int64
-		ExpiresAt *time.Time
+		RoleID    int64      `gorm:"column:role_id"`
+		ScopeType *string    `gorm:"column:scope_type"`
+		ScopeID   *int64     `gorm:"column:scope_id"`
+		Source    string     `gorm:"column:source"`
+		SourceID  int64      `gorm:"column:source_id"`
+		ExpiresAt *time.Time `gorm:"column:expires_at"`
 	}
 	var rows []row
 
@@ -145,8 +145,8 @@ func (a *authzBindingProvider) EffectiveBindingsForUser(ctx context.Context, ten
 		roleIDs = append(roleIDs, id)
 	}
 	type permRow struct {
-		RoleID         int64
-		PermissionCode string
+		RoleID         int64  `gorm:"column:role_id"`
+		PermissionCode string `gorm:"column:permission_code"`
 	}
 	var permRows []permRow
 	_ = a.app.DB.WithContext(ctx).
@@ -198,9 +198,9 @@ func (l *casbinPolicyLoader) LoadPolicies(ctx context.Context) ([]authz.RolePoli
 	// role→perm grants, tenant-scoped via the role's tenant_id. Soft-deleted
 	// roles are excluded so a deleted role grants nothing.
 	type grant struct {
-		TenantID int64
-		RoleID   int64
-		Code     string
+		TenantID int64  `gorm:"column:tenant_id"`
+		RoleID   int64  `gorm:"column:role_id"`
+		Code     string `gorm:"column:code"`
 	}
 	var grants []grant
 	if err := l.app.DB.WithContext(ctx).

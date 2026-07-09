@@ -193,8 +193,8 @@ func (r *repo) batchNames(ctx context.Context, table string, ids []int64, filter
 		return nil
 	}
 	var out []struct {
-		ID   int64
-		Name string
+		ID   int64  `gorm:"column:id"`
+		Name string `gorm:"column:name"`
 	}
 	q := r.db.WithContext(ctx).Table(table).Select("id, name").Where("id IN ?", ids)
 	if filterDeleted {
@@ -218,9 +218,9 @@ func (r *repo) batchUserNames(ctx context.Context, ids []int64) map[int64]string
 		return nil
 	}
 	var users []struct {
-		ID          int64
-		DisplayName *string
-		Username    string
+		ID          int64   `gorm:"column:id"`
+		DisplayName *string `gorm:"column:display_name"`
+		Username    string  `gorm:"column:username"`
 	}
 	if err := r.db.WithContext(ctx).
 		Table("mxid_user").
