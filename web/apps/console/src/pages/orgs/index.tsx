@@ -10,13 +10,12 @@ import {
   Loader2,
   Users,
   Search,
-  X,
   FolderTree,
   UserPlus,
   UserMinus,
 } from 'lucide-react'
 import { orgApi, userApi, cn, statusLabel, statusColor, useTranslation } from '@mxid/shared'
-import { pageMotion, Button, ConfirmDialog } from '@mxid/shared/ui'
+import { pageMotion, Button, ConfirmDialog, Modal } from '@mxid/shared/ui'
 import type { OrgNode, User, PaginatedData } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { useTabParam } from '../../hooks/useTabParam'
@@ -703,16 +702,11 @@ export default function OrgsPage() {
       </div>
 
       {/* ───── Create Child Modal ───── */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md rounded-xl bg-surface p-6 shadow-xl"
-          >
-            <h3 className="mb-4 text-lg font-semibold">
-              {selected ? t('orgs.createModal.titleWithParent', { name: selected.name }) : t('orgs.createModal.title')}
-            </h3>
+      <Modal
+        open={showCreate}
+        title={selected ? t('orgs.createModal.titleWithParent', { name: selected.name }) : t('orgs.createModal.title')}
+        onClose={() => setShowCreate(false)}
+      >
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-ink">{t('orgs.createModal.nameRequired')}</label>
@@ -747,19 +741,10 @@ export default function OrgsPage() {
                 </Button>
               </div>
             </form>
-          </motion.div>
-        </div>
-      )}
+      </Modal>
 
       {/* ───── Edit Modal ───── */}
-      {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-sm rounded-xl bg-surface p-6 shadow-xl"
-          >
-            <h3 className="mb-4 text-lg font-semibold">{t('orgs.editModal.title')}</h3>
+      <Modal open={showEdit} title={t('orgs.editModal.title')} onClose={() => setShowEdit(false)} size="sm">
             <form onSubmit={handleEdit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-ink">{t('orgs.editModal.nameLabel')}</label>
@@ -782,105 +767,64 @@ export default function OrgsPage() {
                 </Button>
               </div>
             </form>
-          </motion.div>
-        </div>
-      )}
+      </Modal>
 
       {/* ───── Move Org Modal ───── */}
-      {showMove && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md rounded-xl bg-surface shadow-xl"
-          >
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h3 className="text-lg font-semibold">
-                {t('orgs.moveModal.title', { name: selected.name })}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowMove(false)
-                  setMoveTargetId(null)
-                }}
-                className="rounded p-1 text-faint hover:bg-surface-muted hover:text-muted"
-              >
-                <X className="h-5 w-5" />
-              </button>
+      <Modal
+        open={showMove && !!selected}
+        title={selected ? t('orgs.moveModal.title', { name: selected.name }) : ''}
+        onClose={() => { setShowMove(false); setMoveTargetId(null) }}
+      >
+        {selected && (
+          <>
+            <p className="mb-3 text-sm text-muted">{t('orgs.moveModal.hint')}</p>
+
+            {/* Root option */}
+            <button
+              onClick={() => setMoveTargetId(null)}
+              className={cn(
+                'mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-muted',
+                moveTargetId === null && 'bg-primary/10 text-primary font-medium'
+              )}
+            >
+              <Building2 className="h-4 w-4 shrink-0 text-faint" />
+              <span>{t('orgs.rootNode')}</span>
+            </button>
+
+            {/* Tree selector */}
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-border p-2">
+              {tree.map((node) => (
+                <SelectableTreeNode
+                  key={node.id}
+                  node={node}
+                  selectedId={moveTargetId}
+                  disabledId={selected.id}
+                  onSelect={(id) => setMoveTargetId(id)}
+                />
+              ))}
             </div>
 
-            <div className="px-6 py-4">
-              <p className="mb-3 text-sm text-muted">
-                {t('orgs.moveModal.hint')}
-              </p>
-
-              {/* Root option */}
-              <button
-                onClick={() => setMoveTargetId(null)}
-                className={cn(
-                  'mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-muted',
-                  moveTargetId === null && 'bg-primary/10 text-primary font-medium'
-                )}
-              >
-                <Building2 className="h-4 w-4 shrink-0 text-faint" />
-                <span>{t('orgs.rootNode')}</span>
-              </button>
-
-              {/* Tree selector */}
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-border p-2">
-                {tree.map((node) => (
-                  <SelectableTreeNode
-                    key={node.id}
-                    node={node}
-                    selectedId={moveTargetId}
-                    disabledId={selected.id}
-                    onSelect={(id) => setMoveTargetId(id)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setShowMove(false)
-                  setMoveTargetId(null)
-                }}
-              >
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="secondary" onClick={() => { setShowMove(false); setMoveTargetId(null) }}>
                 {t('common.cancel')}
               </Button>
               <Button onClick={handleMove} loading={moving}>
                 {t('orgs.moveModal.confirmBtn')}
               </Button>
             </div>
-          </motion.div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* ───── Add Member Modal ───── */}
-      {showAddMember && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-lg rounded-xl bg-surface shadow-xl"
-          >
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h3 className="text-lg font-semibold">{t('orgs.addMemberModal.title', { name: selected.name })}</h3>
-              <button
-                onClick={() => {
-                  setShowAddMember(false)
-                  setUserSearch('')
-                  setUserSearchResults([])
-                }}
-                className="rounded p-1 text-faint hover:bg-surface-muted hover:text-muted"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="px-6 py-4">
+      <Modal
+        open={showAddMember && !!selected}
+        title={selected ? t('orgs.addMemberModal.title', { name: selected.name }) : ''}
+        onClose={() => { setShowAddMember(false); setUserSearch(''); setUserSearchResults([]) }}
+        size="lg"
+      >
+        {selected && (
+          <>
               {/* Search input */}
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
@@ -946,9 +890,8 @@ export default function OrgsPage() {
                   </div>
                 )}
               </div>
-            </div>
 
-            <div className="flex justify-end border-t border-border px-6 py-4">
+            <div className="flex justify-end pt-4">
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -960,9 +903,9 @@ export default function OrgsPage() {
                 {t('common.close')}
               </Button>
             </div>
-          </motion.div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       <ConfirmDialog
         open={showDeleteOrg}
