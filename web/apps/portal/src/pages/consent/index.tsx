@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Loader2, ShieldQuestion, XCircle } from 'lucide-react'
-import { portalApi, useTranslation } from '@mxid/shared'
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { portalApi, useTranslation, AppIcon } from '@mxid/shared'
 import { Button } from '@mxid/shared/ui'
 
 interface ConsentApp {
@@ -146,13 +146,7 @@ export default function ConsentPage() {
     >
       <div className="rounded-2xl border border-border bg-surface p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            {app.logo_url ? (
-              <img src={app.logo_url} alt={app.name} className="h-9 w-9 rounded-md object-cover" />
-            ) : (
-              <ShieldQuestion className="h-7 w-7" />
-            )}
-          </div>
+          <AppIcon value={app.logo_url} fallbackName={app.name} size={56} className="rounded-xl" />
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-ink">{app.name}</h1>
             <p className="mt-0.5 text-xs text-muted">{app.description || t('portal.consent.subtitle')}</p>
