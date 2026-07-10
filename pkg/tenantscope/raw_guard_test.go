@@ -66,12 +66,12 @@ var allowedCalls = map[string]string{
 	// insertBindingTx console branch supersede+insert: mxid_role_binding has no
 	// tenant_id column; tenant is carried via the joined mxid_role and the parent
 	// access_request was loaded tenant-scoped before the grant.
-	"internal/domain/access/repository.go:426": "mxid_role_binding DELETE (supersede) has no tenant_id column; scoped by role_id+subject; parent request loaded tenant-scoped",
-	"internal/domain/access/repository.go:435": "mxid_role_binding INSERT has no tenant_id column; tenant carried via joined mxid_role; parent request loaded tenant-scoped",
+	"internal/domain/access/repository.go:433": "mxid_role_binding DELETE (supersede) has no tenant_id column; scoped by role_id+subject; parent request loaded tenant-scoped",
+	"internal/domain/access/repository.go:442": "mxid_role_binding INSERT has no tenant_id column; tenant carried via joined mxid_role; parent request loaded tenant-scoped",
 	// mxid_app_role_binding app insert: tenant_id is explicitly set as an INSERT
 	// value (from the tenant-scoped request); it is a value not a WHERE predicate.
-	// (The app-branch DELETE at ~455 carries an inline tenant_id = ? predicate.)
-	"internal/domain/access/repository.go:463": "mxid_app_role_binding INSERT sets tenant_id explicitly from the tenant-scoped request; value not predicate",
+	// (The app-branch DELETE at ~462 carries an inline tenant_id = ? predicate.)
+	"internal/domain/access/repository.go:470": "mxid_app_role_binding INSERT sets tenant_id explicitly from the tenant-scoped request; value not predicate",
 }
 
 // windowRadius is how many source lines on each side of a Raw/Exec marker the

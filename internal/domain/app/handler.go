@@ -572,9 +572,11 @@ func (h *Handler) ImportSAMLMetadata(c *gin.Context) {
 	cfg, err := h.svc.ImportSAMLSPMetadata(c.Request.Context(), id, raw)
 	if err != nil {
 		// Schema errors are 400 (operator-fixable); everything else is 500.
+		// 40011 (NOT 40003) — 40003 collides with the frontend's global
+		// totpCodeReused localization; the SAML schema message is safe to show.
 		var schemaErr saml.ErrInvalidSPMetadata
 		if errors.As(err, &schemaErr) {
-			response.BadRequest(c, 40003, err.Error())
+			response.BadRequest(c, 40011, err.Error())
 			return
 		}
 		h.handleServiceError(c, err)

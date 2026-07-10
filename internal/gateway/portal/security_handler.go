@@ -354,7 +354,10 @@ func (h *SecurityHandler) changePassword(c *gin.Context) {
 	}
 
 	if err := h.userQuerier.ChangePassword(c.Request.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
-		response.BadRequest(c, 40002, err.Error())
+		// Route through the user domain's bound sentinels (wrong old password,
+		// weak/reused new password, etc.) instead of blindly echoing err.Error()
+		// — a wrapped DB failure otherwise leaks its text under a bogus 400.
+		response.MapError(c, err)
 		return
 	}
 

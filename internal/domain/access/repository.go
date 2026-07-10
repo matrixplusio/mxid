@@ -2,6 +2,7 @@ package access
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -65,6 +66,9 @@ func (r *repo) GetEligibility(ctx context.Context, id, tenantID int64) (*Eligibi
 		Where("id = ? AND tenant_id = ?", id, tenantID).
 		First(&e).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrEligibilityNotFound
+		}
 		return nil, err
 	}
 	return &e, nil
@@ -279,6 +283,9 @@ func (r *repo) GetRequest(ctx context.Context, id, tenantID int64) (*Request, er
 		Where("id = ? AND tenant_id = ?", id, tenantID).
 		First(&req).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRequestNotFound
+		}
 		return nil, err
 	}
 	return &req, nil

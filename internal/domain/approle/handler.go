@@ -144,7 +144,7 @@ func (h *Handler) createRoleForApp(c *gin.Context) {
 		CreatedBy:   h.userID(c),
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, r)
@@ -171,7 +171,7 @@ func (h *Handler) createRoleForAppGroup(c *gin.Context) {
 		CreatedBy:   h.userID(c),
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, r)
@@ -203,7 +203,7 @@ func (h *Handler) updateRole(c *gin.Context) {
 		SortOrder:   body.SortOrder,
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, r)
@@ -285,7 +285,7 @@ func (h *Handler) createBindingForApp(c *gin.Context) {
 		CreatedBy:   h.userID(c),
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, b)
@@ -310,7 +310,7 @@ func (h *Handler) createBindingForAppGroup(c *gin.Context) {
 		CreatedBy:   h.userID(c),
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, b)

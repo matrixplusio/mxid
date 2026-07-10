@@ -41,7 +41,9 @@ func (r *fakeRepo) GetEligibility(_ context.Context, id, tenantID int64) (*Eligi
 	defer r.mu.Unlock()
 	e, ok := r.eligibilities[id]
 	if !ok || e.TenantID != tenantID {
-		return nil, errors.New("eligibility not found")
+		// Mirror the real repo, which translates gorm's not-found to the domain
+		// sentinel so handlers 404 cleanly instead of leaking the ORM's text.
+		return nil, ErrEligibilityNotFound
 	}
 	cp := *e
 	return &cp, nil
@@ -92,7 +94,7 @@ func (r *fakeRepo) GetRequest(_ context.Context, id, tenantID int64) (*Request, 
 	defer r.mu.Unlock()
 	req, ok := r.requests[id]
 	if !ok || req.TenantID != tenantID {
-		return nil, errors.New("request not found")
+		return nil, ErrRequestNotFound
 	}
 	cp := *req
 	return &cp, nil

@@ -13,7 +13,10 @@ var (
 	codeSubjectNotInTenant = errcode.Code{HTTP: 404, Num: 40403}
 	codeScopeNotInTenant   = errcode.Code{HTTP: 404, Num: 40404}
 	codePermissionNotFound = errcode.Code{HTTP: 400, Num: 40002}
-	codeScopeIncomplete    = errcode.Code{HTTP: 400, Num: 40003}
+	// 40006 (NOT 40003): 40003 is the frontend's global totpCodeReused
+	// localization — an incomplete scope rendered as "TOTP code reused". 40006
+	// is non-localized, so the frontend shows the real message.
+	codeScopeIncomplete    = errcode.Code{HTTP: 400, Num: 40006}
 	codeSystemRoleDelete   = errcode.Code{HTTP: 403, Num: 40301}
 	codeSuperAdminUserOnly = errcode.Code{HTTP: 400, Num: 40005}
 	codeRoleCodeExists     = errcode.Code{HTTP: 409, Num: 40901}

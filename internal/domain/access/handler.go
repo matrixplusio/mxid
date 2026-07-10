@@ -2,7 +2,6 @@ package access
 
 import (
 	"context"
-	"errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/domain/authn"
@@ -117,23 +116,28 @@ func (h *Handler) RegisterPortal(rg *gin.RouterGroup) {
 	}
 }
 
-// Error codes used by this handler. Each operation gets its own code so a
-// client can distinguish failure causes without parsing the message string.
-// Keep these distinct — don't reuse a code across two different operations.
+// Error codes. Request-body bind failures keep their per-operation literal
+// codes below; every SERVICE error now flows through response.MapError, which
+// renders the domain sentinel bound in errcodes.go — so the failure cause maps
+// to a stable code by error identity, not by call site, and an unexpected/DB
+// error becomes a logged 500 instead of leaking its text under a 400.
 //
+// Bind-failure codes (literal, this file):
 //	40002 — createEligibility: bad request body
-//	40003 — createEligibility: service/validation error
-//	40004 — approve: service error
-//	40005 — reject: service error
-//	40006 — cancel: service error
-//	40007 — revoke: service error
 //	40008 — createRequest (portal): bad request body
-//	40009 — createRequest (portal): service/validation error
 //	40010 — updateEligibility: bad request body
-//	40011 — updateEligibility: service/validation error
-//	40012 — approve: self-approval refused (separation of duties, 403)
-//	40013 — approve: approver not in eligibility's approver_subject (403)
 //	40101 — createRequest (portal): no authenticated user in context
+//
+// Service-error codes (bound sentinels, see errcodes.go):
+//	40020 — invalid eligibility configuration (ErrInvalidEligibility)
+//	40021 — request not allowed by policy (ErrRequestNotAllowed)
+//	40022 — request no longer pending (ErrRequestNotPending)
+//	40023 — request cannot be cancelled (ErrRequestNotCancellable)
+//	40024 — grant cannot be revoked (ErrGrantNotRevocable)
+//	40012 — approve: self-approval refused, SoD (ErrSelfApproval, 403)
+//	40013 — approve: approver not eligible (ErrApproverNotEligible, 403)
+//	40410 — request not found (ErrRequestNotFound)
+//	40411 — eligibility not found (ErrEligibilityNotFound)
 
 // ─── console handlers ─────────────────────────────────────────────────────────
 
@@ -146,7 +150,7 @@ func (h *Handler) createEligibility(c *gin.Context) {
 	uid := h.userID(c)
 	e, err := h.svc.CreateEligibility(c.Request.Context(), h.tenantID(c), &uid, body)
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.Created(c, e)
@@ -164,7 +168,7 @@ func (h *Handler) updateEligibility(c *gin.Context) {
 	}
 	e, err := h.svc.UpdateEligibility(c.Request.Context(), h.tenantID(c), id, body)
 	if err != nil {
-		response.BadRequest(c, 40011, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, e)
@@ -219,12 +223,12 @@ func (h *Handler) approve(c *gin.Context) {
 	// when the policy applies, but require_stepup must hold unconditionally.
 	req, err := h.svc.repo.GetRequest(ctx, id, tenantID)
 	if err != nil {
-		response.BadRequest(c, 40004, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	elig, err := h.svc.repo.GetEligibility(ctx, req.EligibilityID, tenantID)
 	if err != nil {
-		response.BadRequest(c, 40004, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	if elig.RequireStepUp && (h.stepUp == nil || !h.stepUp.Fresh(c, tenantID)) {
@@ -247,18 +251,11 @@ func (h *Handler) approve(c *gin.Context) {
 
 	out, err := h.svc.Approve(ctx, tenantID, id, h.userID(c), body.Reason)
 	if err != nil {
-		// Separation-of-duties rejection is a policy refusal, not a bad request:
-		// surface it as 403 with its own code so the console can localize a clear
-		// "can't approve your own request" message.
-		if errors.Is(err, ErrSelfApproval) {
-			response.Forbidden(c, 40012, err.Error())
-			return
-		}
-		if errors.Is(err, ErrApproverNotEligible) {
-			response.Forbidden(c, 40013, err.Error())
-			return
-		}
-		response.BadRequest(c, 40004, err.Error())
+		// MapError routes each bound sentinel to its code: ErrSelfApproval and
+		// ErrApproverNotEligible are separation-of-duties refusals bound to 403
+		// (40012/40013, localized by the console), ErrRequestNotPending to 400,
+		// and any unexpected/DB error to a logged 500 that never leaks internals.
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, out)
@@ -272,7 +269,7 @@ func (h *Handler) reject(c *gin.Context) {
 	var body DecisionRequest
 	_ = c.ShouldBindJSON(&body)
 	if err := h.svc.Reject(c.Request.Context(), h.tenantID(c), id, h.userID(c), body.Reason); err != nil {
-		response.BadRequest(c, 40005, "invalid request body")
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, gin.H{"status": StatusRejected})
@@ -284,7 +281,7 @@ func (h *Handler) revoke(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Revoke(c.Request.Context(), h.tenantID(c), id, h.userID(c)); err != nil {
-		response.BadRequest(c, 40007, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, gin.H{"status": StatusRevoked})
@@ -325,7 +322,7 @@ func (h *Handler) createRequest(c *gin.Context) {
 	}
 	out, err := h.svc.CreateRequest(c.Request.Context(), h.tenantID(c), uid, body)
 	if err != nil {
-		response.BadRequest(c, 40009, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.Created(c, out)
@@ -337,7 +334,7 @@ func (h *Handler) cancel(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Cancel(c.Request.Context(), h.tenantID(c), id, h.userID(c)); err != nil {
-		response.BadRequest(c, 40006, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, gin.H{"status": StatusCancelled})

@@ -23,6 +23,21 @@ var (
 	ErrAppRoleNotInParent = errors.New("app role not found under this app/app-group")
 )
 
+// Validation / lookup sentinels bound to HTTP codes in errcodes.go. Field
+// validation wraps these via fmt.Errorf("%w: <detail>", ErrX) so the client
+// still sees the precise reason under a stable code; response.MapError sends
+// any unbound error (wrapped DB failure, missing-validator misconfig) to a
+// logged 500 that never leaks its text.
+var (
+	// ErrInvalidRole marks a CreateRole/UpdateRole that fails field validation.
+	ErrInvalidRole = errors.New("invalid app role")
+	// ErrInvalidBinding marks an AddBinding that fails field validation.
+	ErrInvalidBinding = errors.New("invalid app-role binding")
+	// ErrRoleNotFound marks an UpdateRole against a missing app-role id
+	// (translated from the repository's not-found so it 404s cleanly).
+	ErrRoleNotFound = errors.New("app role not found")
+)
+
 // EntityValidator reports whether a referenced entity id exists within the
 // caller's tenant. Backed by the referent's tenant-scoped GetByID (the
 // tenantscope plugin appends tenant_id=?, so a cross-tenant id resolves to
@@ -152,13 +167,13 @@ type CreateRoleRequest struct {
 
 func (s *Service) CreateRole(ctx context.Context, req CreateRoleRequest) (*AppRole, error) {
 	if (req.AppID == nil) == (req.AppGroupID == nil) {
-		return nil, errors.New("exactly one of app_id / app_group_id must be set")
+		return nil, fmt.Errorf("%w: exactly one of app_id / app_group_id must be set", ErrInvalidRole)
 	}
 	if req.Code == "" {
-		return nil, errors.New("code required")
+		return nil, fmt.Errorf("%w: code required", ErrInvalidRole)
 	}
 	if req.Name == "" {
-		return nil, errors.New("name required")
+		return nil, fmt.Errorf("%w: name required", ErrInvalidRole)
 	}
 	// Referenced-entity guard: the parent app/app-group id is an untrusted path
 	// param. Prove it lives in the caller's tenant before stamping it into the
@@ -202,6 +217,9 @@ type UpdateRoleRequest struct {
 func (s *Service) UpdateRole(ctx context.Context, req UpdateRoleRequest) (*AppRole, error) {
 	role, err := s.repo.GetRoleByID(ctx, req.ID, req.TenantID)
 	if err != nil {
+		if dberr.IsNotFound(err) {
+			return nil, ErrRoleNotFound
+		}
 		return nil, err
 	}
 	if req.Name != nil {
@@ -262,13 +280,13 @@ type AddBindingRequest struct {
 
 func (s *Service) AddBinding(ctx context.Context, req AddBindingRequest) (*Binding, error) {
 	if (req.AppID == nil) == (req.AppGroupID == nil) {
-		return nil, errors.New("exactly one of app_id / app_group_id must be set")
+		return nil, fmt.Errorf("%w: exactly one of app_id / app_group_id must be set", ErrInvalidBinding)
 	}
 	if !validSubject(req.SubjectType) {
-		return nil, fmt.Errorf("invalid subject_type: %s", req.SubjectType)
+		return nil, fmt.Errorf("%w: invalid subject_type: %s", ErrInvalidBinding, req.SubjectType)
 	}
 	if req.SubjectID == 0 {
-		return nil, errors.New("subject_id required")
+		return nil, fmt.Errorf("%w: subject_id required", ErrInvalidBinding)
 	}
 	// Referenced-entity guard. (1) Parent app/app-group must live in the
 	// caller's tenant. (2) The AppRoleID the binding attaches to must belong to

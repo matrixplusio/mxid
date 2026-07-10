@@ -1,14 +1,14 @@
 // Password reset is the lost-password recovery flow used by the portal
 // login page. Two endpoints, both public (pre-auth):
 //
-//   POST /api/v1/portal-public/password/forgot   {email, tenant?}
-//        → if SMTP enabled: emails a link/code via mailer.SendPasswordResetEmail
-//        → always returns 200 even when the email maps to no user
-//          (avoid leaking email enumeration; mirrors Auth0/Okta behaviour)
+//	POST /api/v1/portal-public/password/forgot   {email, tenant?}
+//	     → if SMTP enabled: emails a link/code via mailer.SendPasswordResetEmail
+//	     → always returns 200 even when the email maps to no user
+//	       (avoid leaking email enumeration; mirrors Auth0/Okta behaviour)
 //
-//   POST /api/v1/portal-public/password/reset    {token, new_password}
-//        → consumes the one-shot token, writes a new password through
-//          user.Service.ResetPassword (full policy + history checks apply)
+//	POST /api/v1/portal-public/password/reset    {token, new_password}
+//	     → consumes the one-shot token, writes a new password through
+//	       user.Service.ResetPassword (full policy + history checks apply)
 //
 // Tokens live in Redis for 30 minutes — same TTL as the email-verify flow.
 // We tie token → user_id (not token → email) so a user changing their
@@ -37,6 +37,12 @@ const (
 	pwdResetTTL       = 1800 // seconds — 30 min
 	pwdResetKeyPrefix = "pwd_reset:"
 )
+
+// errResetTokenInvalid is the safe, user-facing result of consumeToken when the
+// token is missing/expired/malformed. It lets the handler 400 on this case and
+// route every OTHER consumeToken error (a wrapped Redis failure) to a logged
+// 500 instead of echoing the infra error text back to the client.
+var errResetTokenInvalid = errors.New("token invalid or expired")
 
 // TenantResolver resolves a portal-supplied tenant code (e.g. "matrixplus")
 // to its int64 id. Mirrors the resolver wired into the login handler; we
@@ -230,7 +236,11 @@ func (h *PasswordResetHandler) reset(c *gin.Context) {
 
 	tenantID, userID, err := h.consumeToken(c.Request.Context(), req.Token)
 	if err != nil {
-		response.BadRequest(c, 40002, err.Error())
+		if errors.Is(err, errResetTokenInvalid) {
+			response.BadRequest(c, 40002, "token invalid or expired")
+			return
+		}
+		response.InternalError(c, "failed to reset password", err)
 		return
 	}
 	// Re-establish the tenant scope captured at forgot-time so the password
@@ -253,7 +263,9 @@ func (h *PasswordResetHandler) reset(c *gin.Context) {
 		case errors.Is(err, user.ErrWeakPassword):
 			response.BadRequest(c, 40004, err.Error())
 		case errors.Is(err, user.ErrPasswordReused):
-			response.BadRequest(c, 40003, err.Error())
+			// 40005 (matches user.codePasswordReused), NOT 40003 — 40003
+			// collides with the frontend's global totpCodeReused localization.
+			response.BadRequest(c, 40005, err.Error())
 		default:
 			response.InternalError(c, "failed to reset password", err)
 		}
@@ -273,7 +285,7 @@ func (h *PasswordResetHandler) consumeToken(ctx context.Context, token string) (
 	val, err := h.rdb.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return 0, 0, errors.New("token invalid or expired")
+			return 0, 0, errResetTokenInvalid
 		}
 		return 0, 0, fmt.Errorf("read token: %w", err)
 	}

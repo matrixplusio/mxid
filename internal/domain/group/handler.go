@@ -197,7 +197,10 @@ func (h *Handler) BatchAddMembers(c *gin.Context) {
 	}
 	userIDs, err := idstr.ParseList(req.UserIDs)
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		// Malformed id list is a bad request body, not a service error. 40001
+		// (not 40003) — 40003 collides with the frontend's global
+		// totpCodeReused localization and would misrender the message.
+		response.BadRequest(c, 40001, "invalid user id list")
 		return
 	}
 
@@ -245,7 +248,10 @@ func (h *Handler) BatchRemoveMembers(c *gin.Context) {
 	}
 	userIDs, err := idstr.ParseList(req.UserIDs)
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		// Malformed id list is a bad request body, not a service error. 40001
+		// (not 40003) — 40003 collides with the frontend's global
+		// totpCodeReused localization and would misrender the message.
+		response.BadRequest(c, 40001, "invalid user id list")
 		return
 	}
 
@@ -292,7 +298,10 @@ func (h *Handler) UpsertRule(c *gin.Context) {
 	}
 	expr, err := ValidateRule(body)
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		// 40010 (codeBadRule), NOT 40003 — 40003 collides with the frontend's
+		// global totpCodeReused localization. Rule errors carry safe, specific
+		// messages (bad field/operator/value, or a JSON decode error).
+		response.BadRequest(c, 40010, err.Error())
 		return
 	}
 	rule, err := h.service.UpsertRule(c.Request.Context(), id, expr)

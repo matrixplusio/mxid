@@ -26,15 +26,21 @@ const emailVerifyTTL = 1800 // seconds
 
 const verifyKeyPrefix = "email_verify:"
 
+// errVerifyTokenInvalid is the safe, user-facing result of consumeToken for a
+// missing/expired/malformed token. The handler 400s on it and sends every
+// other consumeToken error (a wrapped Redis failure) to a logged 500 rather
+// than leaking the infra error text.
+var errVerifyTokenInvalid = errors.New("token invalid or expired")
+
 // EmailVerifyHandler manages the email verification flow.
 //
 // Flow:
-//   1. POST /profile/email/send-verification  → generates token, stores in
-//      redis ({prefix}{token} → userID), and returns the verification URL.
-//      In production this URL would be sent via SMTP; in dev it's also
-//      logged so the developer can click it.
-//   2. GET  /profile/email/verify?token=...    → consumes the token (one-shot),
-//      flips email_verified=true.
+//  1. POST /profile/email/send-verification  → generates token, stores in
+//     redis ({prefix}{token} → userID), and returns the verification URL.
+//     In production this URL would be sent via SMTP; in dev it's also
+//     logged so the developer can click it.
+//  2. GET  /profile/email/verify?token=...    → consumes the token (one-shot),
+//     flips email_verified=true.
 //
 // We tie token → userID rather than token → email so a user changing their
 // email after requesting verification automatically invalidates the in-flight
@@ -176,7 +182,11 @@ func (h *EmailVerifyHandler) verify(c *gin.Context) {
 
 	userID, tokenEmail, err := h.consumeToken(c.Request.Context(), token)
 	if err != nil {
-		response.BadRequest(c, 40002, err.Error())
+		if errors.Is(err, errVerifyTokenInvalid) {
+			response.BadRequest(c, 40002, "token invalid or expired")
+			return
+		}
+		response.InternalError(c, "failed to verify email", err)
 		return
 	}
 
@@ -213,7 +223,7 @@ func (h *EmailVerifyHandler) consumeToken(ctx context.Context, token string) (in
 	val, err := h.rdb.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return 0, "", errors.New("token invalid or expired")
+			return 0, "", errVerifyTokenInvalid
 		}
 		return 0, "", fmt.Errorf("read token: %w", err)
 	}
@@ -223,11 +233,11 @@ func (h *EmailVerifyHandler) consumeToken(ctx context.Context, token string) (in
 	// Value is "<userID>:<email>"; split on the first colon (emails have no ':').
 	uidStr, email, ok := strings.Cut(val, ":")
 	if !ok {
-		return 0, "", errors.New("token invalid or expired")
+		return 0, "", errVerifyTokenInvalid
 	}
 	uid, err := strconv.ParseInt(uidStr, 10, 64)
 	if err != nil {
-		return 0, "", errors.New("token invalid or expired")
+		return 0, "", errVerifyTokenInvalid
 	}
 	return uid, email, nil
 }

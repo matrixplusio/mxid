@@ -6,9 +6,12 @@ import "github.com/imkerbos/mxid/pkg/errcode"
 // Numeric values are the frozen API contract (unchanged from the former
 // handleServiceError switch); response.MapError does the lookup.
 var (
-	codeUserNotFound     = errcode.Code{HTTP: 404, Num: 40401}
-	codeInvalidPassword  = errcode.Code{HTTP: 400, Num: 40002}
-	codePasswordReused   = errcode.Code{HTTP: 400, Num: 40003}
+	codeUserNotFound    = errcode.Code{HTTP: 404, Num: 40401}
+	codeInvalidPassword = errcode.Code{HTTP: 400, Num: 40002}
+	// 40005 (NOT 40003): 40003 is the frontend's global totpCodeReused
+	// localization — binding password-reuse there made it render "TOTP code
+	// reused". 40005 is non-localized, so the frontend shows the real message.
+	codePasswordReused   = errcode.Code{HTTP: 400, Num: 40005}
 	codeWeakPassword     = errcode.Code{HTTP: 400, Num: 40004}
 	codeLicenseQuota     = errcode.Code{HTTP: 402, Num: 40201}
 	codeUsernameExists   = errcode.Code{HTTP: 409, Num: 40901}

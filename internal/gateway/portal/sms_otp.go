@@ -1,14 +1,14 @@
 // SMS OTP login: passwordless sign-in via a 6-digit code sent over SMS.
 // Two endpoints, both public (pre-auth):
 //
-//   POST /api/v1/portal-public/auth/sms/send   {phone, tenant?}
-//        → if SMS is enabled and the phone maps to a real user, generate a
-//          6-digit code in Redis (5 min TTL) and dispatch via the
-//          configured SMS provider. Always returns 200 (no enumeration).
+//	POST /api/v1/portal-public/auth/sms/send   {phone, tenant?}
+//	     → if SMS is enabled and the phone maps to a real user, generate a
+//	       6-digit code in Redis (5 min TTL) and dispatch via the
+//	       configured SMS provider. Always returns 200 (no enumeration).
 //
-//   POST /api/v1/portal-public/auth/sms/login  {phone, code, tenant?}
-//        → consume the code, create a portal session, return the user
-//          payload + set the session cookie.
+//	POST /api/v1/portal-public/auth/sms/login  {phone, code, tenant?}
+//	     → consume the code, create a portal session, return the user
+//	       payload + set the session cookie.
 //
 // Gated by LoginMethods.SMSOTP. Disabled → 403 on /send.
 package portal
@@ -40,6 +40,13 @@ const (
 	smsOTPCooldown       = 60
 	smsOTPCooldownPrefix = "sms_otp_cooldown:"
 )
+
+// errSMSCodeInvalid is the safe, user-facing result of consumeCode for a
+// wrong/expired/malformed code. The handler treats it as a failed attempt
+// (counted against the phone's rate budget) and 400s; any OTHER consumeCode
+// error (a wrapped Redis failure) becomes a logged 500 that neither leaks the
+// infra error text nor burns the caller's guess budget on an outage.
+var errSMSCodeInvalid = errors.New("code invalid or expired")
 
 // SMSEnabledChecker — true when LoginMethods.SMSOTP is enabled for the
 // default tenant.
@@ -88,14 +95,14 @@ type SMSOTPHandlerOpts struct {
 
 func NewSMSOTPHandler(o SMSOTPHandlerOpts) *SMSOTPHandler {
 	return &SMSOTPHandler{
-		rdb:        o.Redis,
-		users:      o.Users,
-		logger:     o.Logger,
-		smsSvc:     o.SMS,
-		sessionMgr: o.SessionMgr,
-		enabled:    o.Enabled,
-		defaultTID: o.DefaultTID,
-		tenantByCd: o.TenantByCode,
+		rdb:         o.Redis,
+		users:       o.Users,
+		logger:      o.Logger,
+		smsSvc:      o.SMS,
+		sessionMgr:  o.SessionMgr,
+		enabled:     o.Enabled,
+		defaultTID:  o.DefaultTID,
+		tenantByCd:  o.TenantByCode,
 		cookieDom:   o.CookieDomain,
 		cookieSec:   o.CookieSecure,
 		devFallback: o.DevFallback,
@@ -115,8 +122,8 @@ type smsSendRequest struct {
 }
 
 type smsSendResponse struct {
-	Sent       bool   `json:"sent"`
-	TTLSeconds int    `json:"ttl_seconds"`
+	Sent       bool `json:"sent"`
+	TTLSeconds int  `json:"ttl_seconds"`
 	// DevCode is populated only when SMS service is disabled OR provider
 	// send failed AND the phone matched a real user. Dev fallback so OSS
 	// admins can complete the flow.
@@ -244,6 +251,12 @@ func (h *SMSOTPHandler) login(c *gin.Context) {
 
 	userID, err := h.consumeCode(c.Request.Context(), phone, req.Code)
 	if err != nil {
+		// A Redis failure is not a failed guess: 500 it (logged, not leaked)
+		// without burning the phone's budget or echoing the infra error text.
+		if !errors.Is(err, errSMSCodeInvalid) {
+			response.InternalError(c, "failed to verify code", err)
+			return
+		}
 		// Wrong/expired code — count it against the phone's budget. Tripping
 		// the cap immediately returns 429 so the attacker can't keep guessing.
 		if rle := h.limiter.RecordFailure(c.Request.Context(), "phone:"+phone); rle != nil {
@@ -253,7 +266,7 @@ func (h *SMSOTPHandler) login(c *gin.Context) {
 				return
 			}
 		}
-		response.BadRequest(c, 40002, err.Error())
+		response.BadRequest(c, 40002, "code invalid or expired")
 		return
 	}
 	// Correct code — clear the phone's failure budget.
@@ -290,22 +303,22 @@ func (h *SMSOTPHandler) consumeCode(ctx context.Context, phone, code string) (in
 	val, err := h.rdb.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return 0, errors.New("code invalid or expired")
+			return 0, errSMSCodeInvalid
 		}
 		return 0, fmt.Errorf("read code: %w", err)
 	}
 	parts := strings.SplitN(val, ":", 2)
 	if len(parts) != 2 {
-		return 0, errors.New("malformed code payload")
+		return 0, errSMSCodeInvalid
 	}
 	var userID int64
 	if _, err := fmt.Sscanf(parts[0], "%d", &userID); err != nil {
-		return 0, errors.New("malformed code payload")
+		return 0, errSMSCodeInvalid
 	}
 	if parts[1] != code {
 		// Wrong code — DO NOT delete; let the 5-min TTL handle the lockout.
 		// Otherwise one fat-fingered keystroke would force a resend.
-		return 0, errors.New("code invalid")
+		return 0, errSMSCodeInvalid
 	}
 	// Correct — clear so it can't be reused.
 	_ = h.rdb.Del(ctx, key).Err()

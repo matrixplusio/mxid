@@ -285,7 +285,10 @@ func (h *Handler) BatchAction(c *gin.Context) {
 	}
 	ids, err := idstr.ParseList(req.IDs)
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		// Malformed id list is a bad request body, not a service error. 40001
+		// (not 40003) — 40003 collides with the frontend's global
+		// totpCodeReused localization and would misrender the message.
+		response.BadRequest(c, 40001, "invalid user id list")
 		return
 	}
 	res, err := h.svc.BatchAction(c.Request.Context(), ids, req.Action, actorIDFromCtx(c))

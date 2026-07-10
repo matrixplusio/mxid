@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -14,6 +15,12 @@ import (
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/snowflake"
 )
+
+// errIconRejected wraps the operator-fixable saveIcon failures (too large,
+// unsupported type). The handler 400s on it and routes every OTHER saveIcon
+// error (a wrapped io/DB failure) to a logged 500 rather than echoing the infra
+// error text back to the client.
+var errIconRejected = errors.New("icon rejected")
 
 // Uploaded assets live in the database (see internal/domain/upload), NOT on
 // local disk — so the backend keeps no local file state. The serve path reads
@@ -88,7 +95,11 @@ func RegisterUpload(r *gin.Engine, consoleGroup *gin.RouterGroup, idGen *snowfla
 
 		url, err := saveIcon(c.Request.Context(), f, header, repo, idGen)
 		if err != nil {
-			response.BadRequest(c, 40002, err.Error())
+			if errors.Is(err, errIconRejected) {
+				response.BadRequest(c, 40002, err.Error())
+				return
+			}
+			response.InternalError(c, "failed to save icon", err)
 			return
 		}
 		response.OK(c, gin.H{"url": url})
@@ -116,7 +127,7 @@ func parseIconID(name string) int64 {
 // trusted admin console, not anonymous).
 func saveIcon(ctx context.Context, src multipart.File, header *multipart.FileHeader, repo upload.Repository, idGen *snowflake.Generator) (string, error) {
 	if header.Size > maxIconBytes {
-		return "", fmt.Errorf("file too large: %d bytes (max %d)", header.Size, maxIconBytes)
+		return "", fmt.Errorf("%w: file too large: %d bytes (max %d)", errIconRejected, header.Size, maxIconBytes)
 	}
 
 	mime := strings.ToLower(header.Header.Get("Content-Type"))
@@ -126,7 +137,7 @@ func saveIcon(ctx context.Context, src multipart.File, header *multipart.FileHea
 	}
 	ext, ok := allowedIconMime[mime]
 	if !ok {
-		return "", fmt.Errorf("unsupported content-type: %s", mime)
+		return "", fmt.Errorf("%w: unsupported content-type: %s", errIconRejected, mime)
 	}
 
 	// Read into memory with a hard cap (+1 to detect a lying Content-Length that
@@ -136,7 +147,7 @@ func saveIcon(ctx context.Context, src multipart.File, header *multipart.FileHea
 		return "", fmt.Errorf("read file: %w", err)
 	}
 	if len(data) > maxIconBytes {
-		return "", fmt.Errorf("file too large (max %d bytes)", maxIconBytes)
+		return "", fmt.Errorf("%w: file too large (max %d bytes)", errIconRejected, maxIconBytes)
 	}
 
 	id := idGen.Generate()

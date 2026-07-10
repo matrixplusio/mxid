@@ -87,7 +87,7 @@ func (h *Handler) createForApp(c *gin.Context) {
 		CreatedBy:   h.userID(c),
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, p)
@@ -127,7 +127,7 @@ func (h *Handler) createForAppGroup(c *gin.Context) {
 		CreatedBy:   h.userID(c),
 	})
 	if err != nil {
-		response.BadRequest(c, 40003, err.Error())
+		response.MapError(c, err)
 		return
 	}
 	response.OK(c, p)

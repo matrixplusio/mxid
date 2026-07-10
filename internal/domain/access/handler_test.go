@@ -453,3 +453,59 @@ func TestConsoleApprove_RequireStepUp_NoMFA_Returns403MFAEnrollRequired(t *testi
 		t.Fatalf("request must remain pending (no grant created), got status=%s", stored.Status)
 	}
 }
+
+// TestConsoleCreateEligibility_Invalid_Returns40020 guards the errcode contract
+// AND the historical 40003→totpCodeReused collision: an eligibility that fails
+// field validation must surface as 400 with the domain code 40020, never the
+// old 40003 (which the frontend localizes as "TOTP code reused").
+func TestConsoleCreateEligibility_Invalid_Returns40020(t *testing.T) {
+	h, _ := newHandlerWithFakeSvc(t)
+	r := consoleEngine(h)
+
+	// Empty allowed_durations → ErrInvalidEligibility.
+	body := `{"target_kind":"console","role_id":"42","requester_subject_type":"any","allowed_durations":[99999],"max_duration_seconds":3600}`
+	w := doPOST(r, "/api/v1/console/access-eligibilities", body)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"code":40020`) {
+		t.Errorf("want code 40020, got: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "40003") {
+		t.Errorf("must not use 40003 (collides with totpCodeReused): %s", w.Body.String())
+	}
+}
+
+// TestConsoleUpdateEligibility_Invalid_Returns40020 mirrors the create guard
+// for the PUT path.
+func TestConsoleUpdateEligibility_Invalid_Returns40020(t *testing.T) {
+	h, fakes := newHandlerWithFakeSvc(t)
+	idGen, _ := snowflake.New(11)
+	elig := seedElig(t, fakes, idGen)
+	r := consoleEngine(h)
+
+	body := `{"target_kind":"console","role_id":"42","requester_subject_type":"any","allowed_durations":[99999],"max_duration_seconds":3600}`
+	w := doPUT(r, fmt.Sprintf("/api/v1/console/access-eligibilities/%d", elig.ID), body)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"code":40020`) {
+		t.Errorf("want code 40020, got: %s", w.Body.String())
+	}
+}
+
+// TestConsoleApprove_MissingRequest_Returns404 proves a repository not-found no
+// longer leaks the ORM's error text under a bogus 400 — it maps to a clean 404
+// with the domain code 40410 via the repo→sentinel translation.
+func TestConsoleApprove_MissingRequest_Returns404(t *testing.T) {
+	h, _ := newHandlerWithFakeSvc(t)
+	r := consoleEngine(h)
+
+	w := doPOST(r, "/api/v1/console/access-requests/999999/approve", "")
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"code":40410`) {
+		t.Errorf("want code 40410, got: %s", w.Body.String())
+	}
+}

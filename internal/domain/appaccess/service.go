@@ -26,6 +26,12 @@ var (
 	ErrSubjectNotInTenant = errors.New("subject not found in tenant")
 )
 
+// ErrInvalidPolicy marks an AddPolicy that fails field validation (parent
+// exclusivity, subject_type, effect, subject_id). Bound to 400 in errcodes.go;
+// response.MapError renders it while sending any unbound error (wrapped DB
+// failure, missing-validator misconfig) to a logged 500 that never leaks.
+var ErrInvalidPolicy = errors.New("invalid access policy")
+
 // EntityValidator reports whether a referenced entity id exists within the
 // caller's tenant. Backed by the referent's tenant-scoped GetByID (the
 // tenantscope plugin appends tenant_id=?, so a cross-tenant id resolves to
@@ -151,21 +157,21 @@ type AddPolicyRequest struct {
 
 func (s *Service) AddPolicy(ctx context.Context, req AddPolicyRequest) (*Policy, error) {
 	if (req.AppID == nil) == (req.AppGroupID == nil) {
-		return nil, fmt.Errorf("exactly one of app_id / app_group_id must be set")
+		return nil, fmt.Errorf("%w: exactly one of app_id / app_group_id must be set", ErrInvalidPolicy)
 	}
 	if !validSubjectType(req.SubjectType) {
-		return nil, fmt.Errorf("invalid subject_type: %s", req.SubjectType)
+		return nil, fmt.Errorf("%w: invalid subject_type: %s", ErrInvalidPolicy, req.SubjectType)
 	}
 	if req.Effect == "" {
 		req.Effect = EffectAllow
 	}
 	if !validEffect(req.Effect) {
-		return nil, fmt.Errorf("invalid effect: %s", req.Effect)
+		return nil, fmt.Errorf("%w: invalid effect: %s", ErrInvalidPolicy, req.Effect)
 	}
 	if req.SubjectType == SubjectPublic {
 		req.SubjectID = 0 // normalize
 	} else if req.SubjectID == 0 {
-		return nil, fmt.Errorf("subject_id required for subject_type %s", req.SubjectType)
+		return nil, fmt.Errorf("%w: subject_id required for subject_type %s", ErrInvalidPolicy, req.SubjectType)
 	}
 	// Referenced-entity guard. The parent app/app-group id is an untrusted path
 	// param and the subject id comes from the request body; prove both live in

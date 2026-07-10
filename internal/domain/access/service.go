@@ -38,6 +38,37 @@ var ErrApproverNotEligible = errors.New("access: approver is not authorized to a
 // binding would commit as an orphan grant that never expires.
 var ErrRequestNotPending = errors.New("access: request is no longer pending")
 
+// The following sentinels carry safe, user-facing text and are bound to HTTP
+// codes in errcodes.go. response.MapError renders them; any unbound error is
+// treated as unexpected → 500 (logged, not leaked). Validation helpers wrap
+// these with a specific detail via fmt.Errorf("%w: <detail>", ErrX) so the
+// client still sees the precise reason while the code stays stable.
+
+// ErrInvalidEligibility marks an eligibility create/update that fails field
+// validation (target_kind, durations, ttl bounds).
+var ErrInvalidEligibility = errors.New("access: invalid eligibility configuration")
+
+// ErrRequestNotAllowed marks a CreateRequest rejected by policy — the
+// eligibility is disabled, the requester is not eligible, the requested
+// duration is not permitted, or a required justification is missing.
+var ErrRequestNotAllowed = errors.New("access: request not allowed")
+
+// ErrRequestNotCancellable marks a Cancel refused because the request does not
+// belong to the caller or is no longer pending.
+var ErrRequestNotCancellable = errors.New("access: request cannot be cancelled")
+
+// ErrGrantNotRevocable marks a Revoke refused because the request is not an
+// active (approved) grant.
+var ErrGrantNotRevocable = errors.New("access: grant cannot be revoked")
+
+// ErrRequestNotFound / ErrEligibilityNotFound are returned by the repository
+// when a lookup matches no row (translated from gorm.ErrRecordNotFound), so a
+// missing id surfaces as a clean 404 instead of leaking the ORM's error text.
+var (
+	ErrRequestNotFound     = errors.New("access: request not found")
+	ErrEligibilityNotFound = errors.New("access: eligibility not found")
+)
+
 // SuperAdminChecker reports whether a user holds the global super-admin flag.
 // Super-admins get a break-glass exemption from the per-eligibility approver
 // scoping (they can already approve anything via the wildcard authz policy;
@@ -153,20 +184,20 @@ const maxEligibilityTTL = 604800
 // (0, max_duration_seconds].
 func validateEligibilityRequest(req CreateEligibilityRequest) error {
 	if req.TargetKind != TargetConsole && req.TargetKind != TargetApp {
-		return fmt.Errorf("access: invalid target_kind %q", req.TargetKind)
+		return fmt.Errorf("%w: invalid target_kind %q", ErrInvalidEligibility, req.TargetKind)
 	}
 	if req.TargetKind == TargetApp && req.AppID == nil {
-		return fmt.Errorf("access: app_id required for app target")
+		return fmt.Errorf("%w: app_id required for app target", ErrInvalidEligibility)
 	}
 	if len(req.AllowedDurations) == 0 {
-		return fmt.Errorf("access: allowed_durations must not be empty")
+		return fmt.Errorf("%w: allowed_durations must not be empty", ErrInvalidEligibility)
 	}
 	if req.MaxDurationSeconds <= 0 || req.MaxDurationSeconds > maxEligibilityTTL {
-		return fmt.Errorf("access: max_duration_seconds must be in (0, %d]", maxEligibilityTTL)
+		return fmt.Errorf("%w: max_duration_seconds must be in (0, %d]", ErrInvalidEligibility, maxEligibilityTTL)
 	}
 	for _, d := range req.AllowedDurations {
 		if d <= 0 || d > req.MaxDurationSeconds {
-			return fmt.Errorf("access: each allowed duration must be in (0, max_duration_seconds=%d]", req.MaxDurationSeconds)
+			return fmt.Errorf("%w: each allowed duration must be in (0, max_duration_seconds=%d]", ErrInvalidEligibility, req.MaxDurationSeconds)
 		}
 	}
 	return nil
@@ -327,16 +358,16 @@ func (s *Service) CreateRequest(ctx context.Context, tenantID, requesterID int64
 		return nil, err
 	}
 	if elig.Status != 1 {
-		return nil, fmt.Errorf("access: eligibility is disabled")
+		return nil, fmt.Errorf("%w: eligibility is disabled", ErrRequestNotAllowed)
 	}
 	if !s.requesterEligible(ctx, tenantID, requesterID, elig) {
-		return nil, fmt.Errorf("access: user %d is not eligible for this rule", requesterID)
+		return nil, fmt.Errorf("%w: user %d is not eligible for this rule", ErrRequestNotAllowed, requesterID)
 	}
 	if !elig.DurationAllowed(in.RequestedSeconds) {
-		return nil, fmt.Errorf("access: requested duration %ds is not in the allowed set", in.RequestedSeconds)
+		return nil, fmt.Errorf("%w: requested duration %ds is not in the allowed set", ErrRequestNotAllowed, in.RequestedSeconds)
 	}
 	if elig.RequireJustification && in.Justification == "" {
-		return nil, fmt.Errorf("access: justification is required for this eligibility")
+		return nil, fmt.Errorf("%w: justification is required for this eligibility", ErrRequestNotAllowed)
 	}
 
 	secs := elig.ClampDuration(in.RequestedSeconds)
@@ -377,7 +408,7 @@ func (s *Service) Approve(ctx context.Context, tenantID, requestID, approverID i
 		return nil, err
 	}
 	if req.Status != StatusPending {
-		return nil, fmt.Errorf("access: request %d is not pending (status=%s)", requestID, req.Status)
+		return nil, fmt.Errorf("%w (status=%s)", ErrRequestNotPending, req.Status)
 	}
 
 	// Separation of duties: the approver must never be the requester. This is a
@@ -440,7 +471,7 @@ func (s *Service) Reject(ctx context.Context, tenantID, requestID, approverID in
 		return err
 	}
 	if req.Status != StatusPending {
-		return fmt.Errorf("access: request %d is not pending (status=%s)", requestID, req.Status)
+		return fmt.Errorf("%w (status=%s)", ErrRequestNotPending, req.Status)
 	}
 	if err := s.repo.UpdateRequestStatus(ctx, requestID, tenantID, StatusRejected, reason, &approverID); err != nil {
 		return err
@@ -456,10 +487,10 @@ func (s *Service) Cancel(ctx context.Context, tenantID, requestID, requesterID i
 		return err
 	}
 	if req.RequesterID != requesterID {
-		return fmt.Errorf("access: request %d does not belong to user %d", requestID, requesterID)
+		return fmt.Errorf("%w: request does not belong to the caller", ErrRequestNotCancellable)
 	}
 	if req.Status != StatusPending {
-		return fmt.Errorf("access: only pending requests can be cancelled (status=%s)", req.Status)
+		return fmt.Errorf("%w: only pending requests can be cancelled (status=%s)", ErrRequestNotCancellable, req.Status)
 	}
 	if err := s.repo.UpdateRequestStatus(ctx, requestID, tenantID, StatusCancelled, "", nil); err != nil {
 		return err
@@ -476,7 +507,7 @@ func (s *Service) Revoke(ctx context.Context, tenantID, requestID, actorID int64
 		return err
 	}
 	if req.Status != StatusApproved {
-		return fmt.Errorf("access: only active (approved) grants can be revoked (status=%s)", req.Status)
+		return fmt.Errorf("%w: only active (approved) grants can be revoked (status=%s)", ErrGrantNotRevocable, req.Status)
 	}
 	if err := s.repo.EndGrant(ctx, req, StatusRevoked, BindingRevoked); err != nil {
 		return err
