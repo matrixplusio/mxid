@@ -59,6 +59,11 @@ type Service struct {
 	// user id, preserving the previous behaviour for callers that don't wire them.
 	identity resolver.IdentityResolver
 	tenants  resolver.TenantResolver
+	// resolveIssuer maps a ctx to the runtime OIDC issuer override, or "" to use
+	// the static issuer. Wired from the SAME source as the op provider's dynamic
+	// issuer so the logout_token `iss` can never disagree with the id_token `iss`
+	// under an admin external-URL override. Optional (nil → always static).
+	resolveIssuer func(context.Context) string
 }
 
 // NewService wires a Service. issuer must be the same value emitted as the
@@ -66,17 +71,31 @@ type Service struct {
 // so RPs validating the logout_token see a consistent issuer. identity +
 // tenants are used to resolve `sub` via the app's subject_strategy; pass nil to
 // fall back to the raw user id.
-func NewService(sessions *session.Manager, index *Index, apps resolver.AppResolver, signer Signer, issuer string, httpClient Doer, identity resolver.IdentityResolver, tenants resolver.TenantResolver) *Service {
+func NewService(sessions *session.Manager, index *Index, apps resolver.AppResolver, signer Signer, issuer string, httpClient Doer, identity resolver.IdentityResolver, tenants resolver.TenantResolver, resolveIssuer func(context.Context) string) *Service {
 	return &Service{
-		sessions: sessions,
-		index:    index,
-		apps:     apps,
-		signer:   signer,
-		issuer:   issuer,
-		http:     httpClient,
-		identity: identity,
-		tenants:  tenants,
+		sessions:      sessions,
+		index:         index,
+		apps:          apps,
+		signer:        signer,
+		issuer:        issuer,
+		http:          httpClient,
+		identity:      identity,
+		tenants:       tenants,
+		resolveIssuer: resolveIssuer,
 	}
+}
+
+// issuerFor returns the logout_token `iss`: the runtime override when set, else
+// the static boot issuer. Kept identical to the op provider's issuer resolution
+// so an RP validating the logout_token sees the same `iss` it saw in the
+// id_token.
+func (s *Service) issuerFor(ctx context.Context) string {
+	if s.resolveIssuer != nil {
+		if iss := s.resolveIssuer(ctx); iss != "" {
+			return iss
+		}
+	}
+	return s.issuer
 }
 
 // LogoutUser fans out a back-channel logout to every RP the user has an
@@ -217,7 +236,7 @@ func (s *Service) sendLogout(ctx context.Context, appID, userID int64, sid strin
 	}
 
 	claims := LogoutTokenClaims{
-		Issuer:   s.issuer,
+		Issuer:   s.issuerFor(ctx),
 		Audience: app.ClientID,
 		Subject:  s.resolveSubject(ctx, app, userID),
 	}

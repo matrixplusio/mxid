@@ -470,6 +470,17 @@ func (r *gormRepository) CreateLoginRecord(ctx context.Context, rec *LoginRecord
 	return nil
 }
 
+// PurgeLoginRecordsOlderThan hard-deletes login-history rows older than cutoff.
+// Login records are display/audit history — unbounded growth is the only
+// concern (they carry no live security state). A global cross-tenant GC, so
+// callers pass a system context; returns the number of rows removed.
+func (r *gormRepository) PurgeLoginRecordsOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	res := r.db.WithContext(ctx).
+		Where("created_at < ?", cutoff).
+		Delete(&LoginRecord{})
+	return res.RowsAffected, res.Error
+}
+
 // ListLoginRecords returns paginated login records for a user, newest first.
 func (r *gormRepository) ListLoginRecords(ctx context.Context, userID int64, page, pageSize int) ([]*LoginRecord, int64, error) {
 	var total int64

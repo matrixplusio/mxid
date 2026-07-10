@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ func wireOIDCOP(
 	access oidcop.AccessChecker,
 	tenantResolver resolver.TenantResolver,
 	appRoles oidcop.AppRoleResolver,
+	issuerResolver func(context.Context) string,
 ) (*oidclogout.Service, error) {
 	// Provider keyset + auto-rotation (90d default). EnsureActive mints the
 	// first signing key on startup. Rotation runs under the leader lock so
@@ -82,7 +84,20 @@ func wireOIDCOP(
 	storage := oidcop.NewStorage(a.Redis, keySvc, clients, claims, claims, a.EventBus, oidcop.DefaultConfig())
 
 	cryptoKey := a.MasterKey.Derive("oidc-op-crypto-v1")
-	provider, err := oidcop.NewProvider(opIssuer, storage, cryptoKey, true)
+	// Dynamic issuer: honour a runtime external-URL override (settings) the same
+	// way SAML/CAS do, falling back to the static boot issuer. nil-safe on a nil
+	// request (op may probe the issuer func at construction). Nil issuerResolver
+	// → static-only, the pre-override behaviour.
+	var dynamicIssuer oidcop.DynamicIssuer
+	if issuerResolver != nil {
+		dynamicIssuer = func(r *http.Request) string {
+			if r == nil {
+				return ""
+			}
+			return issuerResolver(r.Context())
+		}
+	}
+	provider, err := oidcop.NewProvider(opIssuer, storage, cryptoKey, true, dynamicIssuer)
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +138,7 @@ func wireOIDCOP(
 		safehttp.New(safehttp.WithTimeout(5*time.Second)),
 		idResolver,
 		tenantResolver,
+		issuerResolver,
 	)
 
 	// SSO login-confirmation store (Google-style, product requirement). SAME

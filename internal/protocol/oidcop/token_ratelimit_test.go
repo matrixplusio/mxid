@@ -44,7 +44,7 @@ func newRateLimitedProvider(t *testing.T, rdb *redis.Client, apps ...*resolver.A
 	clients := NewClientStore(resolver, func(string) string { return "" })
 	storage := NewStorage(rdb, nil, clients, nil, nil, nil, DefaultConfig())
 	var key [32]byte
-	provider, err := NewProvider("https://issuer.example.com", storage, key, true)
+	provider, err := NewProvider("https://issuer.example.com", storage, key, true, nil)
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
 	}

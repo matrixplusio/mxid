@@ -9,11 +9,24 @@ import (
 	"golang.org/x/text/language"
 )
 
+// DynamicIssuer resolves the OIDC issuer for a request at runtime, e.g. from an
+// admin-configured external-URL override (settings). It returns "" to fall back
+// to the static boot issuer. Mirrors the per-request URL swap SAML/CAS already
+// do via SetURLProvider, so id_token `iss` and discovery honour a runtime URL
+// change without a restart. MUST be nil-safe on a nil request (op may probe it).
+type DynamicIssuer func(r *http.Request) string
+
 // NewProvider builds the zitadel OpenID Provider. issuer is the full external
 // base (e.g. https://host/protocol/oidc); cryptoKey (32 bytes) encrypts op's
 // internal state/cookies. The provider IS an http.Handler serving authorize/
 // token/userinfo/keys/discovery/end_session.
-func NewProvider(issuer string, storage op.Storage, cryptoKey [32]byte, allowInsecure bool) (op.OpenIDProvider, error) {
+//
+// dynamicIssuer is optional: when non-nil, the issuer emitted for a request is
+// dynamicIssuer(r) if it returns non-empty, else the static issuer. When nil,
+// the issuer is always the static one (previous behaviour). The static issuer
+// is still validated at construction either way, so a broken boot issuer fails
+// loud at startup.
+func NewProvider(issuer string, storage op.Storage, cryptoKey [32]byte, allowInsecure bool, dynamicIssuer DynamicIssuer) (op.OpenIDProvider, error) {
 	config := &op.Config{
 		CryptoKey:                cryptoKey,
 		DefaultLogoutRedirectURI: "/",
@@ -46,7 +59,31 @@ func NewProvider(issuer string, storage op.Storage, cryptoKey [32]byte, allowIns
 		// We terminate TLS at nginx; the internal issuer is http. Allow it.
 		opts = append(opts, op.WithAllowInsecure())
 	}
-	return op.NewProvider(config, storage, op.StaticIssuer(issuer), opts...)
+	return op.NewProvider(config, storage, issuerOption(issuer, dynamicIssuer), opts...)
+}
+
+// issuerOption returns op's static issuer provider when dynamicIssuer is nil,
+// otherwise a provider that validates the static base at construction (so a
+// broken boot issuer still fails loud) and, per request, prefers a non-empty
+// dynamicIssuer(r) over the static value. Falls back to static on a nil request
+// or an empty override — the issuer is NEVER empty.
+func issuerOption(issuer string, dynamicIssuer DynamicIssuer) func(bool) (op.IssuerFromRequest, error) {
+	if dynamicIssuer == nil {
+		return op.StaticIssuer(issuer)
+	}
+	return func(allowInsecure bool) (op.IssuerFromRequest, error) {
+		if err := op.ValidateIssuer(issuer, allowInsecure); err != nil {
+			return nil, err
+		}
+		return func(r *http.Request) string {
+			if r != nil {
+				if iss := dynamicIssuer(r); iss != "" {
+					return iss
+				}
+			}
+			return issuer
+		}, nil
+	}
 }
 
 // CallbackURL returns the builder for the authorize-callback URL op resumes at

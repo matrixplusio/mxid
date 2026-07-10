@@ -56,10 +56,10 @@ var allowedCalls = map[string]string{
 	// Junction/relation table with no tenant_id column; the relation is
 	// pre-scoped by the (app_id, group_id) pair whose parents are already
 	// tenant-checked at the service layer before insert.
-	"internal/domain/app/repository_impl.go:245": "mxid_app_group_rel junction has no tenant_id column; scoped by app_id+group_id",
+	"internal/domain/app/repository_impl.go:256": "mxid_app_group_rel junction has no tenant_id column; scoped by app_id+group_id",
 	// ltree subtree path rewrite scoped by the path LIKE prefix + id; operates
 	// within a single org subtree already resolved under the caller's tenant.
-	"internal/domain/org/repository_impl.go:112": "ltree descendant path move scoped by path prefix + id, single resolved subtree",
+	"internal/domain/org/repository_impl.go:117": "ltree descendant path move scoped by path prefix + id, single resolved subtree",
 	// mxid_role_binding console insert: table has no tenant_id column; tenant is
 	// carried via the joined mxid_role; the parent access_request was already
 	// loaded tenant-scoped before the grant.

@@ -131,9 +131,10 @@ func setupServiceHarness(t *testing.T) (svc *Service, sm *session.Manager, idx *
 		// Loopback httptest servers: the production safehttp client blocks
 		// them (SSRF guard), so tests inject a plain http.Client instead.
 		&http.Client{Timeout: 5 * time.Second},
-		// nil resolvers → `sub` falls back to the raw user id, matching the
-		// pre-subject-strategy behaviour these fan-out tests assert on.
-		nil, nil,
+		// nil resolvers → `sub` falls back to the raw user id and `iss` to the
+		// static issuer, matching the pre-override behaviour these fan-out tests
+		// assert on.
+		nil, nil, nil,
 	)
 
 	return svc, sm, idx, rpA, rpB, appA, appB

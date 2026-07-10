@@ -119,7 +119,9 @@ func (h *AdminSessionHandler) revokeOne(c *gin.Context) {
 	}
 	ns := c.Query("namespace")
 	if ns == "" {
-		response.BadRequest(c, 40003, "missing namespace query")
+		// 40004 (not 40003): 40003 is the frontend's global totpCodeReused
+		// localization; keep this admin-session error off that number.
+		response.BadRequest(c, 40004, "missing namespace query")
 		return
 	}
 	switch ns {

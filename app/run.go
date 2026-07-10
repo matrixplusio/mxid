@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -782,12 +783,12 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 		runDynamicGroupReconcile(ctx, groupModule.Service, a.Config.Tenant.DefaultID)
 	})
 
-	// API-token purge sweeper — hard-deletes long-expired/revoked API tokens so
-	// mxid_api_token doesn't grow without bound (expired/revoked tokens are
-	// already rejected at auth time, so this is housekeeping, not a security
-	// window). Leader-elected: a global cross-tenant DELETE belongs on one pod.
+	// Housekeeping purge sweeper — GC for tables that only grow: expired/revoked
+	// API tokens and old login history. Neither carries live security state, so
+	// this only bounds table size. Leader-elected: global cross-tenant DELETEs
+	// belong on one pod.
 	go dlock.RunAsLeader(workerCtx, a.DB, dlock.KeyAPITokenPurge, a.Logger, func(ctx context.Context) {
-		runAPITokenPurge(ctx, a, apitoken.NewRepository(a.DB))
+		runHousekeepingPurge(ctx, a, apitoken.NewRepository(a.DB), user.NewGormRepository(a.DB))
 	})
 
 	// Transactional outbox worker — durable at-least-once delivery for side
@@ -1144,7 +1145,30 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 	// (internal/protocol/oidclogout) that restores offboarding + JIT
 	// downstream teardown (see the offboardLogout / oidcLogout dispatch
 	// below).
-	oidcLogoutSvc, err := wireOIDCOP(workerCtx, a, issuer, appResolver, idResolver, sessResolver, sessionMgr, accessAdapter, tenantResolver, appRolesAdapter)
+	// Runtime URL provider — admin-configurable external URLs. Empty fields fall
+	// through to the bootstrap config (the static defaults compiled in). Invoked
+	// per-request so admin changes take effect immediately (settings cache 60s).
+	// Defined here (before wireOIDCOP) so OIDC's issuer can honour the same
+	// runtime override that SAML/CAS do below.
+	urlProvider := func(ctx context.Context) urlswap.URLs {
+		v, err := settingService.ExternalURLs(ctx, a.Config.Tenant.DefaultID)
+		if err != nil {
+			return urlswap.URLs{}
+		}
+		return urlswap.URLs{Issuer: v.IssuerURL, Portal: v.PortalURL, Console: v.ConsoleURL}
+	}
+	// oidcIssuerResolver maps a ctx to the OIDC issuer (issuer + /protocol/oidc)
+	// from the runtime override, or "" to fall back to the static boot issuer.
+	// Shared by the op provider (id_token/discovery `iss`) and the back-channel
+	// logout signer (logout_token `iss`) so the two never disagree.
+	oidcIssuerResolver := func(ctx context.Context) string {
+		if u := urlProvider(ctx); u.Issuer != "" {
+			return strings.TrimSuffix(u.Issuer, "/") + "/protocol/oidc"
+		}
+		return ""
+	}
+
+	oidcLogoutSvc, err := wireOIDCOP(workerCtx, a, issuer, appResolver, idResolver, sessResolver, sessionMgr, accessAdapter, tenantResolver, appRolesAdapter, oidcIssuerResolver)
 	if err != nil {
 		a.Logger.Fatal("wire zitadel OIDC engine: " + err.Error())
 	}
@@ -1163,17 +1187,7 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 	offboardMod.Service.SetDeprovisionEnqueuer(offboardDeprovisionEnqueuer{outbox: outboxRepo})
 	offboardMod.RegisterRoutes(a)
 
-	// Runtime URL provider — admin-configurable external URLs. Empty
-	// fields fall through to the bootstrap config (i.e. the static
-	// defaults compiled in). The provider is invoked per-request so admin
-	// changes take effect immediately (settings layer caches for 60s).
-	urlProvider := func(ctx context.Context) urlswap.URLs {
-		v, err := settingService.ExternalURLs(ctx, a.Config.Tenant.DefaultID)
-		if err != nil {
-			return urlswap.URLs{}
-		}
-		return urlswap.URLs{Issuer: v.IssuerURL, Portal: v.PortalURL, Console: v.ConsoleURL}
-	}
+	// urlProvider (defined above, before wireOIDCOP) also drives SAML/CAS.
 	samlModule.Handler.SetURLProvider(urlProvider)
 	casModule.Handler.SetURLProvider(urlProvider)
 
@@ -1772,25 +1786,26 @@ func runAuditRetention(stopCtx context.Context, a *bootstrap.App, ss *setting.Se
 	}
 }
 
-// runAPITokenPurge periodically hard-deletes API tokens whose expiry or
-// revocation is older than a fixed grace window, so mxid_api_token doesn't grow
-// without bound. Expired/revoked tokens are already rejected at authenticate
-// time (ErrExpired / ErrRevoked), so this is pure housekeeping — the grace keeps
-// recently-dead rows around briefly for support/debugging. A global
-// cross-tenant DELETE → explicit system context (the tenant plugin fails closed
-// otherwise). First pass runs immediately; later passes ride the daily ticker.
-func runAPITokenPurge(stopCtx context.Context, a *bootstrap.App, repo apitoken.Repository) {
+// runHousekeepingPurge periodically hard-deletes rows that only ever grow:
+// expired/revoked API tokens (already rejected at auth time) and old login
+// history. Neither carries live security state, so this is pure GC to bound
+// table size. Both are global cross-tenant DELETEs → explicit system context
+// (the tenant plugin fails closed otherwise). First pass runs immediately;
+// later passes ride the daily ticker.
+func runHousekeepingPurge(stopCtx context.Context, a *bootstrap.App, tokenRepo apitoken.Repository, userRepo user.Repository) {
 	const (
-		tickEvery = 24 * time.Hour
-		grace     = 30 * 24 * time.Hour // keep dead tokens 30d before purging
+		tickEvery       = 24 * time.Hour
+		tokenGrace      = 30 * 24 * time.Hour  // keep dead tokens 30d before purging
+		loginRecordKeep = 365 * 24 * time.Hour // keep 1y of login history
 	)
 	ticker := time.NewTicker(tickEvery)
 	defer ticker.Stop()
 	for {
 		ctx := tenantscope.SystemContext()
+		now := time.Now()
+
 		metrics.WorkerRun("api_token_purge")
-		deleted, err := repo.PurgeExpired(ctx, time.Now().Add(-grace))
-		if err != nil {
+		if deleted, err := tokenRepo.PurgeExpired(ctx, now.Add(-tokenGrace)); err != nil {
 			a.Logger.Warn("api token purge failed", zap.Error(err))
 		} else {
 			if deleted > 0 {
@@ -1798,6 +1813,17 @@ func runAPITokenPurge(stopCtx context.Context, a *bootstrap.App, repo apitoken.R
 			}
 			metrics.WorkerSuccess("api_token_purge")
 		}
+
+		metrics.WorkerRun("login_record_purge")
+		if deleted, err := userRepo.PurgeLoginRecordsOlderThan(ctx, now.Add(-loginRecordKeep)); err != nil {
+			a.Logger.Warn("login record purge failed", zap.Error(err))
+		} else {
+			if deleted > 0 {
+				a.Logger.Info("login record purge", zap.Int64("deleted", deleted))
+			}
+			metrics.WorkerSuccess("login_record_purge")
+		}
+
 		select {
 		case <-stopCtx.Done():
 			return

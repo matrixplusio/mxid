@@ -1,6 +1,9 @@
 package user
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ListParams holds parameters for listing users with filters.
 type ListParams struct {
@@ -86,4 +89,5 @@ type Repository interface {
 	// Login records
 	CreateLoginRecord(ctx context.Context, rec *LoginRecord) error
 	ListLoginRecords(ctx context.Context, userID int64, page, pageSize int) ([]*LoginRecord, int64, error)
+	PurgeLoginRecordsOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }
