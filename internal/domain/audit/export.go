@@ -181,5 +181,18 @@ func VerifyExport(b *ExportBundle, trusted KeyRegistry) (AnchorVerifyResult, err
 		through = a.ToSeq
 		expectedFrom = a.ToSeq + 1
 	}
+	// A bundle with ZERO anchors proves nothing — without this guard the loop is
+	// simply skipped and OK:true is returned, so an export with all anchors
+	// stripped "verifies".
+	if len(b.Anchors) == 0 {
+		return AnchorVerifyResult{OK: false, AnchoredThrough: 0, FailFromSeq: b.FromSeq, Reason: "no anchors"}, nil
+	}
+	// The anchors must cover the WHOLE declared [FromSeq,ToSeq] range. Otherwise
+	// an attacker can anchor [FromSeq,3], append forged entries 4..ToSeq (which
+	// fall outside every anchor range and are never Merkle-checked) and still get
+	// OK:true. Require the anchored high-water mark to reach ToSeq.
+	if through < b.ToSeq {
+		return AnchorVerifyResult{OK: false, AnchoredThrough: through, FailFromSeq: through + 1, Reason: "incomplete coverage"}, nil
+	}
 	return AnchorVerifyResult{OK: true, AnchoredThrough: through}, nil
 }

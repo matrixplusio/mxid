@@ -102,7 +102,7 @@ export default function GroupsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!createForm.name || !createForm.code) return
-    if (createType === 2 && createRule.conditions.length === 0) {
+    if (createType === GroupType.Dynamic && createRule.conditions.length === 0) {
       alert(t("groups.needAtLeastOneRule"))
       return
     }
@@ -115,12 +115,12 @@ export default function GroupsPage() {
       })
       // For dynamic groups, attach the rule right after creation — the backend
       // flips type to dynamic and runs the initial sync.
-      if (createType === 2 && created) {
+      if (createType === GroupType.Dynamic && created) {
         await groupApi.upsertRule(created.id, createRule)
       }
       setShowCreate(false)
       setCreateForm({ name: '', code: '', description: '' })
-      setCreateType(1)
+      setCreateType(GroupType.Static)
       setCreateRule(EMPTY_RULE)
       setPage(1)
       loadData()
@@ -747,15 +747,15 @@ export default function GroupsPage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium text-ink">{t('groups.createModal.groupType')}</label>
                   <div className="flex gap-3">
-                    <label className={cn('flex flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3', createType === 1 ? 'border-primary bg-primary/5' : 'border-border')}>
-                      <input type="radio" name="group_type" checked={createType === 1} onChange={() => setCreateType(1)} className="mt-0.5" />
+                    <label className={cn('flex flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3', createType === GroupType.Static ? 'border-primary bg-primary/5' : 'border-border')}>
+                      <input type="radio" name="group_type" checked={createType === GroupType.Static} onChange={() => setCreateType(GroupType.Static)} className="mt-0.5" />
                       <div>
                         <div className="text-sm font-medium text-ink">{t('groups.createModal.staticName')}</div>
                         <div className="text-xs text-muted">{t('groups.createModal.staticDesc')}</div>
                       </div>
                     </label>
-                    <label className={cn('flex flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3', createType === 2 ? 'border-primary bg-primary/5' : 'border-border')}>
-                      <input type="radio" name="group_type" checked={createType === 2} onChange={() => setCreateType(2)} className="mt-0.5" />
+                    <label className={cn('flex flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3', createType === GroupType.Dynamic ? 'border-primary bg-primary/5' : 'border-border')}>
+                      <input type="radio" name="group_type" checked={createType === GroupType.Dynamic} onChange={() => setCreateType(GroupType.Dynamic)} className="mt-0.5" />
                       <div>
                         <div className="text-sm font-medium text-ink">{t('groups.createModal.dynamicName')}</div>
                         <div className="text-xs text-muted">{t('groups.createModal.dynamicDesc')}</div>
@@ -763,7 +763,7 @@ export default function GroupsPage() {
                     </label>
                   </div>
                 </div>
-                {createType === 2 && (
+                {createType === GroupType.Dynamic && (
                   <RuleEditor value={createRule} onChange={setCreateRule} />
                 )}
                 <div className="flex justify-end gap-3 pt-2">

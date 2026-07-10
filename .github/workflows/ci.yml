@@ -1,0 +1,81 @@
+name: CI
+
+# Quality gate for every push + PR to dev/main. Until this existed the ONLY
+# gates were local (pre-commit, skippable via SKIP_VERIFY) — so regressions
+# could merge unchecked. This runs the same `make verify` chain + the test
+# suite in the cloud, on every change, so a red check blocks the merge.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Go (build · vet · lint · gormtaglint · test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.11' # keep in lockstep with go.mod + the CE Dockerfile
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: verify-mod (go.mod/go.sum in sync)
+        run: make verify-mod
+
+      - name: vet
+        run: go vet ./...
+
+      - name: build (all packages)
+        run: go build ./...
+
+      - name: gormtaglint (garble-safe scan structs)
+        run: make verify-gormtags
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: test
+        run: go test ./... # unit suite runs on SQLite in-memory; no external services needed
+
+  frontend:
+    name: Web (build · exports)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: verify-exports (package.json exports map exists on disk)
+        run: node scripts/verify-exports.mjs
+
+      - name: build web (strict)
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -r build

@@ -21,7 +21,7 @@ func (s *Service) SubscribeEvents() {
 	}
 	s.eventBus.Subscribe(event.OrgMemberAdded, s.handleOrgMemberChange)
 	s.eventBus.Subscribe(event.OrgMemberRemoved, s.handleOrgMemberChange)
-	s.eventBus.Subscribe(event.OrgMemberMoved, s.handleOrgMemberChange)
+	// (OrgMemberMoved is never published — Added/Removed cover membership; dropped.)
 	// An org re-parent (ltree path change) shifts subtree membership without any
 	// per-user event, so in_subtree rules would otherwise go stale. Same handler
 	// — it recomputes every dynamic group in the org's tenant.

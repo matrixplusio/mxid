@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { accessApprovalApi, formatDate, useTranslation, useEdition, useAuthStore, AccessRequestStatus } from '@mxid/shared'
+import { accessApprovalApi, formatDate, useTranslation, useEdition, useAuthStore, AccessRequestStatus, AccessTargetKind } from '@mxid/shared'
 import type { AccessRequest } from '@mxid/shared'
 import { pageMotion, Button, Modal, Field, Textarea, Card, DataTable, FilterBar, Select, ConfirmDialog } from '@mxid/shared/ui'
 import type { Column } from '@mxid/shared/ui'
@@ -108,7 +108,7 @@ export default function AccessApprovalsPage() {
     {
       key: 'target',
       title: t('approvals.columns.target'),
-      render: (r) => <span className="text-muted">{r.target_kind === 'console' ? t('access.targetConsole') : t('access.targetApp')}</span>,
+      render: (r) => <span className="text-muted">{r.target_kind === AccessTargetKind.Console ? t('access.targetConsole') : t('access.targetApp')}</span>,
     },
     { key: 'role_id', title: t('approvals.columns.role'), render: (r) => <span className="text-muted">{r.role_id}</span> },
     {

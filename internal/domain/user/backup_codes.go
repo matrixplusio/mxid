@@ -82,11 +82,23 @@ func (r *backupCodeRepo) ListActive(ctx context.Context, userID int64) ([]*MFABa
 	return rows, err
 }
 
+// MarkUsed atomically consumes a backup code: the `used_at IS NULL` predicate +
+// RowsAffected check make it single-use even under a race. Two concurrent logins
+// presenting the same code both pass VerifyBackupCode's bcrypt match, but only
+// the UPDATE that flips used_at first affects a row; the loser sees
+// RowsAffected==0 and is rejected as an invalid code (no double-consume).
 func (r *backupCodeRepo) MarkUsed(ctx context.Context, id int64, when time.Time) error {
-	return r.db.WithContext(ctx).
+	res := r.db.WithContext(ctx).
 		Model(&MFABackupCode{}).
 		Where("id = ? AND used_at IS NULL", id).
-		Update("used_at", when).Error
+		Update("used_at", when)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrMFAInvalidCode
+	}
+	return nil
 }
 
 func (r *backupCodeRepo) CountActive(ctx context.Context, userID int64) (int, error) {

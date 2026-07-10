@@ -15,6 +15,9 @@ import {
   userApi,
   useTranslation,
   useEdition,
+  AccessTargetKind,
+  AccessRequesterSubjectType,
+  AccessApproverSubjectType,
 } from '@mxid/shared'
 import type {
   Eligibility,
@@ -39,14 +42,14 @@ const DURATION_LABELS: Record<number, string> = {
 }
 
 const DEFAULT_FORM: CreateEligibilityBody = {
-  target_kind: 'app',
+  target_kind: AccessTargetKind.App,
   role_id: '',
   app_id: '',
-  requester_subject_type: 'group',
+  requester_subject_type: AccessRequesterSubjectType.Group,
   requester_subject_id: '',
   allowed_durations: [3600, 14400],
   max_duration_seconds: 86400,
-  approver_subject_type: 'role',
+  approver_subject_type: AccessApproverSubjectType.Role,
   approver_subject_id: '',
   require_justification: false,
   require_stepup: false,
@@ -97,7 +100,7 @@ export default function AccessEligibilityPage() {
   // Console RBAC roles — needed for the `console` target's role_id picker
   // AND for the approver picker when approver_subject_type === 'role'.
   useEffect(() => {
-    const need = form.target_kind === 'console' || form.approver_subject_type === 'role'
+    const need = form.target_kind === AccessTargetKind.Console || form.approver_subject_type === AccessApproverSubjectType.Role
     if (!need || consoleRoles.length > 0 || consoleRolesLoading) return
     setConsoleRolesLoading(true)
     permissionApi
@@ -109,7 +112,7 @@ export default function AccessEligibilityPage() {
 
   // Apps — needed for the `app` target's app_id picker.
   useEffect(() => {
-    if (form.target_kind !== 'app' || apps.length > 0 || appsLoading) return
+    if (form.target_kind !== AccessTargetKind.App || apps.length > 0 || appsLoading) return
     setAppsLoading(true)
     appApi
       .list({ page: 1, page_size: 200 })
@@ -121,7 +124,7 @@ export default function AccessEligibilityPage() {
   // App roles — cascades off the selected app_id. Re-fetched whenever
   // app_id changes; cleared when no app is selected.
   useEffect(() => {
-    if (form.target_kind !== 'app' || !form.app_id) {
+    if (form.target_kind !== AccessTargetKind.App || !form.app_id) {
       setAppRoles([])
       return
     }
@@ -145,7 +148,7 @@ export default function AccessEligibilityPage() {
 
   // User groups — needed when requester or approver subject type is `group`.
   useEffect(() => {
-    const need = form.requester_subject_type === 'group' || form.approver_subject_type === 'group'
+    const need = form.requester_subject_type === AccessRequesterSubjectType.Group || form.approver_subject_type === AccessApproverSubjectType.Group
     if (!need || groups.length > 0 || groupsLoading) return
     setGroupsLoading(true)
     groupApi
@@ -158,7 +161,7 @@ export default function AccessEligibilityPage() {
   // Orgs — needed when requester subject type is `org`. Flatten the tree
   // since the picker just needs a flat name/id list.
   useEffect(() => {
-    if (form.requester_subject_type !== 'org' || orgs.length > 0 || orgsLoading) return
+    if (form.requester_subject_type !== AccessRequesterSubjectType.Org || orgs.length > 0 || orgsLoading) return
     setOrgsLoading(true)
     orgApi
       .tree()
@@ -181,7 +184,7 @@ export default function AccessEligibilityPage() {
   // Note: this loads a single page of up to 200 users; for tenants with
   // more users than that, a real search-select would be needed.
   useEffect(() => {
-    const need = form.requester_subject_type === 'user' || form.approver_subject_type === 'user'
+    const need = form.requester_subject_type === AccessRequesterSubjectType.User || form.approver_subject_type === AccessApproverSubjectType.User
     if (!need || users.length > 0 || usersLoading) return
     setUsersLoading(true)
     userApi
@@ -208,7 +211,7 @@ export default function AccessEligibilityPage() {
     setForm({
       target_kind: row.target_kind,
       role_id: row.role_id,
-      app_id: row.target_kind === 'app' ? row.app_id : undefined,
+      app_id: row.target_kind === AccessTargetKind.App ? row.app_id : undefined,
       requester_subject_type: row.requester_subject_type,
       requester_subject_id: row.requester_subject_id,
       allowed_durations: row.allowed_durations,
@@ -227,7 +230,7 @@ export default function AccessEligibilityPage() {
   }
 
   const submit = async () => {
-    if (form.target_kind === 'app' && !form.app_id) {
+    if (form.target_kind === AccessTargetKind.App && !form.app_id) {
       toast.error(t('eligibility.createFailed'), t('eligibility.appIdRequired'))
       return
     }
@@ -238,11 +241,11 @@ export default function AccessEligibilityPage() {
     // A concrete requester/approver subject is required unless the subject type
     // is "any" (requester) or "auto" (approver) — otherwise the backend gets an
     // empty ,string int64 and rejects with a raw unmarshal error.
-    if (form.requester_subject_type !== 'any' && !(form.requester_subject_id ?? '').trim()) {
+    if (form.requester_subject_type !== AccessRequesterSubjectType.Any && !(form.requester_subject_id ?? '').trim()) {
       toast.error(t('eligibility.createFailed'), t('eligibility.requesterRequired'))
       return
     }
-    if (form.approver_subject_type !== 'auto' && !(form.approver_subject_id ?? '').trim()) {
+    if (form.approver_subject_type !== AccessApproverSubjectType.Auto && !(form.approver_subject_id ?? '').trim()) {
       toast.error(t('eligibility.createFailed'), t('eligibility.approverRequired'))
       return
     }
@@ -250,11 +253,11 @@ export default function AccessEligibilityPage() {
       const body: CreateEligibilityBody = {
         ...form,
         // omit app_id when target is console
-        app_id: form.target_kind === 'app' ? form.app_id : undefined,
+        app_id: form.target_kind === AccessTargetKind.App ? form.app_id : undefined,
         // omit the id fields when there's no concrete subject, so we never send
         // an empty string into a ,string-tagged int64 on the backend.
-        requester_subject_id: form.requester_subject_type === 'any' ? undefined : form.requester_subject_id,
-        approver_subject_id: form.approver_subject_type === 'auto' ? undefined : form.approver_subject_id,
+        requester_subject_id: form.requester_subject_type === AccessRequesterSubjectType.Any ? undefined : form.requester_subject_id,
+        approver_subject_id: form.approver_subject_type === AccessApproverSubjectType.Auto ? undefined : form.approver_subject_id,
       }
       if (editingId) {
         await accessApprovalApi.updateEligibility(editingId, body)
@@ -322,7 +325,7 @@ export default function AccessEligibilityPage() {
                   ...f,
                   target_kind: value,
                   role_id: '',
-                  app_id: value === 'app' ? (f.app_id ?? '') : undefined,
+                  app_id: value === AccessTargetKind.App ? (f.app_id ?? '') : undefined,
                 }))
               }}
             >
@@ -331,7 +334,7 @@ export default function AccessEligibilityPage() {
             </select>
           </Field>
 
-          {form.target_kind === 'console' ? (
+          {form.target_kind === AccessTargetKind.Console ? (
             <Field label={t('eligibility.roleId')}>
               <SearchSelect
                 value={form.role_id}
@@ -357,7 +360,7 @@ export default function AccessEligibilityPage() {
             </Field>
           )}
 
-          {form.target_kind === 'app' && (
+          {form.target_kind === AccessTargetKind.App && (
             <Field label={t('eligibility.roleId')}>
               <SearchSelect
                 value={form.role_id}
@@ -388,13 +391,13 @@ export default function AccessEligibilityPage() {
 
           <Field
             label={t('eligibility.requesterSubjectId')}
-            hint={form.requester_subject_type === 'any' ? t('eligibility.requesterAnyHint') : undefined}
+            hint={form.requester_subject_type === AccessRequesterSubjectType.Any ? t('eligibility.requesterAnyHint') : undefined}
           >
-            {form.requester_subject_type === 'any' ? (
+            {form.requester_subject_type === AccessRequesterSubjectType.Any ? (
               <Select value="" disabled>
                 <option value="">{t('eligibility.requesterAnyHint')}</option>
               </Select>
-            ) : form.requester_subject_type === 'group' ? (
+            ) : form.requester_subject_type === AccessRequesterSubjectType.Group ? (
               <SearchSelect
                 value={form.requester_subject_id ?? ''}
                 disabled={groupsLoading}
@@ -404,7 +407,7 @@ export default function AccessEligibilityPage() {
                 searchPlaceholder={t('common.search')}
                 emptyText={t('common.empty')}
               />
-            ) : form.requester_subject_type === 'org' ? (
+            ) : form.requester_subject_type === AccessRequesterSubjectType.Org ? (
               <SearchSelect
                 value={form.requester_subject_id ?? ''}
                 disabled={orgsLoading}
@@ -444,13 +447,13 @@ export default function AccessEligibilityPage() {
 
           <Field
             label={t('eligibility.approverSubjectId')}
-            hint={form.approver_subject_type === 'auto' ? t('eligibility.approverAutoHint') : undefined}
+            hint={form.approver_subject_type === AccessApproverSubjectType.Auto ? t('eligibility.approverAutoHint') : undefined}
           >
-            {form.approver_subject_type === 'auto' ? (
+            {form.approver_subject_type === AccessApproverSubjectType.Auto ? (
               <Select value="" disabled>
                 <option value="">{t('eligibility.approverAutoHint')}</option>
               </Select>
-            ) : form.approver_subject_type === 'role' ? (
+            ) : form.approver_subject_type === AccessApproverSubjectType.Role ? (
               <SearchSelect
                 value={form.approver_subject_id ?? ''}
                 disabled={consoleRolesLoading}
@@ -460,7 +463,7 @@ export default function AccessEligibilityPage() {
                 searchPlaceholder={t('common.search')}
                 emptyText={t('common.empty')}
               />
-            ) : form.approver_subject_type === 'group' ? (
+            ) : form.approver_subject_type === AccessApproverSubjectType.Group ? (
               <SearchSelect
                 value={form.approver_subject_id ?? ''}
                 disabled={groupsLoading}
@@ -593,10 +596,10 @@ export default function AccessEligibilityPage() {
                 rows.map((row) => (
                   <tr key={row.id} className="hover:bg-surface-muted/50">
                     <td className="whitespace-nowrap px-6 py-3 text-sm text-ink">
-                      {row.target_kind === 'console'
+                      {row.target_kind === AccessTargetKind.Console
                         ? t('access.targetConsole')
                         : t('access.targetApp')}
-                      {row.target_kind === 'app' && row.app_id && (
+                      {row.target_kind === AccessTargetKind.App && row.app_id && (
                         <span className="ml-1 text-faint">
                           ({row.app_name || row.app_id})
                         </span>
@@ -606,12 +609,12 @@ export default function AccessEligibilityPage() {
                       {row.target_name || row.role_id}
                     </td>
                     <td className="px-6 py-3 text-sm text-muted">
-                      {row.requester_subject_type === 'any'
+                      {row.requester_subject_type === AccessRequesterSubjectType.Any
                         ? t('eligibility.everyone')
                         : row.requester_subject_name || row.requester_subject_id || '—'}
                     </td>
                     <td className="px-6 py-3 text-sm text-muted">
-                      {row.approver_subject_type === 'auto'
+                      {row.approver_subject_type === AccessApproverSubjectType.Auto
                         ? t('eligibility.autoApprover')
                         : row.approver_subject_name || row.approver_subject_id || '—'}
                     </td>

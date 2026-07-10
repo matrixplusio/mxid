@@ -330,6 +330,13 @@ func (s *Service) GetRolePermissions(ctx context.Context, roleID int64) ([]*Perm
 	return perms, nil
 }
 
+// GetPermissionsByIDs resolves permission rows (incl. their codes) for the given
+// ids. Used by the handler's privilege-escalation guard on SetPermissions so a
+// caller can only add permissions they themselves hold.
+func (s *Service) GetPermissionsByIDs(ctx context.Context, ids []int64) ([]*Permission, error) {
+	return s.repo.GetPermissionsByIDs(ctx, ids)
+}
+
 // SetRolePermissions replaces all permissions for a role.
 func (s *Service) SetRolePermissions(ctx context.Context, roleID int64, permissionIDs []int64) error {
 	// Verify role exists

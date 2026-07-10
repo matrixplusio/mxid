@@ -35,6 +35,14 @@ type AppRoleResolver interface {
 	ResolveAppRoles(ctx context.Context, userID, appID, tenantID int64) ([]string, error)
 }
 
+// AccessChecker reports whether a user may access an app under its access
+// policy (public/user/group/org/role allow+deny rules). Same contract as the
+// OIDC bridge's checker; reason is a machine token for the "no access" page.
+// Injected by Register; a nil checker means the policy is NOT enforced.
+type AccessChecker interface {
+	CheckAppAccess(ctx context.Context, userID, appID, tenantID int64) (allowed bool, reason string, err error)
+}
+
 // Handler serves SAML protocol endpoints.
 type Handler struct {
 	issuer      string
@@ -46,6 +54,9 @@ type Handler struct {
 	tenantRes   resolver.TenantResolver
 	sessionIdx  *SessionIndexStore
 	logger      *zap.Logger
+	// access enforces the app-access policy before an assertion is minted. Set
+	// by Register. nil = policy NOT enforced (dangerous — always wire in prod).
+	access AccessChecker
 	// confirm mints/consumes the one-time SSO login-confirmation token. Set by
 	// Register. nil = confirmation feature off (SP-initiated stays seamless).
 	confirm *ssoflow.ConfirmStore
@@ -312,6 +323,26 @@ func (h *Handler) processSSO(c *gin.Context, appCode, requestID, relayState stri
 	// tenant-scoped under the gorm isolation plugin (protocol group has no
 	// AuthMiddleware).
 	c.Request = c.Request.WithContext(tenantscope.WithTenant(c.Request.Context(), ssoSess.TenantID))
+
+	// Enforce the app-access policy BEFORE minting an assertion. Without this any
+	// authenticated user could obtain a signed SAML assertion for any enabled
+	// app, bypassing the admin's per-app allow/deny rules (the OIDC path already
+	// enforces this via the bridge). Fail-closed: a checker error or a deny → 403.
+	if h.access != nil {
+		allowed, reason, aerr := h.access.CheckAppAccess(c.Request.Context(), ssoSess.UserID, app.ID, ssoSess.TenantID)
+		if aerr != nil {
+			h.logger.Error("saml sso: app-access check failed",
+				zap.String("app_code", appCode), zap.Int64("user_id", ssoSess.UserID), zap.Error(aerr))
+			response.Error(c, http.StatusForbidden, 40302, "access denied", "")
+			return
+		}
+		if !allowed {
+			h.logger.Warn("saml sso: access denied by policy",
+				zap.String("app_code", appCode), zap.Int64("user_id", ssoSess.UserID), zap.String("reason", reason))
+			response.Error(c, http.StatusForbidden, 40302, "access denied", reason)
+			return
+		}
+	}
 
 	// User authenticated — build assertion
 	user, err := h.idRes.ResolveUser(c.Request.Context(), ssoSess.UserID)

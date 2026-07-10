@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/domain/authn"
@@ -101,7 +103,11 @@ func (h *EmailVerifyHandler) sendVerification(c *gin.Context) {
 		response.InternalError(c, "failed to generate token", err)
 		return
 	}
-	if err := h.rdb.Set(c.Request.Context(), verifyKeyPrefix+token, userID, emailVerifyTTL*1e9).Err(); err != nil {
+	// Bind the token to (userID, email) — NOT userID alone. On verify we require
+	// the user's CURRENT email to still equal this one, so changing the email
+	// after requesting verification invalidates the in-flight link (otherwise the
+	// click would flip email_verified on the NEW, unverified address).
+	if err := h.rdb.Set(c.Request.Context(), verifyKeyPrefix+token, fmt.Sprintf("%d:%s", userID, email), emailVerifyTTL*1e9).Err(); err != nil {
 		response.InternalError(c, "failed to persist token", err)
 		return
 	}
@@ -168,9 +174,22 @@ func (h *EmailVerifyHandler) verify(c *gin.Context) {
 		return
 	}
 
-	userID, err := h.consumeToken(c.Request.Context(), token)
+	userID, tokenEmail, err := h.consumeToken(c.Request.Context(), token)
 	if err != nil {
 		response.BadRequest(c, 40002, err.Error())
+		return
+	}
+
+	// The link is only valid for the email it was issued for. If the user
+	// changed their email in the meantime, the current address is different +
+	// unverified — refuse rather than mark the new address verified.
+	curEmail, err := h.users.GetEmail(c.Request.Context(), userID)
+	if err != nil {
+		response.InternalError(c, "failed to read user", err)
+		return
+	}
+	if curEmail == "" || !strings.EqualFold(curEmail, tokenEmail) {
+		response.BadRequest(c, 40002, "verification link no longer matches your email")
 		return
 	}
 
@@ -189,19 +208,28 @@ func (h *EmailVerifyHandler) verify(c *gin.Context) {
 	response.OK(c, gin.H{"verified": true})
 }
 
-func (h *EmailVerifyHandler) consumeToken(ctx context.Context, token string) (int64, error) {
+func (h *EmailVerifyHandler) consumeToken(ctx context.Context, token string) (int64, string, error) {
 	key := verifyKeyPrefix + token
-	val, err := h.rdb.Get(ctx, key).Int64()
+	val, err := h.rdb.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return 0, errors.New("token invalid or expired")
+			return 0, "", errors.New("token invalid or expired")
 		}
-		return 0, fmt.Errorf("read token: %w", err)
+		return 0, "", fmt.Errorf("read token: %w", err)
 	}
 	// Delete immediately — one-shot. Even if MarkEmailVerified errors below,
 	// the user can request a new link; better than leaving a reusable token.
 	_ = h.rdb.Del(ctx, key).Err()
-	return val, nil
+	// Value is "<userID>:<email>"; split on the first colon (emails have no ':').
+	uidStr, email, ok := strings.Cut(val, ":")
+	if !ok {
+		return 0, "", errors.New("token invalid or expired")
+	}
+	uid, err := strconv.ParseInt(uidStr, 10, 64)
+	if err != nil {
+		return 0, "", errors.New("token invalid or expired")
+	}
+	return uid, email, nil
 }
 
 // generateToken returns a 32-byte hex random string (64 chars). Long

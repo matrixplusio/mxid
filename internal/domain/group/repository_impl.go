@@ -9,6 +9,13 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// liveGroupMember restricts a mxid_user_group_member query to members whose user
+// is not soft-deleted. The member LIST already INNER JOINs mxid_user with the
+// same predicate; the COUNT paths did not, so a soft-deleted user (whose
+// membership row lingers until the UserDeleted purge) inflated the count and
+// desynced it from the returned page. Defense-in-depth for a dropped event.
+const liveGroupMember = "user_id IN (SELECT id FROM mxid_user WHERE deleted_at IS NULL)"
+
 type repository struct {
 	db *gorm.DB
 }
@@ -216,6 +223,7 @@ func (r *repository) GetMembers(ctx context.Context, groupID int64, page, pageSi
 	if err := r.db.WithContext(ctx).
 		Model(&UserGroupMember{}).
 		Where("group_id = ?", groupID).
+		Where(liveGroupMember).
 		Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count group members: %w", err)
 	}
@@ -245,6 +253,7 @@ func (r *repository) CountMembers(ctx context.Context, groupID int64) (int64, er
 	if err := r.db.WithContext(ctx).
 		Model(&UserGroupMember{}).
 		Where("group_id = ?", groupID).
+		Where(liveGroupMember).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count group members: %w", err)
 	}
@@ -264,6 +273,7 @@ func (r *repository) CountMembersByGroupIDs(ctx context.Context, groupIDs []int6
 		Model(&UserGroupMember{}).
 		Select("group_id, COUNT(*) AS cnt").
 		Where("group_id IN ?", groupIDs).
+		Where(liveGroupMember).
 		Group("group_id").
 		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("count group members batch: %w", err)

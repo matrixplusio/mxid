@@ -173,6 +173,52 @@ func TestService_AddMember_GroupSubjectOmitsUserID(t *testing.T) {
 	}
 }
 
+// ListMembers/CountMembers must exclude a role binding whose subject is a
+// SOFT-DELETED user, while still keeping non-user (group) subjects — the
+// liveUserSubject filter is an OR, so a naive AND would have dropped group
+// bindings too.
+func TestService_ListMembers_ExcludesSoftDeletedUserKeepsGroup(t *testing.T) {
+	db := newPermissionReferentDB(t)
+	seedNamedRole(t, db, 1, "editor")
+	svc := newPermSvc(t, db)
+	svc.validators.User = func(_ context.Context, _ int64) (bool, error) { return true, nil }
+	svc.validators.Group = func(_ context.Context, _ int64) (bool, error) { return true, nil }
+	seedLiveUser(t, db, 500, 501)
+	ctxA := tenantscope.WithTenant(context.Background(), 100)
+
+	if _, err := svc.AddMember(ctxA, 0, 1, &AddMemberRequest{SubjectType: SubjectTypeUser, SubjectID: 500}); err != nil {
+		t.Fatalf("AddMember user 500: %v", err)
+	}
+	if _, err := svc.AddMember(ctxA, 0, 1, &AddMemberRequest{SubjectType: SubjectTypeUser, SubjectID: 501}); err != nil {
+		t.Fatalf("AddMember user 501: %v", err)
+	}
+	if _, err := svc.AddMember(ctxA, 0, 1, &AddMemberRequest{SubjectType: SubjectTypeGroup, SubjectID: 600}); err != nil {
+		t.Fatalf("AddMember group 600: %v", err)
+	}
+	// Soft-delete user 501; its binding row lingers.
+	if err := db.Exec("UPDATE mxid_user SET deleted_at = ? WHERE id = 501", "2026-07-10 00:00:00").Error; err != nil {
+		t.Fatalf("soft-delete user: %v", err)
+	}
+
+	members, total, err := svc.ListMembers(ctxA, 1, MemberListParams{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("ListMembers: %v", err)
+	}
+	got := map[int64]string{}
+	for _, m := range members {
+		got[m.SubjectID] = m.SubjectType
+	}
+	if total != 2 || len(members) != 2 {
+		t.Fatalf("want 2 members (live user + group), got total=%d members=%+v", total, got)
+	}
+	if _, ok := got[501]; ok {
+		t.Fatal("soft-deleted user 501 must be excluded from role members")
+	}
+	if got[500] != SubjectTypeUser || got[600] != SubjectTypeGroup {
+		t.Fatalf("live user + group subjects must remain: %+v", got)
+	}
+}
+
 // ListMembers must resolve subject ids to display names via the injected
 // resolvers, and fall back to the string id when a subject can't be resolved.
 func TestService_ListMembers_ResolvesNames(t *testing.T) {
@@ -194,6 +240,7 @@ func TestService_ListMembers_ResolvesNames(t *testing.T) {
 	// Allow any user id past the referent guard so we can seed both a
 	// resolvable (500) and an unresolvable (501) subject.
 	svc.validators.User = func(_ context.Context, _ int64) (bool, error) { return true, nil }
+	seedLiveUser(t, db, 500, 501)
 	ctxA := tenantscope.WithTenant(context.Background(), 100)
 
 	for _, id := range []int64{500, 501} {

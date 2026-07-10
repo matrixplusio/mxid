@@ -493,7 +493,7 @@ func (r *repo) ApproveAndGrant(ctx context.Context, req *Request, approverID int
 		if err := r.insertBindingTx(tx, req, newBindingID, expiresAt); err != nil {
 			return err
 		}
-		return tx.Exec(`
+		res := tx.Exec(`
 UPDATE mxid_access_request
 SET status = ?, approver_id = ?, decided_at = ?, activated_at = ?, expires_at = ?, binding_id = ?, updated_at = ?
 WHERE id = ? AND tenant_id = ? AND status = ?`,
@@ -507,7 +507,17 @@ WHERE id = ? AND tenant_id = ? AND status = ?`,
 			req.ID,
 			req.TenantID,
 			StatusPending,
-		).Error
+		)
+		if res.Error != nil {
+			return res.Error
+		}
+		// Zero rows = the request left 'pending' between the caller's read and
+		// this write (concurrent approve / double-submit). Fail so the binding
+		// INSERT above rolls back instead of committing as an orphan grant.
+		if res.RowsAffected == 0 {
+			return ErrRequestNotPending
+		}
+		return nil
 	})
 }
 

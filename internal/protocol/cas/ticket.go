@@ -15,7 +15,10 @@ const (
 	defaultTicketTTL = 30 * time.Second
 )
 
-// ServiceTicket represents a CAS service ticket.
+// ServiceTicket represents a CAS service ticket (ST-) or, when IsProxy is set, a
+// proxy ticket (PT-). Both are single-use and share the same Redis store; the
+// IsProxy flag lets /serviceValidate reject a PT (only /proxyValidate accepts
+// one) per the CAS spec.
 type ServiceTicket struct {
 	Ticket    string   `json:"ticket"`
 	UserID    int64    `json:"user_id"`
@@ -23,6 +26,11 @@ type ServiceTicket struct {
 	Service   string   `json:"service"`
 	Username  string   `json:"username"`
 	CreatedAt time.Time `json:"created_at"`
+	// IsProxy marks this as a proxy ticket (PT-) minted via /proxy from a PGT.
+	IsProxy bool `json:"is_proxy,omitempty"`
+	// Proxies is the ordered proxy chain surfaced in a proxyValidate response's
+	// <cas:proxies> — most-recent proxy first. Empty for a directly-issued ST.
+	Proxies []string `json:"proxies,omitempty"`
 }
 
 // TicketStore manages CAS service tickets in Redis.

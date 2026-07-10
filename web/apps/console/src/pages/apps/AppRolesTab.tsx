@@ -8,7 +8,7 @@
 // time based on these bindings. SP reads claim verbatim — no JMESPath.
 import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2, Loader2, Crown, Shield, User, UsersRound, Building2, Edit2, Star } from 'lucide-react'
-import { appRoleApi, groupApi, userApi, orgApi, permissionApi, useTranslation } from '@mxid/shared'
+import { appRoleApi, groupApi, userApi, orgApi, permissionApi, useTranslation, AccessPolicySubjectType } from '@mxid/shared'
 import type {
   AppRole, AppRoleBinding, AppRoleSubjectType, AppRoleOwner,
   Group, User as UserT, OrgNode, Role,
@@ -349,7 +349,7 @@ function BindingForm({
 }) {
   const { t } = useTranslation()
   const [appRoleId, setAppRoleId] = useState<string>(String(roles[0]?.id ?? ''))
-  const [subjectType, setSubjectType] = useState<AppRoleSubjectType>('group')
+  const [subjectType, setSubjectType] = useState<AppRoleSubjectType>(AccessPolicySubjectType.Group)
   const [subjectId, setSubjectId] = useState<string>('')
   const [groups, setGroups] = useState<Group[]>([])
   const [users, setUsers] = useState<UserT[]>([])
@@ -363,14 +363,14 @@ function BindingForm({
     setOptsLoading(true)
     const load = async () => {
       try {
-        if (subjectType === 'group') setGroups((await groupApi.list({ page: 1, page_size: 200 })).items)
-        else if (subjectType === 'user') setUsers((await userApi.list({ page: 1, page_size: 200 })).items)
-        else if (subjectType === 'org') {
+        if (subjectType === AccessPolicySubjectType.Group) setGroups((await groupApi.list({ page: 1, page_size: 200 })).items)
+        else if (subjectType === AccessPolicySubjectType.User) setUsers((await userApi.list({ page: 1, page_size: 200 })).items)
+        else if (subjectType === AccessPolicySubjectType.Org) {
           const tree = await orgApi.tree()
           const flat: OrgNode[] = []
           const walk = (n: OrgNode[]) => { for (const x of n) { flat.push(x); if (x.children) walk(x.children) } }
           walk(tree); setOrgs(flat)
-        } else if (subjectType === 'role') setSysRoles((await permissionApi.listRoles({ page: 1, page_size: 200 })).items)
+        } else if (subjectType === AccessPolicySubjectType.Role) setSysRoles((await permissionApi.listRoles({ page: 1, page_size: 200 })).items)
       } finally { setOptsLoading(false) }
     }
     load()
@@ -413,10 +413,10 @@ function BindingForm({
             ) : (
               <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
                 <option value="">{t('apps.roles.pleaseSelect')}</option>
-                {subjectType === 'group' && groups.map((g) => <option key={String(g.id)} value={String(g.id)}>{g.name} ({g.code})</option>)}
-                {subjectType === 'user' && users.map((u) => <option key={String(u.id)} value={String(u.id)}>{u.display_name || u.username} ({u.username})</option>)}
-                {subjectType === 'org' && orgs.map((o) => <option key={String(o.id)} value={String(o.id)}>{o.name} ({o.code})</option>)}
-                {subjectType === 'role' && sysRoles.map((r) => <option key={String(r.id)} value={String(r.id)}>{r.name} ({r.code})</option>)}
+                {subjectType === AccessPolicySubjectType.Group && groups.map((g) => <option key={String(g.id)} value={String(g.id)}>{g.name} ({g.code})</option>)}
+                {subjectType === AccessPolicySubjectType.User && users.map((u) => <option key={String(u.id)} value={String(u.id)}>{u.display_name || u.username} ({u.username})</option>)}
+                {subjectType === AccessPolicySubjectType.Org && orgs.map((o) => <option key={String(o.id)} value={String(o.id)}>{o.name} ({o.code})</option>)}
+                {subjectType === AccessPolicySubjectType.Role && sysRoles.map((r) => <option key={String(r.id)} value={String(r.id)}>{r.name} ({r.code})</option>)}
               </Select>
             )}
           </Field>

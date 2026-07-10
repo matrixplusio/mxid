@@ -26,7 +26,24 @@ func newPermissionReferentDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(&Role{}, &RoleBinding{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	// ListMembers/CountMembers now subquery mxid_user to drop soft-deleted user
+	// subjects. mxid_user is owned by the user domain (not imported here); a
+	// minimal stand-in table suffices. Tests seed the rows they need live.
+	if err := db.Exec("CREATE TABLE mxid_user (id INTEGER PRIMARY KEY, deleted_at DATETIME)").Error; err != nil {
+		t.Fatalf("create mxid_user: %v", err)
+	}
 	return db
+}
+
+// seedLiveUser inserts a non-deleted mxid_user row so a user role-binding passes
+// the liveUserSubject filter.
+func seedLiveUser(t *testing.T, db *gorm.DB, ids ...int64) {
+	t.Helper()
+	for _, id := range ids {
+		if err := db.Exec("INSERT INTO mxid_user (id, deleted_at) VALUES (?, NULL)", id).Error; err != nil {
+			t.Fatalf("seed user %d: %v", id, err)
+		}
+	}
 }
 
 func testIDGen(t *testing.T) *snowflake.Generator {

@@ -849,6 +849,8 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 		} else {
 			authzSvc = authzSvc.WithCasbin(casbinEngine)
 			wireCasbinSync(workerCtx, a, casbinEngine, loader)
+			// Safety net for dropped resync events: periodic full rebuild.
+			go runCasbinReconcile(workerCtx, casbinEngine, loader, a.Logger)
 		}
 	}
 	// Tell authn /auth/me whether the caller is admin-eligible so the
@@ -938,6 +940,14 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 			ctx = tenantscope.WithTenant(ctx, tenantID)
 			urls, err := settingService.ExternalURLs(ctx, tenantID)
 			if err != nil {
+				// ErrNotFound already returns (empty, nil) inside ExternalURLs, so a
+				// non-nil err here is a genuine DB / decode failure. Empty return is
+				// the intended fail-safe (the EE side falls back to its boot-time env
+				// URLs), but swallowing the error silently hid DB blips that
+				// downgraded the external-IdP issuer to the boot default with zero
+				// signal. Log it so the degradation is observable.
+				a.Logger.Warn("external-idp URL settings read failed; falling back to boot defaults",
+					zap.Int64("tenant_id", tenantID), zap.Error(err))
 				return "", "", ""
 			}
 			return urls.IssuerURL, urls.PortalURL, urls.ConsoleURL
@@ -1121,7 +1131,7 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 	if err != nil {
 		a.Logger.Fatal("wire zitadel OIDC engine: " + err.Error())
 	}
-	samlModule := saml.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, appResolver, idResolver, sessResolver, tenantResolver, saml.NewSessionIndexStore(a.Redis), appRolesAdapter, a.Redis, a.Logger)
+	samlModule := saml.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, appResolver, idResolver, sessResolver, tenantResolver, saml.NewSessionIndexStore(a.Redis), appRolesAdapter, accessAdapter, a.Redis, a.Logger)
 	casModule := cas.Register(a.ProtocolGroup, issuer, a.Config.Server.PortalURL, a.Redis, appResolver, idResolver, sessResolver, tenantResolver, appRolesAdapter, a.Logger)
 
 	// One-click offboarding (L1 access cutoff): disable account + back-channel
@@ -1755,6 +1765,36 @@ func runDynamicGroupReconcile(stopCtx context.Context, grp *group.Service, tenan
 		case <-stopCtx.Done():
 			return
 		case <-ticker.C:
+		}
+	}
+}
+
+// runCasbinReconcile periodically rebuilds the Casbin enforcer policy from the
+// mxid_role* source of truth. The policy is normally kept fresh by role /
+// permission / super-admin events (wireCasbinSync), but that is purely
+// event-driven: a dropped resync message (Redis blip, pod restart mid-publish)
+// would leave the enforcer stale until the next relevant mutation or a restart —
+// silently granting or denying against an outdated role→permission catalog. This
+// is the safety net, mirroring runDynamicGroupReconcile. Sync is fail-safe: a
+// loader error leaves the existing policy untouched (never degrades to
+// deny-all), so a transient DB hiccup on a tick is harmless. The first pass is
+// skipped here because the caller already ran an initial Sync at wire time.
+func runCasbinReconcile(stopCtx context.Context, engine *authz.CasbinEngine, loader authz.PolicyLoader, logger *zap.Logger) {
+	const tickEvery = 30 * time.Minute
+	ticker := time.NewTicker(tickEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stopCtx.Done():
+			return
+		case <-ticker.C:
+		}
+		// context.Background (not tenant-scoped): the loader reads the full
+		// role/permission catalog across the install, matching the boot-time Sync.
+		if err := engine.Sync(context.Background(), loader); err != nil {
+			// Existing policy is retained on error; log so a persistent failure
+			// (vs a one-off blip) is visible.
+			logger.Warn("casbin periodic reconcile failed; keeping current policy", zap.Error(err))
 		}
 	}
 }

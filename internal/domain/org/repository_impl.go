@@ -168,10 +168,17 @@ func (r *repository) GetMembers(ctx context.Context, orgID int64, page, pageSize
 		Select("id").
 		Where("deleted_at IS NULL AND (CAST(path AS TEXT) = (?) OR CAST(path AS TEXT) LIKE (?) || '.%')", rootPath, rootPath)
 
+	// Exclude soft-deleted users: their mxid_user_org rows persist (membership is
+	// normally purged on UserDeleted, but this is the defense-in-depth net for a
+	// dropped event) and mxid_user_org has no deleted_at of its own, so without
+	// this a soft-deleted user would still be counted and listed as a member.
+	liveUsers := "user_id IN (SELECT id FROM mxid_user WHERE deleted_at IS NULL)"
+
 	var total int64
 	if err := r.db.WithContext(ctx).
 		Model(&UserOrg{}).
 		Where("org_id IN (?)", subtree).
+		Where(liveUsers).
 		Distinct("user_id").
 		Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count organization members: %w", err)
@@ -182,6 +189,7 @@ func (r *repository) GetMembers(ctx context.Context, orgID int64, page, pageSize
 	if err := r.db.WithContext(ctx).
 		Model(&UserOrg{}).
 		Where("org_id IN (?)", subtree).
+		Where(liveUsers).
 		Group("user_id").
 		Order("MIN(created_at) ASC").
 		Offset(offset).

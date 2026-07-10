@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, X, Search } from 'lucide-react'
-import { userApi, groupApi, orgApi, cn, useTranslation } from '@mxid/shared'
+import { userApi, groupApi, orgApi, cn, useTranslation, AccessPolicySubjectType } from '@mxid/shared'
 import type { OrgNode } from '@mxid/shared'
 
 export type SubjectType = 'user' | 'group' | 'org'
@@ -70,14 +70,14 @@ export default function SubjectPicker({ subjectType, value, selectedLabel, onCha
       setLoading(true)
       try {
         let opts: SubjectOption[] = []
-        if (subjectType === 'user') {
+        if (subjectType === AccessPolicySubjectType.User) {
           const data = await userApi.list({ search: query, page: 1, page_size: 10 })
           opts = data.items.map((u) => ({
             id: u.id,
             label: u.display_name || u.username,
             secondary: u.email || u.username,
           }))
-        } else if (subjectType === 'group') {
+        } else if (subjectType === AccessPolicySubjectType.Group) {
           const data = await groupApi.list({ keyword: query, page: 1, page_size: 10 })
           opts = data.items.map((g) => ({ id: g.id, label: g.name, secondary: g.code }))
         } else {

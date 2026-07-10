@@ -104,16 +104,21 @@ func (h *Handler) checkAssignAllowed(c *gin.Context, roleID int64, req *AddMembe
 		}
 	}
 
-	// 4. If the binding is scoped, verify the caller's binding for each
-	// granted perm actually covers the target scope. Implemented by
-	// running an authz.Check per perm against the requested scope target.
+	// 4. Verify the caller's OWN authority covers the requested scope — INCLUDING
+	// a GLOBAL (unscoped) grant. Previously this ran only for scoped bindings, so
+	// a scope-limited admin (who holds a perm within one org/group) could hand
+	// out an UNSCOPED binding of that perm — privilege escalation. A nil target
+	// is the runtime check for a globally-required permission, so a scoped-only
+	// holder fails it. Runs per granted perm via the same engine path as runtime
+	// checks.
+	var target *authz.ScopeTarget
 	if req.ScopeType != nil && req.ScopeID != nil {
-		target := scopeToTarget(*req.ScopeType, *req.ScopeID)
-		for _, p := range rolePerms {
-			ok, err := svc.Check(c.Request.Context(), tenantID, callerID, p.Code, target)
-			if err != nil || !ok {
-				return errAssignBlocked("scope of grant exceeds your own: " + p.Code)
-			}
+		target = scopeToTarget(*req.ScopeType, *req.ScopeID)
+	}
+	for _, p := range rolePerms {
+		ok, err := svc.Check(c.Request.Context(), tenantID, callerID, p.Code, target)
+		if err != nil || !ok {
+			return errAssignBlocked("scope of grant exceeds your own: " + p.Code)
 		}
 	}
 	return nil
@@ -285,12 +290,59 @@ func (h *Handler) SetPermissions(c *gin.Context) {
 		return
 	}
 
+	// Privilege-escalation guard: a caller may only put permissions on a role
+	// that the caller themselves holds. Without this, a holder of
+	// role.permission.manage could add any catalog permission (incl. their own
+	// escalation) to a role they belong to.
+	if err := h.checkSetPermissionsAllowed(c, id, permIDs); err != nil {
+		response.Error(c, http.StatusForbidden, 40300, err.Error(), "")
+		return
+	}
+
 	if err := h.svc.SetRolePermissions(c.Request.Context(), id, permIDs); err != nil {
 		h.handleServiceError(c, err)
 		return
 	}
 
 	response.OK(c, nil)
+}
+
+// checkSetPermissionsAllowed is the privilege-escalation guard for PUT
+// /roles/:id/permissions — the subset half of checkAssignAllowed applied to the
+// permission catalog being set: the caller may only grant codes they hold.
+func (h *Handler) checkSetPermissionsAllowed(c *gin.Context, roleID int64, permIDs []int64) error {
+	svc := authz.FromContext(c)
+	if svc == nil {
+		return errAssignBlocked("authz engine unavailable")
+	}
+	tid, _ := c.Get("tenant_id")
+	tenantID, _ := tid.(int64)
+	uid, _ := c.Get("user_id")
+	callerID, _ := uid.(int64)
+	if callerID == 0 {
+		return errAssignBlocked("caller not authenticated")
+	}
+	callerPerms, err := svc.PermissionsForUser(c.Request.Context(), tenantID, callerID)
+	if err != nil {
+		return errAssignBlocked("caller permission lookup failed")
+	}
+	if _, ok := callerPerms["*"]; ok {
+		return nil // super_admin may set anything
+	}
+	// A non-wildcard caller must not edit the super_admin role's catalog.
+	if role, rerr := h.svc.GetRole(c.Request.Context(), roleID); rerr == nil && role.Code == SuperAdminRoleCode {
+		return errAssignBlocked("only a super admin can edit super_admin permissions")
+	}
+	perms, err := h.svc.GetPermissionsByIDs(c.Request.Context(), permIDs)
+	if err != nil {
+		return errAssignBlocked("permission lookup failed")
+	}
+	for _, p := range perms {
+		if _, ok := callerPerms[p.Code]; !ok {
+			return errAssignBlocked("cannot grant permission you do not hold: " + p.Code)
+		}
+	}
+	return nil
 }
 
 // ListMembers handles GET /roles/:id/members.

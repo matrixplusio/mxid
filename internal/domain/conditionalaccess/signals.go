@@ -66,6 +66,23 @@ func (c *SignalComputer) Compute(ctx context.Context, in ComputeInput) (Signals,
 		return s, err
 	}
 
+	// The CURRENT login is already persisted to the history store before
+	// conditional-access runs (the login-success event records it synchronously),
+	// so it comes back as the newest row. Left in, it makes NewCountry and
+	// ImpossibleTravel compare the login against ITSELF (same IP, same country,
+	// ~0s apart) and NEVER fire. Drop the just-written current-login row(s) —
+	// same IP within a few seconds — so we compare only against genuinely PRIOR
+	// logins. Same-IP rows can't trip either geo signal anyway (identical
+	// country), so excluding them is safe.
+	prior := make([]LoginEvent, 0, len(hist))
+	for _, h := range hist {
+		if h.IP == in.IP && c.now().Sub(h.At) < 5*time.Second {
+			continue
+		}
+		prior = append(prior, h)
+	}
+	hist = prior
+
 	// New country: current country resolved, non-empty, and not present in the
 	// set of countries seen in recent successful logins. Empty history (first
 	// login) is never "new country" — there is nothing to compare against.

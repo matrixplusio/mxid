@@ -22,6 +22,12 @@ func newOrgChildGuardDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(&Organization{}, &UserOrg{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	// GetMembers now excludes soft-deleted users via a subquery on mxid_user
+	// (owned by the user domain, not imported here). A minimal stand-in table is
+	// enough for the membership queries to resolve.
+	if err := db.Exec("CREATE TABLE mxid_user (id INTEGER PRIMARY KEY, deleted_at DATETIME)").Error; err != nil {
+		t.Fatalf("create mxid_user: %v", err)
+	}
 	return db
 }
 
@@ -37,6 +43,10 @@ func seedOrgWithMembers(t *testing.T, db *gorm.DB) {
 	}
 	if err := db.WithContext(sys).Create(&UserOrg{ID: 10, UserID: 99, OrgID: 2}).Error; err != nil {
 		t.Fatalf("seed member: %v", err)
+	}
+	// User 99 is live (deleted_at NULL) so it counts as a member.
+	if err := db.Exec("INSERT INTO mxid_user (id, deleted_at) VALUES (99, NULL)").Error; err != nil {
+		t.Fatalf("seed user: %v", err)
 	}
 }
 
@@ -82,5 +92,26 @@ func TestService_OrgChildGuard_SameTenantAllowed(t *testing.T) {
 	}
 	if total != 1 || len(ids) != 1 || ids[0] != 99 {
 		t.Fatalf("GetMembers same-tenant got ids=%v total=%d", ids, total)
+	}
+}
+
+// A soft-deleted user whose mxid_user_org row lingers must NOT be counted or
+// listed as an org member (defense-in-depth for a dropped UserDeleted event).
+func TestService_OrgChildGuard_ExcludesSoftDeletedMember(t *testing.T) {
+	db := newOrgChildGuardDB(t)
+	seedOrgWithMembers(t, db)
+	// Soft-delete user 99 while leaving the membership row in place.
+	if err := db.Exec("UPDATE mxid_user SET deleted_at = ? WHERE id = 99", "2026-07-10 00:00:00").Error; err != nil {
+		t.Fatalf("soft-delete user: %v", err)
+	}
+	svc := &Service{repo: NewRepository(db)}
+
+	ctxB := tenantscope.WithTenant(context.Background(), 200)
+	ids, total, err := svc.GetMembers(ctxB, 2, 1, 20)
+	if err != nil {
+		t.Fatalf("GetMembers: %v", err)
+	}
+	if total != 0 || len(ids) != 0 {
+		t.Fatalf("soft-deleted user must be excluded, got ids=%v total=%d", ids, total)
 	}
 }

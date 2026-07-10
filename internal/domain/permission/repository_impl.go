@@ -7,6 +7,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// liveUserSubject excludes bindings whose subject is a SOFT-DELETED user, while
+// keeping group/org subjects (which don't point at mxid_user). A user binding
+// normally goes away on UserDeleted; this is the defense-in-depth net for a
+// dropped event so a deleted user is not counted or listed as a role member.
+const liveUserSubject = "(subject_type <> 'user' OR subject_id IN (SELECT id FROM mxid_user WHERE deleted_at IS NULL))"
+
 // gormRepository implements Repository using GORM.
 type gormRepository struct {
 	db *gorm.DB
@@ -110,7 +116,9 @@ func (r *gormRepository) ListMembers(ctx context.Context, roleID int64, params M
 	var bindings []*RoleBinding
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&RoleBinding{}).Where("role_id = ?", roleID)
+	query := r.db.WithContext(ctx).Model(&RoleBinding{}).
+		Where("role_id = ?", roleID).
+		Where(liveUserSubject)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count role members: %w", err)
@@ -142,6 +150,7 @@ func (r *gormRepository) CountMembers(ctx context.Context, roleID int64) (int64,
 	err := r.db.WithContext(ctx).
 		Model(&RoleBinding{}).
 		Where("role_id = ?", roleID).
+		Where(liveUserSubject).
 		Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("count role members: %w", err)

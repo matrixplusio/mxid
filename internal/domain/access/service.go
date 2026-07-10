@@ -31,6 +31,13 @@ var ErrSelfApproval = errors.New("access: approver must differ from requester (s
 // scoping approval authority per eligibility. Handlers should map it to 403.
 var ErrApproverNotEligible = errors.New("access: approver is not authorized to approve this eligibility")
 
+// ErrRequestNotPending is returned by ApproveAndGrant when the guarded UPDATE
+// (WHERE status='pending') matches zero rows — the request was already decided
+// by a concurrent approver or a double-submit. Returning it rolls back the
+// binding INSERT in the same transaction; without the RowsAffected check the
+// binding would commit as an orphan grant that never expires.
+var ErrRequestNotPending = errors.New("access: request is no longer pending")
+
 // SuperAdminChecker reports whether a user holds the global super-admin flag.
 // Super-admins get a break-glass exemption from the per-eligibility approver
 // scoping (they can already approve anything via the wildcard authz policy;

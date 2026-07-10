@@ -461,7 +461,28 @@ export const TenantStatus = { Enabled: 1, Disabled: 2 } as const
 export const IdpStatus = { Enabled: 1, Disabled: 2 } as const
 export const OffboardingTaskStatus = { Open: 0, Resolved: 1 } as const
 export const OffboardingItemStatus = { Pending: 0, Done: 1 } as const
-export const AccessRequestStatus = { Pending: 'pending', Approved: 'approved', Rejected: 'rejected' } as const
+export const AccessRequestStatus = {
+  Pending: 'pending',
+  Approved: 'approved',
+  Rejected: 'rejected',
+  Cancelled: 'cancelled',
+  Expired: 'expired',
+  Revoked: 'revoked',
+} as const
+// Access target kind — which role system a grant lands in (access/model.go TargetConsole/TargetApp).
+export const AccessTargetKind = { Console: 'console', App: 'app' } as const
+// Eligibility requester_subject_type (access/model.go: "any" plus user/group/org).
+export const AccessRequesterSubjectType = { Any: 'any', User: 'user', Group: 'group', Org: 'org' } as const
+// Eligibility approver_subject_type (access/model.go ApproverRole/Group/User/Auto).
+export const AccessApproverSubjectType = { Role: 'role', Group: 'group', User: 'user', Auto: 'auto' } as const
+// Permission RoleBinding subject_type (permission/model.go SubjectTypeUser/Group/Org).
+export const BindingSubjectType = { User: 'user', Group: 'group', Org: 'org' } as const
+// Permission RoleBinding scope_type (permission/model.go ScopeTypeOrg/Group; global is empty string).
+export const BindingScopeType = { Org: 'org', Group: 'group' } as const
+// App access-policy + app-role binding subject_type — superset that includes 'public'.
+export const AccessPolicySubjectType = { Public: 'public', User: 'user', Group: 'group', Org: 'org', Role: 'role' } as const
+// Group dynamic rule status (group/model.go RuleEnabled=1, RulePaused=2).
+export const GroupRuleStatus = { Enabled: 1, Paused: 2 } as const
 
 export interface AppTemplateField {
   key: string

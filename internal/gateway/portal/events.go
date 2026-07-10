@@ -122,6 +122,26 @@ func AttachBusSubscribers(bus *event.Bus, rdb *redis.Client, logger *zap.Logger)
 	bus.Subscribe("app_access.changed", func(ctx context.Context, e event.Event) {
 		emit(brokerEvent{Type: "apps_updated", Payload: e.Payload})
 	})
+	// The portal app list is a function of app-access POLICIES *and* the
+	// role/group/org MEMBERSHIP those policies match on (AppsForUser resolves a
+	// role/group/org-subject policy against the user's bindings). app_access.changed
+	// covers policy edits; these six cover the membership side, which otherwise
+	// left a user's app list stale until a manual refresh after an admin added or
+	// removed them from a role/group/org that grants app access. (role
+	// permission-catalog changes are intentionally NOT here — app visibility never
+	// reads mxid_role_permission.) These are manual admin ops (dynamic-group sync
+	// writes members at the repo layer without emitting per-user events), so the
+	// broadcast is low-frequency. Broadcast-all like app_access.changed; each
+	// client re-fetches /apps.
+	for _, membershipEvent := range []string{
+		"role.member_added", "role.member_removed",
+		"group.member_added", "group.member_removed",
+		"org.member_added", "org.member_removed",
+	} {
+		bus.Subscribe(membershipEvent, func(ctx context.Context, e event.Event) {
+			emit(brokerEvent{Type: "apps_updated", Payload: e.Payload})
+		})
+	}
 	bus.Subscribe("tenant.updated", func(ctx context.Context, e event.Event) {
 		emit(brokerEvent{Type: "tenants_updated"})
 	})

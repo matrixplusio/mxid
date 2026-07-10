@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/imkerbos/mxid/pkg/dberr"
 	"github.com/imkerbos/mxid/pkg/event"
@@ -22,6 +23,11 @@ var ErrRootOrgDelete = errors.New("root organization cannot be deleted")
 // parent_id self-reference has no ON DELETE rule, so a hard delete would strand
 // the whole subtree; the operator must delete or move the children first.
 var ErrOrgHasChildren = errors.New("organization has sub-organizations; delete or move them first")
+
+// ErrOrgCycle blocks a Move whose new parent is the org itself or one of its
+// descendants — that would make the ltree path self-referential and corrupt the
+// hierarchy.
+var ErrOrgCycle = errors.New("organization cannot be moved under itself or its own descendant")
 
 // ErrOrgNotFound is returned when an organization is absent — or, because the
 // org repo is tenant-scoped by the tenantscope plugin, when the requested org
@@ -237,6 +243,14 @@ func (s *Service) Move(ctx context.Context, id int64, req *MoveOrgRequest) error
 		parent, err := s.fetchParentOrg(ctx, *req.ParentID)
 		if err != nil {
 			return err
+		}
+		// Cycle guard: the new parent must not be the org itself or any node in
+		// its own subtree. Moving an org under its own descendant would make the
+		// ltree path self-referential and corrupt the whole hierarchy. Compared
+		// on the path prefix (org.Path is an ancestor of parent.Path iff parent
+		// is org or a descendant of org).
+		if *req.ParentID == id || parent.Path == org.Path || strings.HasPrefix(parent.Path, org.Path+".") {
+			return ErrOrgCycle
 		}
 		newPath = parent.Path + "." + org.Code
 	}

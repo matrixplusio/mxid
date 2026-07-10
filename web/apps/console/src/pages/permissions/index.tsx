@@ -4,7 +4,7 @@ import { Plus, Shield, Check, Loader2, Trash2, Users, UserPlus } from 'lucide-re
 import { permissionApi, formatDate, cn, useTranslation } from '@mxid/shared'
 import { pageMotion, Button, Modal, ConfirmDialog } from '@mxid/shared/ui'
 import type { Role, Permission, PaginatedData, RoleBinding } from '@mxid/shared'
-import { RoleType } from '@mxid/shared'
+import { RoleType, BindingSubjectType, BindingScopeType } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
 import { useTabParam } from '../../hooks/useTabParam'
 import { toast, extractMessage } from '../../components/ui/toast'
@@ -497,9 +497,9 @@ export default function PermissionsPage() {
                               <td className="py-3 pr-4">
                                 <span className={cn(
                                   'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                  binding.subject_type === 'user' && 'bg-blue-50 text-blue-700',
-                                  binding.subject_type === 'group' && 'bg-emerald-50 text-emerald-700',
-                                  binding.subject_type === 'org' && 'bg-purple-50 text-purple-700',
+                                  binding.subject_type === BindingSubjectType.User && 'bg-blue-50 text-blue-700',
+                                  binding.subject_type === BindingSubjectType.Group && 'bg-emerald-50 text-emerald-700',
+                                  binding.subject_type === BindingSubjectType.Org && 'bg-purple-50 text-purple-700',
                                 )}>
                                   {subjectTypeLabels[binding.subject_type as SubjectType] || binding.subject_type}
                                 </span>
@@ -515,7 +515,7 @@ export default function PermissionsPage() {
                               <td className="py-3 pr-4 text-sm">
                                 {binding.scope_type ? (
                                   <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                    {binding.scope_type === 'org' ? t('permissions.scopeOrg') : t('permissions.scopeGroup')} #{binding.scope_id}
+                                    {binding.scope_type === BindingScopeType.Org ? t('permissions.scopeOrg') : t('permissions.scopeGroup')} #{binding.scope_id}
                                   </span>
                                 ) : (
                                   <span className="text-xs text-faint">{t('permissions.scopeGlobal')}</span>
@@ -706,14 +706,14 @@ export default function PermissionsPage() {
               {!isSuperAdminRole && addMemberForm.scope_type !== '' && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-ink">
-                    {addMemberForm.scope_type === 'org' ? t('permissions.addMemberModal.scopeIdOrgLabel') : t('permissions.addMemberModal.scopeIdGroupLabel')}
+                    {addMemberForm.scope_type === BindingScopeType.Org ? t('permissions.addMemberModal.scopeIdOrgLabel') : t('permissions.addMemberModal.scopeIdGroupLabel')}
                   </label>
                   <input
                     type="number"
                     min="1"
                     value={addMemberForm.scope_id}
                     onChange={(e) => setAddMemberForm((f) => ({ ...f, scope_id: e.target.value }))}
-                    placeholder={addMemberForm.scope_type === 'org' ? t('permissions.addMemberModal.scopeIdOrgPlaceholder') : t('permissions.addMemberModal.scopeIdGroupPlaceholder')}
+                    placeholder={addMemberForm.scope_type === BindingScopeType.Org ? t('permissions.addMemberModal.scopeIdOrgPlaceholder') : t('permissions.addMemberModal.scopeIdGroupPlaceholder')}
                     className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                     required
                   />

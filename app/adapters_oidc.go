@@ -79,8 +79,14 @@ func (m *accessMatcher) UserInOrg(ctx context.Context, userID, orgID int64) (boo
 
 func (m *accessMatcher) UserHasRole(ctx context.Context, userID, roleID int64) (bool, error) {
 	var n int64
+	// Only ACTIVE, UNEXPIRED bindings grant role-based app access. JIT (access
+	// domain) hands out time-bound bindings; without the status/expires_at guard
+	// an expired or disabled elevation would keep matching role-subject access
+	// policies — a permanent privilege leak whenever the JIT expiry sweeper is
+	// not the leader or has crashed. Mirrors EffectiveBindingsForUser's filter.
 	err := m.app.DB.WithContext(ctx).Table("mxid_role_binding").
-		Where("role_id = ? AND subject_type = 'user' AND subject_id = ?", roleID, userID).Count(&n).Error
+		Where("role_id = ? AND subject_type = 'user' AND subject_id = ? AND status = 1 AND (expires_at IS NULL OR expires_at > NOW())", roleID, userID).
+		Count(&n).Error
 	return n > 0, err
 }
 

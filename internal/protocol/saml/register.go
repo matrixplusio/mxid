@@ -24,12 +24,14 @@ func Register(
 	tenantRes resolver.TenantResolver,
 	sessionIdx *SessionIndexStore,
 	appRoles AppRoleResolver,
+	access AccessChecker,
 	rdb *redis.Client,
 	logger *zap.Logger,
 ) *Module {
 	handler := NewHandler(issuer, portalURL, appRes, idRes, sessRes, tenantRes, sessionIdx, logger)
 	handler.confirm = ssoflow.NewConfirmStore(rdb)
 	handler.appRoles = appRoles
+	handler.access = access
 	handler.RegisterRoutes(rg)
 	return &Module{Handler: handler}
 }

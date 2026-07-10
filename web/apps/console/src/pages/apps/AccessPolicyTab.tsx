@@ -8,7 +8,7 @@
 // SSE clients refetch /apps so users see new permissions without reload.
 import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2, Loader2, ShieldCheck, ShieldOff, Globe2, UsersRound, User, Building2, Crown } from 'lucide-react'
-import { appAccessApi, groupApi, userApi, orgApi, permissionApi, cn, useTranslation } from '@mxid/shared'
+import { appAccessApi, groupApi, userApi, orgApi, permissionApi, cn, useTranslation, AccessPolicySubjectType } from '@mxid/shared'
 import type { AccessPolicy, AccessSubjectType, AccessEffect, AccessOwner, Group, User as UserT, OrgNode, Role } from '@mxid/shared'
 import { Field, Select, Button, Tag, ConfirmDialog } from '../../components/ui'
 import { toast } from '../../components/ui/toast'
@@ -135,12 +135,12 @@ function PolicyRow({ policy, onDelete }: { policy: AccessPolicy; onDelete: (p: A
         <div className="flex items-center gap-2">
           <Tag variant={isAllow ? 'green' : 'red'}>{isAllow ? t('apps.access.allow') : t('apps.access.deny')}</Tag>
           <span className="text-sm font-medium text-ink">{t(`apps.access.subjectLabel.${policy.subject_type}`)}</span>
-          {policy.subject_type !== 'public' && (
+          {policy.subject_type !== AccessPolicySubjectType.Public && (
             <span className="text-sm text-ink">
               {policy.subject_name || t('apps.access.subjectLabel.unknown')} <span className="text-xs text-faint font-mono">{policy.subject_code}</span>
             </span>
           )}
-          {policy.subject_type === 'public' && (
+          {policy.subject_type === AccessPolicySubjectType.Public && (
             <span className="text-sm text-muted">{t('apps.access.subjectLabel.publicLong')}</span>
           )}
         </div>
@@ -157,7 +157,7 @@ function PolicyRow({ policy, onDelete }: { policy: AccessPolicy; onDelete: (p: A
 }
 
 function policyLabel(p: AccessPolicy, t: (k: string) => string): string {
-  if (p.subject_type === 'public') return 'public'
+  if (p.subject_type === AccessPolicySubjectType.Public) return 'public'
   return `${t(`apps.access.subjectLabel.${p.subject_type}`)}:${p.subject_name || p.subject_id}`
 }
 
@@ -183,7 +183,7 @@ function AddPolicyModal({
   onSaved: () => void
 }) {
   const { t } = useTranslation()
-  const [subjectType, setSubjectType] = useState<AccessSubjectType>('group')
+  const [subjectType, setSubjectType] = useState<AccessSubjectType>(AccessPolicySubjectType.Group)
   const [subjectId, setSubjectId] = useState<string>('')
   const [effect, setEffect] = useState<AccessEffect>('allow')
 
@@ -196,17 +196,17 @@ function AddPolicyModal({
 
   useEffect(() => {
     setSubjectId('')
-    if (subjectType === 'public') return
+    if (subjectType === AccessPolicySubjectType.Public) return
     setOptsLoading(true)
     const load = async () => {
       try {
-        if (subjectType === 'group') {
+        if (subjectType === AccessPolicySubjectType.Group) {
           const r = await groupApi.list({ page: 1, page_size: 200 })
           setGroups(r.items)
-        } else if (subjectType === 'user') {
+        } else if (subjectType === AccessPolicySubjectType.User) {
           const r = await userApi.list({ page: 1, page_size: 200 })
           setUsers(r.items)
-        } else if (subjectType === 'org') {
+        } else if (subjectType === AccessPolicySubjectType.Org) {
           const r = await orgApi.tree()
           const flat: OrgNode[] = []
           const walk = (nodes: OrgNode[]) => {
@@ -217,7 +217,7 @@ function AddPolicyModal({
           }
           walk(r)
           setOrgs(flat)
-        } else if (subjectType === 'role') {
+        } else if (subjectType === AccessPolicySubjectType.Role) {
           const r = await permissionApi.listRoles({ page: 1, page_size: 200 })
           setRoles(r.items)
         }
@@ -229,7 +229,7 @@ function AddPolicyModal({
   }, [subjectType])
 
   const handleSave = async () => {
-    if (subjectType !== 'public' && !subjectId) {
+    if (subjectType !== AccessPolicySubjectType.Public && !subjectId) {
       toast.warning(t('apps.access.pleaseChooseSubject'))
       return
     }
@@ -268,17 +268,17 @@ function AddPolicyModal({
             </Select>
           </Field>
 
-          {subjectType !== 'public' && (
+          {subjectType !== AccessPolicySubjectType.Public && (
             <Field label={t('apps.access.selectSubject')}>
               {optsLoading ? (
                 <div className="flex h-10 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-faint" /></div>
               ) : (
                 <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
                   <option value="">{t('apps.access.pleaseSelect')}</option>
-                  {subjectType === 'group' && groups.map((g) => <option key={String(g.id)} value={String(g.id)}>{g.name} ({g.code})</option>)}
-                  {subjectType === 'user' && users.map((u) => <option key={String(u.id)} value={String(u.id)}>{u.display_name || u.username} ({u.username})</option>)}
-                  {subjectType === 'org' && orgs.map((o) => <option key={String(o.id)} value={String(o.id)}>{o.name} ({o.code})</option>)}
-                  {subjectType === 'role' && roles.map((r) => <option key={String(r.id)} value={String(r.id)}>{r.name} ({r.code})</option>)}
+                  {subjectType === AccessPolicySubjectType.Group && groups.map((g) => <option key={String(g.id)} value={String(g.id)}>{g.name} ({g.code})</option>)}
+                  {subjectType === AccessPolicySubjectType.User && users.map((u) => <option key={String(u.id)} value={String(u.id)}>{u.display_name || u.username} ({u.username})</option>)}
+                  {subjectType === AccessPolicySubjectType.Org && orgs.map((o) => <option key={String(o.id)} value={String(o.id)}>{o.name} ({o.code})</option>)}
+                  {subjectType === AccessPolicySubjectType.Role && roles.map((r) => <option key={String(r.id)} value={String(r.id)}>{r.name} ({r.code})</option>)}
                 </Select>
               )}
             </Field>

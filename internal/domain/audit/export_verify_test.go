@@ -55,6 +55,42 @@ func TestVerifyExport_UntrustedKeyFails(t *testing.T) {
 	}
 }
 
+func TestVerifyExport_ZeroAnchorsRejected(t *testing.T) {
+	// An export with every anchor stripped proves nothing. Before the guard the
+	// verify loop was simply skipped and OK:true returned.
+	b, pub := exportFixture(t)
+	b.Anchors = nil
+	res, err := VerifyExport(b, NewKeyRegistry(pub))
+	if err != nil {
+		t.Fatalf("VerifyExport error: %v", err)
+	}
+	if res.OK {
+		t.Fatal("anchorless bundle verified (proves nothing)")
+	}
+	if res.Reason != "no anchors" {
+		t.Fatalf("expected reason 'no anchors', got %q", res.Reason)
+	}
+}
+
+func TestVerifyExport_IncompleteCoverageRejected(t *testing.T) {
+	// Anchors cover [1,3] but the bundle declares ToSeq=4 with a forged, unanchored
+	// entry appended. Those entries fall outside every anchor range and are never
+	// Merkle-checked, so before the coverage guard the bundle verified OK.
+	b, pub := exportFixture(t)
+	b.ToSeq = 4
+	b.Entries = append(b.Entries, ExportEntry{Seq: 4, EntryHash: []byte("forged-unanchored-entry-000004")})
+	res, err := VerifyExport(b, NewKeyRegistry(pub))
+	if err != nil {
+		t.Fatalf("VerifyExport error: %v", err)
+	}
+	if res.OK {
+		t.Fatal("bundle with unanchored appended entries verified")
+	}
+	if res.Reason != "incomplete coverage" {
+		t.Fatalf("expected reason 'incomplete coverage', got %q", res.Reason)
+	}
+}
+
 func TestReadExport_RoundTrip(t *testing.T) {
 	b, pub := exportFixture(t)
 	dir := t.TempDir()

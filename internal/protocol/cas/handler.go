@@ -105,6 +105,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 		cas.GET("/validate", h.validate)
 		cas.GET("/serviceValidate", h.serviceValidate)
 		cas.GET("/p3/serviceValidate", h.p3ServiceValidate)
+		cas.GET("/proxy", h.proxy)
+		cas.GET("/proxyValidate", h.proxyValidate)
+		cas.GET("/p3/proxyValidate", h.p3ProxyValidate)
 		cas.GET("/logout", h.logout)
 	}
 }
@@ -251,14 +254,42 @@ type ServiceResponse struct {
 	Failure *AuthenticationFailure `xml:"cas:authenticationFailure,omitempty"`
 }
 
-// AuthenticationSuccess represents a successful validation.
+// AuthenticationSuccess represents a successful validation. Field order mirrors
+// the CAS XML schema: user, attributes (p3), proxyGrantingTicket, proxies.
 type AuthenticationSuccess struct {
-	User       string      `xml:"cas:user"`
-	Attributes *Attributes `xml:"cas:attributes,omitempty"`
+	User                 string      `xml:"cas:user"`
+	Attributes           *Attributes `xml:"cas:attributes,omitempty"`
+	ProxyGrantingTicket  string      `xml:"cas:proxyGrantingTicket,omitempty"`
+	Proxies              *ProxyList  `xml:"cas:proxies,omitempty"`
+}
+
+// ProxyList is the ordered <cas:proxies> chain in a proxyValidate response —
+// each <cas:proxy> is a proxying service's pgtUrl, most-recent first.
+type ProxyList struct {
+	Proxies []string `xml:"cas:proxy"`
 }
 
 // AuthenticationFailure represents a failed validation.
 type AuthenticationFailure struct {
+	Code    string `xml:"code,attr"`
+	Message string `xml:",chardata"`
+}
+
+// ProxyResponse wraps the /proxy endpoint's XML response.
+type ProxyResponse struct {
+	XMLName xml.Name      `xml:"cas:serviceResponse"`
+	Xmlns   string        `xml:"xmlns:cas,attr"`
+	Success *ProxySuccess `xml:"cas:proxySuccess,omitempty"`
+	Failure *ProxyFailure `xml:"cas:proxyFailure,omitempty"`
+}
+
+// ProxySuccess carries the freshly minted proxy ticket.
+type ProxySuccess struct {
+	ProxyTicket string `xml:"cas:proxyTicket"`
+}
+
+// ProxyFailure is the /proxy error envelope.
+type ProxyFailure struct {
 	Code    string `xml:"code,attr"`
 	Message string `xml:",chardata"`
 }
@@ -291,15 +322,29 @@ func (a *Attributes) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 // serviceValidate handles CAS 2.0 validation (XML response, no attributes).
 func (h *Handler) serviceValidate(c *gin.Context) {
-	h.doServiceValidate(c, false)
+	h.doValidate(c, false, false)
 }
 
 // p3ServiceValidate handles CAS 3.0 validation (XML response with attributes).
 func (h *Handler) p3ServiceValidate(c *gin.Context) {
-	h.doServiceValidate(c, true)
+	h.doValidate(c, true, false)
 }
 
-func (h *Handler) doServiceValidate(c *gin.Context, includeAttributes bool) {
+// proxyValidate handles CAS 2.0 /proxyValidate — like serviceValidate but also
+// accepts a proxy ticket (PT-) and reports the <cas:proxies> chain.
+func (h *Handler) proxyValidate(c *gin.Context) {
+	h.doValidate(c, false, true)
+}
+
+// p3ProxyValidate handles CAS 3.0 /p3/proxyValidate (attributes + proxies).
+func (h *Handler) p3ProxyValidate(c *gin.Context) {
+	h.doValidate(c, true, true)
+}
+
+// doValidate is the shared ticket-validation path. allowProxy toggles whether a
+// proxy ticket (PT-) is accepted: /serviceValidate must REJECT a PT (only
+// /proxyValidate accepts one) per the CAS spec.
+func (h *Handler) doValidate(c *gin.Context, includeAttributes, allowProxy bool) {
 	ticket := c.Query("ticket")
 	service := c.Query("service")
 
@@ -311,6 +356,14 @@ func (h *Handler) doServiceValidate(c *gin.Context, includeAttributes bool) {
 	st, err := h.store.ConsumeTicket(c.Request.Context(), ticket)
 	if err != nil {
 		h.xmlFailure(c, "INVALID_TICKET", "ticket not recognized or expired")
+		return
+	}
+
+	// A proxy ticket may only be validated at /proxyValidate. The ticket is
+	// already consumed (single-use) — a PT replayed at /serviceValidate is burned
+	// AND rejected.
+	if st.IsProxy && !allowProxy {
+		h.xmlFailure(c, "INVALID_TICKET", "proxy ticket presented to serviceValidate")
 		return
 	}
 
@@ -382,6 +435,22 @@ func (h *Handler) doServiceValidate(c *gin.Context, includeAttributes bool) {
 		// appErr != nil or app == nil — attributes silently omitted; ticket
 		// validation itself still succeeds.
 		_ = appErr
+	}
+
+	// Proxy chain: a proxy ticket reports the ordered list of services that
+	// proxied the authentication, most-recent first.
+	if st.IsProxy && len(st.Proxies) > 0 {
+		success.Proxies = &ProxyList{Proxies: st.Proxies}
+	}
+
+	// pgtUrl: if the validating service requested a proxy-granting ticket and the
+	// app has proxy enabled, mint one via the SSRF-safe, allow-listed callback.
+	// Best-effort (CAS spec §2.5.4): on any failure the PGT is simply omitted and
+	// the ticket validation itself still succeeds.
+	if pgtURL := c.Query("pgtUrl"); pgtURL != "" && casCfg != nil && app != nil {
+		if iou := h.maybeIssuePGT(c, casCfg, app, st, pgtURL); iou != "" {
+			success.ProxyGrantingTicket = iou
+		}
 	}
 
 	resp := &ServiceResponse{

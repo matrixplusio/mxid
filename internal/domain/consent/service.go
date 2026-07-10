@@ -81,7 +81,14 @@ func (s *Service) Grant(ctx context.Context, tenantID, userID, appID int64, scop
 		Where("tenant_id = ? AND user_id = ? AND app_id = ?", tenantID, userID, appID).
 		First(&row).Error
 
-	mergedScopes := mergeScopeSets(row.Scopes, scopes)
+	// A previously REVOKED consent must NOT resurrect its old scopes: merge from
+	// an empty base so re-consent grants only what is asked for now. Without this
+	// the additive merge silently restores scopes the user explicitly revoked.
+	prior := []string(row.Scopes)
+	if row.RevokedAt != nil {
+		prior = nil
+	}
+	mergedScopes := mergeScopeSets(prior, scopes)
 
 	if dberr.IsNotFound(err) {
 		row = UserAppConsent{

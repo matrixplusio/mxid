@@ -378,9 +378,14 @@ func wireAuthzCacheInvalidation(a *bootstrap.App, cache *authz.CachedBindingProv
 	a.EventBus.Subscribe(event.GroupMemberAdded, invalidateUserFromPayload)
 	a.EventBus.Subscribe(event.GroupMemberRemoved, invalidateUserFromPayload)
 
-	// Org structural moves: a user changing org changes which org-scope
-	// bindings they inherit. user_id is in payload when known.
-	a.EventBus.Subscribe(event.OrgMemberMoved, invalidateUserFromPayload)
+	// Org membership changes what org-scope bindings a user inherits (org-subject
+	// role bindings apply to the whole subtree). org.AddMember/RemoveMember publish
+	// these with the user_id, so invalidate that user's cached binding set.
+	// (OrgMemberMoved was subscribed here before but is never published — the real
+	// events are OrgMemberAdded/Removed — so org membership edits went stale until
+	// the cache TTL. OrgMemberMoved stays a reserved, unpublished event.)
+	a.EventBus.Subscribe(event.OrgMemberAdded, invalidateUserFromPayload)
+	a.EventBus.Subscribe(event.OrgMemberRemoved, invalidateUserFromPayload)
 
 	// Super-admin flip uses the "target_id" key (not user_id, which is
 	// the actor). Translate before invalidating.

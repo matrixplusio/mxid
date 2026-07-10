@@ -93,6 +93,29 @@ func TestCompute_ImpossibleTravel(t *testing.T) {
 	}
 }
 
+func TestCompute_ExcludesCurrentLoginFromHistory(t *testing.T) {
+	// Reproduces the production path the earlier tests missed: the CURRENT login
+	// is persisted to the history store (newest row, same IP as the request,
+	// ~now) BEFORE Compute runs. It must be excluded, else the login is compared
+	// against itself and NewCountry / ImpossibleTravel can never fire.
+	geo := fakeGeo{"1.1.1.1": "US", "2.2.2.2": "CN"}
+	now := time.Unix(100000, 0)
+	hist := fakeHistory{
+		{IP: "2.2.2.2", At: now},                         // the just-written CURRENT login (CN)
+		{IP: "1.1.1.1", At: now.Add(-30 * time.Minute)},  // the real prior login (US)
+	}
+	c := newComputer(geo, hist, true, now)
+	s, _ := c.Compute(context.Background(), ComputeInput{
+		UserID: 1, IP: "2.2.2.2", DeviceID: "d", ImpossibleTravelWindow: time.Hour,
+	})
+	if !s.NewCountry {
+		t.Fatal("CN login must be NewCountry even though the current CN login is in history")
+	}
+	if !s.ImpossibleTravel {
+		t.Fatal("US(30m ago)→CN must be impossible travel even though the current login is in history")
+	}
+}
+
 func TestCompute_UnknownGeoNoSignals(t *testing.T) {
 	// Geo unknown (empty) so no geo signals fire, even with history present.
 	c := newComputer(fakeGeo{}, fakeHistory{{IP: "9.9.9.9", At: time.Unix(1, 0)}}, true, time.Unix(100, 0))

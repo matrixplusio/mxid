@@ -4,7 +4,7 @@ import { accessRequestApi } from '@mxid/shared/api'
 import type { Eligibility, AccessRequest } from '@mxid/shared/api'
 import { Button, Modal, Field, Select, SearchSelect, Textarea, pageMotion, LoadingState } from '@mxid/shared/ui'
 import { toast, extractMessage } from '@mxid/shared/ui/toast'
-import { formatDate, useTranslation } from '@mxid/shared'
+import { formatDate, useTranslation, AccessTargetKind, AccessRequestStatus } from '@mxid/shared'
 
 const DURATION_LABELS: Record<number, string> = {
   3600: '1h',
@@ -139,7 +139,7 @@ export default function AccessRequestsPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-ink text-sm">
-                    {r.target_kind === 'console'
+                    {r.target_kind === AccessTargetKind.Console
                       ? t('access.targetConsole')
                       : r.app_name || t('access.targetApp')}
                   </span>
@@ -166,7 +166,7 @@ export default function AccessRequestsPage() {
                   <div className="mt-1 text-xs text-faint truncate max-w-lg">{r.justification}</div>
                 )}
               </div>
-              {r.status === 'pending' && (
+              {r.status === AccessRequestStatus.Pending && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -192,7 +192,7 @@ export default function AccessRequestsPage() {
               }}
               options={eligibilities.map((el) => ({
                 value: el.id,
-                label: `${el.target_kind === 'console' ? t('access.targetConsole') : el.app_name || t('access.targetApp')} · ${el.target_name || el.role_id}`,
+                label: `${el.target_kind === AccessTargetKind.Console ? t('access.targetConsole') : el.app_name || t('access.targetApp')} · ${el.target_name || el.role_id}`,
               }))}
               placeholder={t('access.selectEligibility')}
               searchPlaceholder={t('common.search')}

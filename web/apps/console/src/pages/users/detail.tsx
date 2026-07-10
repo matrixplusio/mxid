@@ -61,10 +61,10 @@ const TAB_KEYS: { key: Tab; i18nKey: string }[] = [
 ]
 
 const STATUS_VALUES = [
-  { value: 1, i18nKey: 'users.detail.status.active' },
-  { value: 2, i18nKey: 'users.detail.status.locked' },
-  { value: 3, i18nKey: 'users.detail.status.disabled' },
-  { value: 4, i18nKey: 'users.detail.status.pending' },
+  { value: UserStatus.Active, i18nKey: 'users.detail.status.active' },
+  { value: UserStatus.Locked, i18nKey: 'users.detail.status.locked' },
+  { value: UserStatus.Disabled, i18nKey: 'users.detail.status.disabled' },
+  { value: UserStatus.Pending, i18nKey: 'users.detail.status.pending' },
 ]
 
 const GENDER_VALUES = [
@@ -184,7 +184,7 @@ export default function UserDetailPage() {
               ) : (
                 <LockButton userID={userID} onDone={loadUser} />
               )}
-              {user.status !== 3 && (
+              {user.status !== UserStatus.Disabled && (
                 <OffboardButton userID={userID} username={user.username} onDone={loadUser} />
               )}
             </div>
