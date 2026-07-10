@@ -69,7 +69,13 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # goinstall builds golangci-lint with the setup-go toolchain (1.25.12);
+          # the prebuilt v1.64.8 binary is compiled with go1.24 and refuses to
+          # analyze a go 1.25 module ("language version used to build golangci-lint
+          # is lower than the targeted Go version"). Pin the last v1 (the repo's
+          # .golangci.yml is v1 config) and let it build under 1.25.
+          version: v1.64.8
+          install-mode: goinstall
           args: --timeout=5m
 
       - name: Apply migrations (seeds role 1 + admin so the e2e tests have FKs)
@@ -102,7 +108,11 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # pnpm 10+: overrides live in pnpm-workspace.yaml (the @babel/core
+          # security pin). pnpm 9 doesn't read overrides from there, so a frozen
+          # install sees a config that mismatches the lockfile's overrides
+          # snapshot and fails (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
+          version: 10
 
       - name: verify-exports (package.json exports map exists on disk)
         run: node scripts/verify-exports.mjs
