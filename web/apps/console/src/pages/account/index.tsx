@@ -23,7 +23,7 @@ import {
   type ConsoleUserInfo,
   type APITokenRow,
 } from '@mxid/shared'
-import { Button, ConfirmDialog, AvatarUpload, avatarTexts } from '../../components/ui'
+import { Button, ConfirmDialog, AvatarUpload, avatarTexts, Modal } from '../../components/ui'
 import { toast } from '@mxid/shared/ui/toast'
 import type { MFAInfo, SessionInfo } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -46,7 +46,6 @@ import {
   Terminal,
   Trash2,
   User as UserIcon,
-  X,
 } from 'lucide-react'
 
 export default function AccountPage() {
@@ -695,14 +694,7 @@ function BackupCodesModal({ codes, onClose }: { codes: string[]; onClose: () => 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink">{t('account.mfa.backupSaveTitle')}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-faint hover:bg-surface-muted">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Modal open title={t('account.mfa.backupSaveTitle')} onClose={onClose}>
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
@@ -734,8 +726,7 @@ function BackupCodesModal({ codes, onClose }: { codes: string[]; onClose: () => 
             {t('account.mfa.backupConfirmSaved')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -794,20 +785,7 @@ function EnrollTOTPModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink">{t('account.mfa.enrollTitle')}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-faint hover:bg-surface-muted">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Modal open title={t('account.mfa.enrollTitle')} onClose={onClose}>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -874,8 +852,7 @@ function EnrollTOTPModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -1256,14 +1233,7 @@ function CreateAPITokenModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink">{t('account.apiTokens.newToken')}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-faint hover:bg-surface-muted">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Modal open title={t('account.apiTokens.newToken')} onClose={onClose}>
         <form onSubmit={handle} className="space-y-3">
           <Field label={t('account.apiTokens.formName')}>
             <input
@@ -1303,8 +1273,7 @@ function CreateAPITokenModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -1317,14 +1286,7 @@ function NewTokenModal({ name, token, onClose }: { name: string; token: string; 
       .catch(() => toast.error(t('account.mfa.copyFail')))
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink">{t('account.apiTokens.created')}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-faint hover:bg-surface-muted">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Modal open title={t('account.apiTokens.created')} onClose={onClose}>
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
@@ -1349,8 +1311,7 @@ function NewTokenModal({ name, token, onClose }: { name: string; token: string; 
             {t('account.apiTokens.saved')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
