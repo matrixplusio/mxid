@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, AppWindow, Loader2, Copy, X, Settings, Eye, EyeOff, LayoutGrid } from 'lucide-react'
 import { appApi, protocolLabel, statusLabel, statusColor, cn, AppIcon, useTranslation, AppStatus } from '@mxid/shared'
@@ -354,6 +354,9 @@ export default function AppsPage() {
 
   // Template picker state
   const [templates, setTemplates] = useState<AppTemplateListItem[]>([])
+  // Custom env labels already used by the tenant's apps (from the DB), merged
+  // with the static presets so a previously-typed env reappears in the dropdown.
+  const [envOptions, setEnvOptions] = useState<string[]>([])
   const [activeTemplate, setActiveTemplate] = useState<AppTemplate | null>(null)
   const [tplFieldValues, setTplFieldValues] = useState<Record<string, string>>({})
 
@@ -418,6 +421,24 @@ export default function AppsPage() {
     appApi.listTemplates().then(setTemplates).catch(() => setTemplates([]))
   }, [showCreate])
 
+  // Distinct custom envs already in use — loaded on mount and refreshed after a
+  // save so a newly-typed env is remembered for the next app.
+  const loadEnvOptions = useCallback(() => {
+    appApi.listEnvOptions().then(setEnvOptions).catch(() => setEnvOptions([]))
+  }, [])
+  useEffect(() => {
+    loadEnvOptions()
+  }, [loadEnvOptions])
+
+  // Dropdown choices: presets first, then DB-known custom envs not already a
+  // preset. A known custom env now selects directly instead of forcing the
+  // "custom" escape hatch.
+  const envChoices = useMemo(() => {
+    const seen = new Set(ENV_PRESETS)
+    const extra = envOptions.filter((e) => e && !seen.has(e))
+    return [...ENV_PRESETS, ...extra]
+  }, [envOptions])
+
   // -------------------------------------------------------------------------
   // Open detail drawer
   // -------------------------------------------------------------------------
@@ -438,7 +459,7 @@ export default function AppsPage() {
       logout_url: app.logout_url || '',
       redirect_uris: (app.redirect_uris || []).join('\n'),
     })
-    setEnvCustom(!!app.env && !ENV_PRESETS.includes(app.env))
+    setEnvCustom(!!app.env && !envChoices.includes(app.env))
 
     try {
       const full = await appApi.getById(app.id)
@@ -453,7 +474,7 @@ export default function AppsPage() {
         logout_url: full.logout_url || '',
         redirect_uris: (full.redirect_uris || []).join('\n'),
       })
-      setEnvCustom(!!full.env && !ENV_PRESETS.includes(full.env))
+      setEnvCustom(!!full.env && !envChoices.includes(full.env))
     } catch {
       // keep the card-level data we already have
     } finally {
@@ -533,6 +554,7 @@ export default function AppsPage() {
       })
       setDetailApp(updated)
       loadData()
+      loadEnvOptions() // a newly-typed env should be remembered for the next app
       toast.success(t('common.success'))
     } catch (e) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -1243,7 +1265,7 @@ export default function AppsPage() {
                             className={inputCls}
                           >
                             <option value="">{t('apps.detail.basic.envNone')}</option>
-                            {ENV_PRESETS.map((e) => (
+                            {envChoices.map((e) => (
                               <option key={e} value={e}>
                                 {e}
                               </option>

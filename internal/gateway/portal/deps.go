@@ -113,6 +113,11 @@ type UserQuerier interface {
 	// LookupByPhone returns the user_id matching (tenant, phone). Used by
 	// the SMS OTP login flow. (0, nil) on miss — no enumeration leak.
 	LookupByPhone(ctx context.Context, tenantID int64, phone string) (int64, error)
+	// UpdateLastLogin stamps last_login_at / last_login_ip after a successful
+	// login. The password engine does this in completeLogin; the passwordless
+	// portal paths (SMS OTP, magic link) run outside the engine and MUST call
+	// this themselves or the user's "last login" never updates.
+	UpdateLastLogin(ctx context.Context, userID int64, ip string) error
 }
 
 // AppQuerier provides app data access for portal handlers.

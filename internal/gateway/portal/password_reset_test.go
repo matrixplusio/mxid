@@ -55,6 +55,7 @@ func (s resetPasswordStub) ResetPassword(context.Context, int64, string) error {
 func (s resetPasswordStub) LookupByPhone(context.Context, int64, string) (int64, error) {
 	return 0, nil
 }
+func (s resetPasswordStub) UpdateLastLogin(context.Context, int64, string) error { return nil }
 
 func newResetHandler(t *testing.T, resetErr error) (*PasswordResetHandler, *redis.Client) {
 	t.Helper()

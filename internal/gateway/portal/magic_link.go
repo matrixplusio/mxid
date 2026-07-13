@@ -238,6 +238,12 @@ func (h *MagicLinkHandler) callback(c *gin.Context) {
 		response.InternalError(c, "failed to create session", err)
 		return
 	}
+	// Stamp last-login (see sms_otp.go): magic-link callbacks bypass the
+	// password engine, so the stamp must happen here. Best-effort.
+	if err := h.users.UpdateLastLogin(c.Request.Context(), userID, ip); err != nil {
+		h.logger.Warn("magic link login: update last login failed",
+			zap.Int64("user_id", userID), zap.Error(err))
+	}
 	// 24h cookie — magic-link callers don't get remember-me; they re-auth
 	// via another magic link or password next time.
 	c.SetSameSite(http.SameSiteLaxMode)

@@ -208,6 +208,13 @@ func (a *portalUserQuerierAdapter) LookupByPhone(ctx context.Context, tenantID i
 	return u.ID, nil
 }
 
+// UpdateLastLogin stamps last_login_at / last_login_ip. Delegates to the same
+// repo method the password engine uses, so passwordless portal logins (SMS
+// OTP, magic link) record last-login consistently.
+func (a *portalUserQuerierAdapter) UpdateLastLogin(ctx context.Context, userID int64, ip string) error {
+	return a.userModule.Repo.UpdateLastLogin(ctx, userID, ip)
+}
+
 /* ─────────── App ─────────── */
 
 type portalAppQuerierAdapter struct {

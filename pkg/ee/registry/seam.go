@@ -45,6 +45,13 @@ type ExternalLoginFunc func(ctx context.Context, in *ResolverInput) (userID int6
 // the CE tenant domain.
 type TenantByCodeFunc func(ctx context.Context, code string) int64
 
+// UpdateLastLoginFunc stamps last_login_at / last_login_ip after a successful
+// login. The CE password engine does this in completeLogin; external-IdP logins
+// run outside that engine (and the CE resolver seam has no client IP), so the EE
+// handler must call this after minting the session or the user's "last login"
+// never reflects a federated sign-in. Implemented by the CE user domain.
+type UpdateLastLoginFunc func(ctx context.Context, userID int64, ip string) error
+
 // ConsoleGateFunc authorizes an external identity for console login: it must
 // reject break-glass built-in accounts and users without any console
 // permission. Implemented in CE (authz + user repo).
@@ -88,6 +95,9 @@ type InitContext struct {
 	TenantByCode TenantByCodeFunc
 	ConsoleGate  ConsoleGateFunc
 	ExternalURLs ExternalURLsFunc
+	// UpdateLastLogin stamps last-login after a federated sign-in (external IdP
+	// runs outside the CE password engine that normally owns the stamp).
+	UpdateLastLogin UpdateLastLoginFunc
 	// OutboxRegister binds an EE outbox handler (e.g. SCIM deprovision delivery).
 	OutboxRegister OutboxRegisterFunc
 	// ProvisioningConfig reads an app's outbound-provisioning credentials at

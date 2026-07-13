@@ -931,6 +931,9 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 		App:           a,
 		SessionMgr:    sessionMgr,
 		ExternalLogin: newUserExternalResolver(userModule).Resolve,
+		UpdateLastLogin: func(ctx context.Context, userID int64, ip string) error {
+			return userModule.Repo.UpdateLastLogin(ctx, userID, ip)
+		},
 		TenantByCode: func(ctx context.Context, code string) int64 {
 			t, err := tenantModule.Service.GetByCode(ctx, code)
 			if err != nil || t == nil {

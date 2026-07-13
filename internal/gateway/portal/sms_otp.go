@@ -285,6 +285,14 @@ func (h *SMSOTPHandler) login(c *gin.Context) {
 		response.InternalError(c, "failed to create session", err)
 		return
 	}
+	// Stamp last-login. Passwordless logins bypass the password engine's
+	// completeLogin (the only other UpdateLastLogin caller), so without this
+	// the user's "last login" never reflects an SMS OTP sign-in. Best-effort:
+	// a bookkeeping failure must not fail an otherwise successful login.
+	if err := h.users.UpdateLastLogin(c.Request.Context(), userID, ip); err != nil {
+		h.logger.Warn("sms login: update last login failed",
+			zap.Int64("user_id", userID), zap.Error(err))
+	}
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(authn.CookiePortal, sess.ID, 86400, "/", h.cookieDom, h.cookieSec, true)
 	response.OK(c, smsLoginResponse{

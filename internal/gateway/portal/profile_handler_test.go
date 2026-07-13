@@ -41,6 +41,7 @@ func (s updateProfileStub) ResetPassword(context.Context, int64, string) error {
 func (s updateProfileStub) LookupByPhone(context.Context, int64, string) (int64, error) {
 	return 0, nil
 }
+func (s updateProfileStub) UpdateLastLogin(context.Context, int64, string) error { return nil }
 
 func doUpdateProfile(t *testing.T, updateErr error) *httptest.ResponseRecorder {
 	t.Helper()

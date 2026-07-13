@@ -131,6 +131,21 @@ func (r *gormRepository) List(ctx context.Context, tenantID int64, params ListAp
 	return apps, total, nil
 }
 
+// ListDistinctEnvs returns the distinct non-empty env labels used by the
+// tenant's own + shared apps, alphabetically. Mirrors List's tenant/shared
+// visibility so the dropdown never leaks another tenant's env names.
+func (r *gormRepository) ListDistinctEnvs(ctx context.Context, tenantID int64) ([]string, error) {
+	var envs []string
+	if err := r.db.WithContext(ctx).Model(&App{}).
+		Where("(tenant_id = ? OR scope = ?) AND env IS NOT NULL AND env <> ''", tenantID, ScopeShared).
+		Distinct().
+		Order("env").
+		Pluck("env", &envs).Error; err != nil {
+		return nil, fmt.Errorf("list distinct envs: %w", err)
+	}
+	return envs, nil
+}
+
 // UpdateStatus updates only the status field of an app.
 func (r *gormRepository) UpdateStatus(ctx context.Context, id int64, status int) error {
 	result := r.db.WithContext(ctx).

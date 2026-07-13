@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/imkerbos/mxid/internal/domain/upload"
+	"github.com/imkerbos/mxid/pkg/authz"
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/snowflake"
 )
@@ -85,7 +86,11 @@ func RegisterUpload(r *gin.Engine, consoleGroup *gin.RouterGroup, idGen *snowfla
 		c.Data(http.StatusOK, u.Mime, u.Data)
 	})
 
-	consoleGroup.POST("/upload/app-icon", func(c *gin.Context) {
+	// Icon upload is part of app authoring — used by both the create and edit
+	// forms (no app id exists yet at create time), so allow either app.create
+	// or app.update. RequireAny does the RBAC check; the matching entry in
+	// consoleProtectedRoutes registers it with the deny-by-default gateway.
+	consoleGroup.POST("/upload/app-icon", authz.RequireAny([]string{"app.create", "app.update"}, nil), func(c *gin.Context) {
 		f, header, err := c.Request.FormFile("file")
 		if err != nil {
 			response.BadRequest(c, 40001, "file field required")

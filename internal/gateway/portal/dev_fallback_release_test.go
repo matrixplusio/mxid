@@ -50,6 +50,7 @@ func (s phoneUserStub) ResetPassword(context.Context, int64, string) error      
 func (s phoneUserStub) LookupByPhone(context.Context, int64, string) (int64, error) {
 	return s.userID, nil
 }
+func (s phoneUserStub) UpdateLastLogin(context.Context, int64, string) error { return nil }
 
 func runSMSSend(t *testing.T, devFallback bool) (*smsSendResponse, *observer.ObservedLogs) {
 	t.Helper()

@@ -35,6 +35,10 @@ export const appApi = {
     client.put<ApiResponse<null>>(`/apps/${id}/config`, { protocol_config: config }).then(r => r.data),
   getProtocolConfig: (id: string) =>
     client.get<ApiResponse<Record<string, unknown>>>(`/apps/${id}/config`).then(r => r.data.data),
+  // Distinct custom env labels already in use — merged with the static presets
+  // in the app-form dropdown so a previously-typed env reappears.
+  listEnvOptions: () =>
+    client.get<ApiResponse<{ envs: string[] }>>('/apps/env-options').then(r => r.data.data.envs ?? []),
 
   // Outbound provisioning (L2 offboarding deprovision). EE-gated capability;
   // config schema is CE. Token never echoed back (token_set flags presence).

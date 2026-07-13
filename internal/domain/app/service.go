@@ -616,6 +616,16 @@ func (s *Service) List(ctx context.Context, tenantID int64, params ListAppParams
 	return apps, total, nil
 }
 
+// ListEnvOptions returns the distinct custom env labels already in use, for the
+// console app-form dropdown (merged with the static presets client-side).
+func (s *Service) ListEnvOptions(ctx context.Context, tenantID int64) ([]string, error) {
+	envs, err := s.repo.ListDistinctEnvs(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list env options: %w", err)
+	}
+	return envs, nil
+}
+
 // UpdateStatus updates an application's status.
 func (s *Service) UpdateStatus(ctx context.Context, id int64, status int) error {
 	if err := s.repo.UpdateStatus(ctx, id, status); err != nil {

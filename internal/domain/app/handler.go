@@ -30,6 +30,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	apps := rg.Group("/apps")
 	{
 		apps.GET("", authz.Require("app.read", nil), h.List)
+		apps.GET("/env-options", authz.Require("app.read", nil), h.ListEnvOptions)
 		apps.POST("", authz.Require("app.create", nil), h.Create)
 		apps.GET("/:id", authz.Require("app.read", nil), h.Get)
 		apps.PUT("/:id", authz.Require("app.update", nil), h.Update)
@@ -139,6 +140,19 @@ func (h *Handler) List(c *gin.Context) {
 	}
 
 	response.Paginated(c, items, total, p.Page, p.PageSize)
+}
+
+// ListEnvOptions returns the distinct custom env labels already used by the
+// tenant's apps. The console merges these with its static presets so a
+// previously-typed env (e.g. "devops") reappears in the dropdown instead of
+// forcing the admin back through the custom-entry path.
+func (h *Handler) ListEnvOptions(c *gin.Context) {
+	envs, err := h.svc.ListEnvOptions(c.Request.Context(), tenantctx.FromContext(c, h.tenantID))
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+	response.OK(c, gin.H{"envs": envs})
 }
 
 // Create handles POST /apps.

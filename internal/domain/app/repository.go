@@ -22,6 +22,10 @@ type Repository interface {
 	Update(ctx context.Context, app *App) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, tenantID int64, params ListAppParams) ([]*App, int64, error)
+	// ListDistinctEnvs returns the distinct non-empty env labels already in use
+	// by the tenant's apps (plus shared apps), so the console can offer
+	// previously-typed custom envs in the dropdown instead of forcing re-entry.
+	ListDistinctEnvs(ctx context.Context, tenantID int64) ([]string, error)
 	UpdateStatus(ctx context.Context, id int64, status int) error
 	UpdateProtocolConfig(ctx context.Context, id int64, config []byte) error
 
