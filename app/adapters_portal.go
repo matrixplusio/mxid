@@ -495,6 +495,10 @@ func (a *portalAppQuerierAdapter) GetAppLaunchURL(ctx context.Context, appID, us
 			// idp_initiated=1 → portal launch skips the SSO confirmation (seamless).
 			return fmt.Sprintf("%s/protocol/cas/%s/login?service=%s&idp_initiated=1", a.issuer, ap.Code, *ap.LoginURL), nil
 		}
+	case app.ProtocolForm:
+		// Form-fill app: open the target login page; the browser extension
+		// detects the origin and auto-submits the stored credential. The page URL
+		// resolves via the shared LoginURL/HomeURL fallback below.
 	}
 	if ap.HomeURL != nil && *ap.HomeURL != "" {
 		return *ap.HomeURL, nil

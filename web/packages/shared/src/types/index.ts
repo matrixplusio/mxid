@@ -425,6 +425,16 @@ export interface SessionInfo {
   last_active_at: string
 }
 
+// A paired form-fill browser extension (binding token) — shown in the portal's
+// "Connected extensions" list so the user can revoke a device.
+export interface FormFillExtToken {
+  id: string
+  device_label: string
+  created_at: string
+  last_used_at: string | null
+  expires_at: string
+}
+
 export interface MFAInfo {
   type: string
   is_default: boolean

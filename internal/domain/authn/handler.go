@@ -115,6 +115,7 @@ type Handler struct {
 	tenantByCode TenantCodeResolver
 	cookieSecure bool
 	cookieDomain string
+	crossSite    bool // portal session cookie SameSite=None (form-fill extension)
 	methodGate   LoginMethodGate
 	rememberMe   RememberMeProvider
 	adminCheck   AdminChecker
@@ -162,13 +163,14 @@ func (h *Handler) SetLoginMethodGate(g LoginMethodGate) { h.methodGate = g }
 func (h *Handler) SetRememberMeProvider(p RememberMeProvider) { h.rememberMe = p }
 
 // NewHandler creates a new auth handler.
-func NewHandler(engine *Engine, captchaSvc *CaptchaService, tenantID int64, cookieSecure bool, cookieDomain string) *Handler {
+func NewHandler(engine *Engine, captchaSvc *CaptchaService, tenantID int64, cookieSecure bool, cookieDomain string, crossSite bool) *Handler {
 	return &Handler{
 		engine:       engine,
 		captchaSvc:   captchaSvc,
 		tenantID:     tenantID,
 		cookieSecure: cookieSecure,
 		cookieDomain: cookieDomain,
+		crossSite:    crossSite,
 	}
 }
 
@@ -659,8 +661,17 @@ func (h *Handler) setSessionCookieWithRemember(c *gin.Context, name, value strin
 	if remember {
 		maxAge = h.rememberMaxAge(c.Request.Context())
 	}
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(name, value, maxAge, "/", h.cookieDomain, h.cookieSecure, true)
+	secure := h.cookieSecure
+	sameSite := http.SameSiteLaxMode
+	// Opt-in: the PORTAL session cookie goes SameSite=None so the form-fill
+	// browser extension can send it on its cross-site fetch to reveal. None
+	// mandates Secure, so force it. Console cookie stays Lax (never cross-site).
+	if h.crossSite && name == CookiePortal {
+		sameSite = http.SameSiteNoneMode
+		secure = true
+	}
+	c.SetSameSite(sameSite)
+	c.SetCookie(name, value, maxAge, "/", h.cookieDomain, secure, true)
 }
 
 // setProtoSessionCookieWithRemember writes the protocol-scope cookie with
@@ -697,8 +708,16 @@ func (h *Handler) rememberMaxAge(ctx context.Context) int {
 // SameSite attribute must match the original Set-Cookie for browsers to
 // reliably target the same cookie for deletion.
 func (h *Handler) clearSessionCookie(c *gin.Context, name string) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(name, "", -1, "/", h.cookieDomain, h.cookieSecure, true)
+	secure := h.cookieSecure
+	sameSite := http.SameSiteLaxMode
+	// Match the attributes the portal cookie was set with (see
+	// setSessionCookieWithRemember) so the browser targets the same cookie.
+	if h.crossSite && name == CookiePortal {
+		sameSite = http.SameSiteNoneMode
+		secure = true
+	}
+	c.SetSameSite(sameSite)
+	c.SetCookie(name, "", -1, "/", h.cookieDomain, secure, true)
 }
 
 // readOrMintDeviceID returns the device id from the request cookie, minting a
@@ -778,6 +797,10 @@ const (
 	CtxTenantID         = "tenant_id"
 	CtxSessionID        = "session_id"
 	CtxMFAEnrollPending = "mfa_enroll_pending"
+	// CtxNamespace is the session namespace (console/portal) the request
+	// authenticated in — step-up freshness must be looked up in the SAME
+	// namespace, not a hardcoded one.
+	CtxNamespace = "session_namespace"
 )
 
 // GetUserID extracts the authenticated user ID from the gin context.

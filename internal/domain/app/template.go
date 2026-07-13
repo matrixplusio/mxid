@@ -60,7 +60,7 @@ var secretLikeKeys = map[string]bool{
 }
 
 func validProtocol(p string) bool {
-	return p == ProtocolOIDC || p == ProtocolSAML || p == ProtocolCAS
+	return p == ProtocolOIDC || p == ProtocolSAML || p == ProtocolCAS || p == ProtocolForm
 }
 
 func loadTemplates() {

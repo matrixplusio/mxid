@@ -115,6 +115,17 @@ const (
 	AppAccessPolicyCreated = "app.access_policy_created"
 	AppAccessPolicyDeleted = "app.access_policy_deleted"
 
+	// Form-fill (SWA) credential-vault events, emitted by the EE form_fill
+	// feature. All carry app_id (resource = the parent app). Reveal is the
+	// highest-signal audit anchor: a plaintext downstream password was handed to
+	// the browser extension. reveal_denied records a blocked attempt (no step-up
+	// / not authorized / rate-limited).
+	AppCredentialStored       = "app.credential.stored"
+	AppCredentialDeleted      = "app.credential.deleted"
+	AppSharedCredentialSet    = "app.credential.shared_set"
+	AppCredentialRevealed     = "app.credential.revealed"
+	AppCredentialRevealDenied = "app.credential.reveal_denied"
+
 	OrgCreated     = "org.created"
 	OrgUpdated     = "org.updated"
 	OrgDeleted     = "org.deleted"

@@ -16,6 +16,7 @@ var (
 	codeAppCodeExists      = errcode.Code{HTTP: 409, Num: 40901}
 	codeGroupCodeExists    = errcode.Code{HTTP: 409, Num: 40902}
 	codeInvalidClientType  = errcode.Code{HTTP: 400, Num: 40010}
+	codeFormFillNotLicensed = errcode.Code{HTTP: 403, Num: 40301}
 )
 
 func init() {
@@ -29,4 +30,5 @@ func init() {
 	errcode.Bind(ErrAppCodeExists, codeAppCodeExists)
 	errcode.Bind(ErrGroupCodeExists, codeGroupCodeExists)
 	errcode.Bind(ErrInvalidClientType, codeInvalidClientType)
+	errcode.Bind(ErrFormFillNotLicensed, codeFormFillNotLicensed)
 }

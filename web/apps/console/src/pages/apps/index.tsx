@@ -20,6 +20,7 @@ const protocolColors: Record<string, string> = {
   oidc: 'bg-blue-100 text-blue-700',
   saml: 'bg-purple-100 text-purple-700',
   cas: 'bg-teal-100 text-teal-700',
+  form: 'bg-emerald-100 text-emerald-700',
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +206,28 @@ const protocolConfigFields: Record<string, ConfigField[]> = {
     { key: 'ticket_ttl', label: 'Ticket TTL (sec)', type: 'text', placeholder: '30', coerce: 'int' },
     { key: 'attribute_mapping', label: 'Attribute Mapping (JSON)', type: 'textarea', placeholder: '{"username":"uid","email":"mail","display_name":"displayName","phone":"telephoneNumber"}', coerce: 'json' },
     { key: 'renew_enabled', label: 'Force Re-authentication', type: 'text', placeholder: 'false', coerce: 'bool' },
+  ],
+  // Form-fill (SWA) descriptor. credential_mode picks per-user vs shared vault;
+  // the selectors + login_url tell the browser extension how to auto-submit the
+  // target login form (capture mode fills these automatically later).
+  form: [
+    {
+      key: 'credential_mode',
+      label: 'Credential Mode',
+      type: 'select',
+      options: [
+        { value: 'per_user', label: 'Per-user (each user stores their own password)' },
+        { value: 'shared', label: 'Shared (admin sets one service account for all)' },
+      ],
+      hint: 'per_user: each user vaults their own login. shared: one admin-set credential everyone launches with.',
+    },
+    { key: 'login_url', label: 'Login Page URL', type: 'text', placeholder: 'https://wiki.internal/login', hint: 'Where the login form lives; the extension fills it here.' },
+    { key: 'username_selector', label: 'Username Field Selector', type: 'text', placeholder: '#username' },
+    { key: 'password_selector', label: 'Password Field Selector', type: 'text', placeholder: '#password' },
+    { key: 'submit_selector', label: 'Submit Button Selector', type: 'text', placeholder: 'button[type=submit]' },
+    { key: 'next_selector', label: 'Next Button Selector (two-step login, optional)', type: 'text', placeholder: 'button.next', hint: 'For sites that ask username first, then password on a second view — the button that reveals the password step.' },
+    { key: 'extra_fields', label: 'Extra Static Fields (JSON, optional)', type: 'textarea', coerce: 'json', placeholder: '[{"selector":"#tenant","value":"acme"}]', hint: 'Static values to fill (tenant code, domain). Array of {selector, value}.' },
+    { key: 'success_url_glob', label: 'Success URL (glob, optional)', type: 'text', placeholder: 'https://wiki.internal/dashboard*' },
   ],
 }
 
@@ -1052,6 +1075,7 @@ export default function AppsPage() {
                       <option value="oidc">OIDC</option>
                       <option value="saml">SAML 2.0</option>
                       <option value="cas">CAS 3.0</option>
+                      <option value="form">{t('apps.createModal.protocols.form')}</option>
                     </select>
                   </div>
 

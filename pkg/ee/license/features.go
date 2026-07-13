@@ -28,6 +28,11 @@ const (
 	FeatureAdvancedStepUp Feature = "advanced_stepup"
 	// FeatureSMS — SMS-based login / OTP.
 	FeatureSMS Feature = "sms"
+	// FeatureFormFill — form-fill / SWA credential vault: store a user's
+	// downstream username+password and auto-submit the target site's login form
+	// via the browser extension. Credential-custodian feature; code lives only in
+	// mxid-ee. See docs/FORM-FILL-SSO-DESIGN.md.
+	FeatureFormFill Feature = "form_fill"
 )
 
 // AllFeatures is the full catalog — reserved keys used to validate feature
@@ -42,6 +47,7 @@ var AllFeatures = []Feature{
 	FeatureSCIM,
 	FeatureAdvancedStepUp,
 	FeatureSMS,
+	FeatureFormFill,
 }
 
 // ImplementedFeatures lists the EE features that actually have shipping code in
@@ -75,6 +81,7 @@ var CodeSeparatedFeatures = []Feature{
 	FeatureSCIM,
 	FeatureSMS,
 	FeatureAdvancedStepUp,
+	FeatureFormFill,
 }
 
 // IsCodeSeparated reports whether f's code ships only in the EE binary (vs

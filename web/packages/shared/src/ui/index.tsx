@@ -165,9 +165,23 @@ export function Modal({
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
 
+  // Keep the latest onClose in a ref so the focus-trap effect can call it
+  // without listing onClose in its deps. Callers routinely pass an inline
+  // arrow (`onClose={() => setOpen(false)}`), which gets a fresh identity on
+  // every parent render — and a controlled input inside the modal re-renders
+  // the parent on every keystroke. If the effect depended on onClose it would
+  // re-run per keystroke and re-focus the first focusable element (the close
+  // button), yanking the caret out of whatever field the user is typing in.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   // a11y: while open, trap focus inside the dialog, close on Escape, and restore
   // focus to the trigger on close. Hooks run before the early return so their
-  // order is stable; the effect no-ops when closed.
+  // order is stable; the effect no-ops when closed. Deps are [open] only — the
+  // initial-focus + listener setup must run once per open transition, NOT on
+  // every render (see onCloseRef above).
   useEffect(() => {
     if (!open) return
     const prevFocus = document.activeElement as HTMLElement | null
@@ -182,7 +196,7 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key === 'Tab' && panel) {
@@ -208,7 +222,7 @@ export function Modal({
       document.removeEventListener('keydown', onKey, true)
       prevFocus?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
   const widths = {

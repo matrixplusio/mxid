@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { portalApi, protocolLabel, AppIcon, useSSE, useTranslation } from '@mxid/shared'
-import { toast } from '@mxid/shared/ui/toast'
+import { Modal, Button, Field, Input } from '@mxid/shared/ui'
+import { toast, extractMessage } from '@mxid/shared/ui/toast'
 import type { PortalApp, PortalAppGroup } from '@mxid/shared'
 import {
   AlertCircle,
   ExternalLink,
   GripVertical,
+  KeyRound,
   LayoutGrid,
   Loader2,
   Search,
@@ -30,6 +32,28 @@ interface SectionView {
 // lower-cased; anything not listed is a custom env sorted after these.
 const ENV_ORDER = ['prod', 'uat', 'qa', 'staging', 'dev']
 
+// useExtInstalled detects the MXID Login extension. The extension's content
+// script tags <html data-mxid-login-ext> (+ fires a 'mxid-login-ext' event) on
+// the portal origin. Returns null while checking, then true/false.
+function useExtInstalled(): boolean | null {
+  const [installed, setInstalled] = useState<boolean | null>(null)
+  useEffect(() => {
+    const present = () => document.documentElement.hasAttribute('data-mxid-login-ext')
+    if (present()) { setInstalled(true); return }
+    const onEvt = () => setInstalled(true)
+    window.addEventListener('mxid-login-ext', onEvt)
+    // The content script sets the marker at document_idle — poll ~3s before
+    // concluding it's absent.
+    let n = 0
+    const iv = setInterval(() => {
+      if (present()) { setInstalled(true); clearInterval(iv) }
+      else if (++n > 15) { setInstalled(false); clearInterval(iv) }
+    }, 200)
+    return () => { window.removeEventListener('mxid-login-ext', onEvt); clearInterval(iv) }
+  }, [])
+  return installed
+}
+
 export default function AppsPage() {
   const { t } = useTranslation()
   const UNGROUPED_LABEL = t('portal.ungrouped')
@@ -47,6 +71,12 @@ export default function AppsPage() {
   const [selected, setSelected] = useState<SidebarKey>('all')
   const [query, setQuery] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
+  // Form-fill (SWA): the app whose per-user credential the user is editing.
+  const [credApp, setCredApp] = useState<PortalApp | null>(null)
+  // MXID Login extension detection + setup guide.
+  const extInstalled = useExtInstalled()
+  const [showSetup, setShowSetup] = useState(false)
+  const hasFormApp = useMemo(() => apps.some((a) => a.protocol === 'form'), [apps])
 
   const fetchAll = useCallback(async () => {
     try {
@@ -313,6 +343,7 @@ export default function AppsPage() {
           dragging={dragId === app.id}
           onLaunch={() => handleLaunch(app)}
           onToggleFavorite={e => toggleFavorite(app, e)}
+          onManageCred={e => { e.stopPropagation(); setCredApp(app) }}
           onDragStart={() => handleDragStart(app.id)}
           onDragEnter={() => handleDragEnter(app.id)}
           onDragEnd={handleDragEnd}
@@ -365,6 +396,21 @@ export default function AppsPage() {
           />
         </div>
       </div>
+
+      {hasFormApp && extInstalled === false && (
+        <div className="mb-5 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <KeyRound className="h-4 w-4 shrink-0" />
+            <span>{t('portal.extBanner.text')}</span>
+          </div>
+          <button
+            onClick={() => setShowSetup(true)}
+            className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-700"
+          >
+            {t('portal.extBanner.action')}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[200px_1fr]">
         {/* Sidebar */}
@@ -471,7 +517,105 @@ export default function AppsPage() {
           )}
         </div>
       </div>
+
+      {credApp && (
+        <CredentialModal
+          app={credApp}
+          onClose={() => setCredApp(null)}
+        />
+      )}
+
+      {showSetup && <ExtSetupModal onClose={() => setShowSetup(false)} />}
     </motion.div>
+  )
+}
+
+// ExtSetupModal — the in-app install tutorial for the MXID Login extension. The
+// portal cannot install it (browsers block web-page installs); this guides the
+// user. The CRX itself is served/pushed by the deployment (managed policy or a
+// download link the admin provides).
+function ExtSetupModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <Modal open title={t('portal.extSetup.title')} onClose={onClose}>
+      <div className="space-y-4 text-sm text-ink">
+        <p className="text-muted">{t('portal.extSetup.intro')}</p>
+        <ol className="list-decimal space-y-2 pl-5">
+          <li>{t('portal.extSetup.step1')}</li>
+          <li>{t('portal.extSetup.step2')}</li>
+          <li>{t('portal.extSetup.step3')}</li>
+        </ol>
+        <p className="rounded-lg bg-surface-muted px-3 py-2 text-xs text-muted">
+          {t('portal.extSetup.note')}
+        </p>
+        <div className="flex justify-end">
+          <Button type="button" onClick={onClose}>{t('common.close')}</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// CredentialModal lets a user store or clear their own downstream credential for
+// a form-fill (SWA) app. The browser extension auto-submits it on launch; the
+// plaintext is never read back into the portal (reveal is extension-only).
+function CredentialModal({ app, onClose }: { app: PortalApp; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [account, setAccount] = useState('')
+  const [credential, setCredential] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!account || !credential) return
+    setSaving(true)
+    try {
+      await portalApi.setAppCredential(app.id, { account, credential })
+      toast.success(t('portal.formCred.saved'))
+      onClose()
+    } catch (err) {
+      toast.error(t('portal.formCred.saveFailed'), extractMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const clear = async () => {
+    setSaving(true)
+    try {
+      await portalApi.deleteAppCredential(app.id)
+      toast.success(t('portal.formCred.cleared'))
+      onClose()
+    } catch (err) {
+      toast.error(t('portal.formCred.clearFailed'), extractMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open title={t('portal.formCred.title', { name: app.name })} onClose={onClose}>
+      <form onSubmit={save} className="space-y-4">
+        <p className="text-xs text-muted">{t('portal.formCred.hint')}</p>
+        <Field label={t('portal.formCred.account')}>
+          <Input value={account} onChange={e => setAccount(e.target.value)} autoComplete="off" required />
+        </Field>
+        <Field label={t('portal.formCred.password')}>
+          <Input type="password" value={credential} onChange={e => setCredential(e.target.value)} autoComplete="new-password" required />
+        </Field>
+        <div className="flex items-center justify-between pt-2">
+          <Button type="button" variant="ghost" onClick={clear} disabled={saving}>
+            {t('portal.formCred.clear')}
+          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" loading={saving}>{t('common.save')}</Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -555,6 +699,7 @@ interface AppCardProps {
   dragging?: boolean
   onLaunch: () => void
   onToggleFavorite: (e: React.MouseEvent) => void
+  onManageCred?: (e: React.MouseEvent) => void
   onDragStart?: () => void
   onDragEnter?: () => void
   onDragEnd?: () => void
@@ -571,6 +716,7 @@ function AppCard({
   dragging,
   onLaunch,
   onToggleFavorite,
+  onManageCred,
   onDragStart,
   onDragEnter,
   onDragEnd,
@@ -626,6 +772,16 @@ function AppCard({
       >
         <Star className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
       </button>
+      {app.protocol === 'form' && onManageCred && (
+        <button
+          type="button"
+          onClick={onManageCred}
+          title={t('portal.formCred.manage')}
+          className="absolute right-12 bottom-4 rounded-full p-1.5 text-faint opacity-0 transition hover:bg-emerald-50 hover:text-emerald-600 group-hover:opacity-100"
+        >
+          <KeyRound className="h-4 w-4" />
+        </button>
+      )}
     </motion.div>
   )
 }

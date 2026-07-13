@@ -25,22 +25,29 @@
 
 ---
 
-MXID 是自托管的企业级 IAM 平台,面向商业级部署设计 —— 多租户、多语言,对标
+MXID 是自托管、单租户的企业级 IAM 平台,面向商业级部署设计 —— 支持多语言,对标
 Keycloak / Auth0 / Okta / TopIAM。采用**开源核心(open core)**:社区版完整可用、
-AGPL 授权;企业版通过签名 license 解锁多租户、外部 IdP 登录、品牌定制等。
+AGPL 授权;企业版通过签名 license 解锁外部 IdP 登录、品牌定制等。
 
-> **v1.0.0** —— 首个正式发布版本。:tada:
+> **v1.4.1** —— 最新稳定版。更新日志见 [releases](https://github.com/imkerbos/mxid/releases)。:tada:
+
+<div align="center">
+
+![MXID 门户 —— 一个入口聚合所有应用,覆盖 OIDC / SAML / CAS / 表单填充](docs/screenshots/portal-apps.png)
+
+</div>
 
 ## 功能亮点
 
 - **协议开箱即用** —— OpenID Connect 1.0(基于 OAuth 2.0;PKCE / Refresh / RP-Initiated Logout)、SAML 2.0(IdP/SP 发起、SLO)、CAS 3.0、JWT。支持按应用配置 claim / attribute 映射。
 - **认证** —— 密码策略(强度 / 历史 / 锁定 / 验证码)、TOTP MFA + 恢复码、邮件魔法链接、外部 IdP 登录(企业版)。
 - **身份与访问** —— 用户、组织、组、RBAC;按应用的访问策略与角色,角色作为 claim 下发。
+- **表单填充 SSO(SWA)** —— 接入只有账号密码表单、不支持标准协议的老旧 Web 系统。MXID 托管下游凭证,加固的 MV3 浏览器扩展自动填充并提交应用自己的登录表单。支持按用户 / 共享凭证、录制即配置、reveal 受 step-up + 令牌绑定保护(企业版)。
 - **改配置不重启** —— SMTP、安全策略、品牌、登录方式、协议默认值、对外 URL 全部在控制台运行时可改。
 - **运维** —— 审计日志 + 留存 + 告警 webhook、API Token(OpenAPI)、中英双语。
 - **生产级交付** —— 单二进制后端 + 容器化边缘;tag 驱动多架构镜像;Ed25519 签名离线授权。
 - **无状态后端 / Kubernetes 友好** —— 图标与品牌 logo 以 `bytea` 存入 PostgreSQL(≤ 2 MB,强缓存 ETag),后端无任何本地磁盘状态,无需 PVC,容器重启不丢失,多副本即开即一致。
-- **如实公布能力** —— `/system/info` 只上报当前二进制实际具备的功能:runtime 门控功能(`multi_tenant`、`branding`、`conditional_access`,代码在 CE 内,license 放行即生效)与代码分离的 EE-only 功能(`external_idp` 等,仅 EE 二进制含其码)明确区分,客户端不会收到虚假的能力声明。
+- **如实公布能力** —— `/system/info` 只上报当前二进制实际具备的功能:runtime 门控功能(`branding`、`conditional_access`,代码在 CE 内,license 放行即生效)与代码分离的 EE-only 功能(`external_idp` 等,仅 EE 二进制含其码)明确区分,客户端不会收到虚假的能力声明。
 
 ## 架构
 
@@ -67,7 +74,7 @@ AGPL 授权;企业版通过签名 license 解锁多租户、外部 IdP 登录、
         │          │ user/group/org   │  │ 按应用策略       │        │
         │          └────────┬─────────┘  └────────┬─────────┘        │
         │     ┌─────────────▼─────────────────────▼────────────┐     │
-        │     │  控制台 SPA(管理)— /tenants /users /apps     │     │
+        │     │  控制台 SPA(管理)— /users /apps /orgs        │     │
         │     └─────────────────────────────────────────────────┘    │
         └──────────────────────────────┬─────────────────────────────┘
                   ┌────────────────────┼────────────────────┐
@@ -148,8 +155,7 @@ MXID 采用**开源核心**。社区版免费、完整可用;企业版通过 Ed2
 | 按应用访问策略(用户 / 组 / 组织 / 角色) | ✅ | ✅ |
 | 按应用角色 → claim | ✅ | ✅ |
 | API Token(OpenAPI) | ✅ | ✅ |
-| **多租户** | | |
-| 租户 | ✅ 单租户 | ✅ 不限 |
+| 表单填充 SSO(SWA)—— 浏览器扩展为纯账密 Web 系统自动登录 | ❌ | ✅ |
 | **运维** | | |
 | 审计日志 + 留存 + 告警 webhook | ✅ | ✅ |
 | SMTP 邮件 + 模板 | ✅ | ✅ |
@@ -170,6 +176,37 @@ MXID 采用**开源核心**。社区版免费、完整可用;企业版通过 Ed2
 | Grafana | OIDC | ✅ `groups` claim → `role_attribute_path` |
 | JumpServer v4 | CAS 3.0 | ✅ 用户自动创建、属性同步 |
 | Harbor / Gitea / Jira / Confluence / Jenkins / AWS / Lark | OIDC / SAML / CAS | 见 `/admin/docs` |
+
+## 表单填充 SSO(浏览器扩展)
+
+不是每个内部系统都支持 OIDC / SAML / CAS。对于只有账号密码表单的老旧 Web 系统,
+MXID 提供**表单填充 SSO**(即 SWA —— Secure Web Authentication):下游凭证托管在
+MXID,由 **MXID Login** 浏览器扩展把它填进应用**自己的**登录表单。MXID 全程不与
+应用直接通信,填充时密码也不离开浏览器。
+
+![自动填充实况 —— 扩展填好并提交应用的登录表单](docs/screenshots/formfill-autofill.png)
+
+**工作原理**
+
+1. 管理员以 **表单填充** 协议注册应用 —— 填登录 URL + 字段选择器,或让扩展
+   **录制**一次真实登录自动生成。
+2. 用户安装 **MXID Login** 扩展(Chrome / Edge,Manifest V3)。纯内网环境通过
+   企业策略 + 自托管 CRX 下发,**无需 Chrome 应用商店**。
+3. 凭证支持**按用户**(每人托管自己的)或**共享**(管理员设一份给所有人),
+   两种模式可按应用共存。
+4. 打开应用登录页 → 扩展 reveal 凭证并自动填充 + 提交。reveal 受门户会话
+   **+ 令牌绑定的每安装密钥 + step-up MFA + 应用访问策略**多重保护,且每次
+   reveal 都记审计。
+
+<p align="center"><img src="docs/screenshots/extension-popup.png" width="340" alt="MXID Login 扩展弹窗 —— 按应用填充状态与一键录制"></p>
+
+**一步到位** —— 扩展的 *Record login*(录制登录)一次同时抓取字段选择器**并**存下
+凭证,用户对着应用登录一次即完成接入。不想托管密码的用户直接跳过即可:应用降级为
+普通启动入口,手动输入密码。
+
+设计与安全:[表单填充设计](docs/FORM-FILL-SSO-DESIGN.md) ·
+[安全规格](docs/FORM-FILL-SSO-B0-SECURITY-SPEC.md) ·
+[扩展令牌绑定](docs/FORM-FILL-EXTENSION-TOKEN-BINDING.md)。
 
 ## 项目结构
 

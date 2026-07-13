@@ -12,14 +12,14 @@ with a signed license.
 | OIDC / SAML / CAS / JWT protocols | ✅ | ✅ |
 | Users / orgs / groups, RBAC | ✅ | ✅ |
 | SMTP email, basic audit | ✅ | ✅ |
-| **Single default tenant** | ✅ | ✅ |
-| **Multi-tenant** (more than the default tenant) | ❌ | ✅ |
+| **Single-tenant** (one identity domain per deployment) | ✅ | ✅ |
 | **External IdP login** (social / enterprise SSO) | ❌ | ✅ |
 | **Branding / white-label** (logo, colors, login page) | ❌ | ✅ |
 | Conditional access, WebAuthn/passkeys, SCIM, SMS, advanced step-up | ❌ | ✅ |
+| **Form-fill SSO (SWA)** — browser-extension auto-login for password-only web apps | ❌ | ✅ |
 
-Feature keys (in the license payload): `multi_tenant`, `external_idp`,
-`branding`, `conditional_access`, `webauthn`, `scim`, `advanced_stepup`, `sms`.
+Feature keys (in the license payload): `external_idp`, `branding`,
+`conditional_access`, `webauthn`, `scim`, `advanced_stepup`, `sms`, `form_fill`.
 
 ### CE capabilities
 
@@ -40,14 +40,14 @@ github.com/imkerbos/license-authority  private  per-product Ed25519 signing keys
 
 Two layers of EE gating:
 
-1. **Runtime-gated** (`multi_tenant`, `branding`, `conditional_access`): the code
+1. **Runtime-gated** (`branding`, `conditional_access`): the code
    lives in the CE binary — these features rely on foundational schema that CE
    already contains (and grandfathers on expiry). `middleware.RequireFeature` /
    `license.Current().Has()` returns 403 / locks the UI unless the license grants
    the feature. Expiry reverts to CE limits; existing data is grandfathered (see
    §Expiry below).
 2. **Code-separated** (`external_idp`, `webauthn`, `scim`, `advanced_stepup`,
-   `sms`, and other high-value features): the implementation lives ONLY in the
+   `sms`, `form_fill`, and other high-value features): the implementation lives ONLY in the
    private `mxid-ee` repo. EE feature packages register into `pkg/ee/registry`
    from their `init()`; the CE binary imports none, so the code is *physically
    absent* from it — there is nothing to patch out. Verified: the CE binary
@@ -96,7 +96,7 @@ Then activate the license in the console (see below). The EE *image* and the
 license unlocks them at runtime.
 
 > **CE image + EE license** unlocks the *runtime-gated* features
-> (`multi_tenant` / `branding` / `conditional_access`), but NOT the
+> (`branding` / `conditional_access`), but NOT the
 > code-separated ones (`external_idp`, `webauthn`, `scim`, …) — those code paths
 > do not exist in the CE binary at all; accessing them returns 404.
 > EE customers run `mxid-ee`.
@@ -111,7 +111,7 @@ A license is an Ed25519-signed token issued by `license-authority`:
 ```bash
 # in the license-authority repo
 go run ./cmd/sign -product mxid \
-  -customer "Acme Corp" -features all -exp 2027-01-01 -max-tenants 50
+  -customer "Acme Corp" -features all -exp 2027-01-01 -max-users 500
 ```
 
 Activate in the **console** — Settings → License: paste the token and save. It's
@@ -154,7 +154,6 @@ token being reused across many deployments, issue an **install-bound** license:
 | Resource | CE | EE |
 |----------|----|----|
 | Users | **100** (`CEMaxUsers`) | unlimited (or the license's `max_users`) |
-| Tenants | **1** (default tenant) | unlimited (or `max_tenants`) |
 | Apps / orgs / groups / roles / API tokens | unlimited | unlimited |
 | Audit retention | unlimited (default 365d, console-configurable) | unlimited |
 | External IdP · branding · conditional access · WebAuthn · SCIM · SMS · advanced step-up | ❌ | ✅ |
@@ -164,7 +163,7 @@ token being reused across many deployments, issue an **install-bound** license:
 | Feature set | signed `features[]` | route gates + UI + (code-separated) absence from the CE binary |
 | Expiry | signed `exp` | expired → reverts to CE limits (see below) |
 | Product binding | signed `product` | a license for another product is rejected |
-| User / tenant caps | edition (`license.Current()`) | create blocked at the cap; existing rows grandfathered |
+| User cap | edition (`license.Current()`) | create blocked at the cap; existing rows grandfathered |
 
 ### Expiry — graceful downgrade, data grandfathered
 
@@ -174,8 +173,8 @@ reverts to **CE limits**, and existing data over those limits is grandfathered:
 - Logins / SSO / token issuance keep working — unaffected.
 - User count ≤ 100 → you can still create up to 100. Count already > 100 (grown
   under EE) → all existing users keep working, but **no new users** until renewal.
-- Extra tenants / external IdPs created under EE keep functioning; you can't
-  create new ones. Applied branding stays; you can't edit it.
+- External IdPs configured under EE keep functioning; you can't create new ones.
+  Applied branding stays; you can't edit it.
 
 Renew by pasting a fresh token in the console — the cap/features lift instantly.
 Offline by design: no online revocation; bound risk with `-exp` + renewal.

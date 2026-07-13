@@ -25,24 +25,31 @@ One login portal, one admin console, one protocol gateway — speak **OIDC**,
 
 ---
 
-MXID is a self-hosted IAM platform built for commercial-grade deployments —
-multi-tenant, multi-language, and benchmarked against Keycloak / Auth0 / Okta /
+MXID is a self-hosted, single-tenant IAM platform built for commercial-grade
+deployments — multi-language and benchmarked against Keycloak / Auth0 / Okta /
 TopIAM. It ships as **open core**: a fully usable Community Edition under AGPL,
-plus an Enterprise Edition that unlocks multi-tenancy, external IdP login,
-white-label branding and more via a signed license.
+plus an Enterprise Edition that unlocks external IdP login, white-label branding
+and more via a signed license.
 
-> **v1.0.0** — first stable release. :tada:
+> **v1.4.1** — latest stable release. See the [releases](https://github.com/imkerbos/mxid/releases) for the changelog. :tada:
+
+<div align="center">
+
+![MXID portal — one launcher for every app, across OIDC / SAML / CAS / form-fill](docs/screenshots/portal-apps.png)
+
+</div>
 
 ## Highlights
 
 - **Protocols out of the box** — OpenID Connect 1.0 (on OAuth 2.0; PKCE, Refresh, RP-Initiated Logout), SAML 2.0 (IdP/SP-initiated, SLO), CAS 3.0, JWT. Per-app claim/attribute mappers.
 - **Authentication** — password policy (strength, history, lockout, captcha), TOTP MFA + recovery codes, magic-link, external IdP login (Enterprise).
 - **Identity & access** — users, organizations, groups, RBAC; per-app access policies and per-app roles propagated as claims.
+- **Form-fill SSO (SWA)** — onboard legacy web apps that only have a username/password form. MXID vaults the downstream credential and a hardened MV3 browser extension auto-fills + submits the app's own login. Per-user or shared credentials, capture-to-configure, step-up-gated + token-bound reveal (Enterprise).
 - **Runtime, not rebuild** — SMTP, security policy, branding, login methods, protocol defaults and URLs are all admin-editable at runtime through the console.
 - **Operations** — audit log with retention + alert webhook, API tokens (OpenAPI), i18n (Chinese + English).
 - **Production-ready delivery** — single-binary backend + containerized edge; tag-driven multi-arch images; Ed25519-signed offline licensing.
 - **Stateless backend / Kubernetes-ready** — icons and brand logos are stored as `bytea` in PostgreSQL (≤ 2 MB, strong ETag cache); no local disk state, no PVC required. Every replica serves the same assets immediately after startup.
-- **Honest capability advertisement** — `/system/info` reports only the features present in the running binary: runtime-gated features (`multi_tenant`, `branding`, `conditional_access` — code ships in CE, unlocked by license) are distinguished from code-separated EE-only features (`external_idp`, etc., absent from the CE binary).
+- **Honest capability advertisement** — `/system/info` reports only the features present in the running binary: runtime-gated features (`branding`, `conditional_access` — code ships in CE, unlocked by license) are distinguished from code-separated EE-only features (`external_idp`, etc., absent from the CE binary).
 
 ## Architecture
 
@@ -69,7 +76,7 @@ white-label branding and more via a signed license.
         │          │ user/group/org   │  │ per-app policy   │        │
         │          └────────┬─────────┘  └────────┬─────────┘        │
         │     ┌─────────────▼─────────────────────▼────────────┐     │
-        │     │  Console SPA (admin) — /tenants /users /apps    │     │
+        │     │  Console SPA (admin) — /users /apps /orgs       │     │
         │     └─────────────────────────────────────────────────┘    │
         └──────────────────────────────┬─────────────────────────────┘
                   ┌────────────────────┼────────────────────┐
@@ -153,8 +160,7 @@ activation and limits: **[docs/EDITIONS.md](docs/EDITIONS.md)**.
 | Per-app access policy (user / group / org / role) | ✅ | ✅ |
 | Per-app roles → claims | ✅ | ✅ |
 | API tokens (OpenAPI) | ✅ | ✅ |
-| **Multi-tenancy** | | |
-| Tenants | ✅ single | ✅ unlimited |
+| Form-fill SSO (SWA) — browser-extension auto-login for password-only web apps | ❌ | ✅ |
 | **Operations** | | |
 | Audit log + retention + alert webhook | ✅ | ✅ |
 | SMTP email + templates | ✅ | ✅ |
@@ -176,6 +182,41 @@ The console ships built-in integration guides at `/admin/docs`:
 | Grafana | OIDC | ✅ `groups` claim → `role_attribute_path` |
 | JumpServer v4 | CAS 3.0 | ✅ user auto-create, attribute sync |
 | Harbor / Gitea / Jira / Confluence / Jenkins / AWS / Lark | OIDC / SAML / CAS | see `/admin/docs` |
+
+## Form-fill SSO (browser extension)
+
+Not every internal system speaks OIDC / SAML / CAS. For legacy web apps that only
+have a username + password form, MXID ships **form-fill SSO** (a.k.a. SWA — Secure
+Web Authentication): the downstream credential is vaulted in MXID and the **MXID
+Login** browser extension types it into the app's *own* login form. MXID never
+talks to the app, and the password never leaves the browser at fill time.
+
+![Auto-fill in action — the extension fills and submits the app's login form](docs/screenshots/formfill-autofill.png)
+
+**How it works**
+
+1. An admin registers the app with protocol **Form-fill** — login URL + field
+   selectors, or let the extension **record** a real login and generate them.
+2. The user installs the **MXID Login** extension (Chrome / Edge, Manifest V3).
+   Intranet deployments push it via enterprise policy + a self-hosted CRX — no
+   Chrome Web Store required.
+3. Credentials are stored **per-user** (each user vaults their own) or **shared**
+   (an admin sets one for everyone) — the two modes coexist per app.
+4. Opening the app's login page → the extension reveals the credential and
+   auto-fills + submits. Reveal is gated by the portal session **+ a token-bound
+   per-install secret + step-up MFA + the app's access policy**, and every reveal
+   is audited.
+
+<p align="center"><img src="docs/screenshots/extension-popup.png" width="340" alt="MXID Login extension popup — per-app fill status and one-click record"></p>
+
+**One-step setup** — the extension's *Record login* captures the field selectors
+**and** stores the credential in a single pass, so a user onboards an app by
+logging into it once. Users who'd rather not vault a password simply skip it: the
+app degrades to a plain launcher and they type the password manually.
+
+Design & security: [form-fill design](docs/FORM-FILL-SSO-DESIGN.md) ·
+[security spec](docs/FORM-FILL-SSO-B0-SECURITY-SPEC.md) ·
+[extension token binding](docs/FORM-FILL-EXTENSION-TOKEN-BINDING.md).
 
 ## Project layout
 

@@ -927,6 +927,11 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 	// external-login account linking (user domain), tenant-code resolution, and
 	// the console authorization gate (the security boundary — a federated user
 	// with no console permission, or a break-glass built-in, is rejected).
+	//
+	// accessSvc is assigned further below (it's built with the app modules) but
+	// declared here so the CanLaunchApp seam closure can capture it — the closure
+	// only runs at request time, long after assignment.
+	var accessSvc *appaccess.Service
 	if err := registry.RunInit(&registry.InitContext{
 		App:           a,
 		SessionMgr:    sessionMgr,
@@ -983,6 +988,20 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 		},
 		// Decrypted per-app provisioning config read, for the EE SCIM connector.
 		ProvisioningConfig: provisioningModule.Service.Resolved,
+		// Step-up (sudo) freshness check for the EE form-fill credential reveal.
+		// stepUpDeps is built above (reused by the JIT StepUpChecker); the checker
+		// is stateless so a dedicated instance here is fine.
+		StepUpFresh: authn.NewStepUpChecker(stepUpDeps).Fresh,
+		// App access-policy check for EE form-fill: only reveal a credential for
+		// an app the user may launch. accessSvc is assigned below; the closure
+		// runs at request time so the late binding is safe.
+		CanLaunchApp: func(ctx context.Context, userID, appID int64) (bool, error) {
+			dec, err := accessSvc.CanAccess(ctx, userID, appID, a.Config.Tenant.DefaultID)
+			if err != nil {
+				return false, err
+			}
+			return dec.Allowed, nil
+		},
 	}); err != nil {
 		a.Logger.Fatal("init EE features", zap.Error(err))
 	}
@@ -1063,7 +1082,7 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 	// Wired before protocol modules because OIDC /authorize calls into
 	// the AccessChecker adapter to gate code issuance.
 	accessRepo := appaccess.NewRepository(a.DB)
-	accessSvc := appaccess.NewService(accessRepo, a.IDGen, a.EventBus)
+	accessSvc = appaccess.NewService(accessRepo, a.IDGen, a.EventBus)
 	accessSvc.SetLogger(a.Logger)
 	// Clean up access policies whose subject group/org/role is deleted, so they
 	// don't dangle as "(unknown)" rows or phantom allow/deny rules.

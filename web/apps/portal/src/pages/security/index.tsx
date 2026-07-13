@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 import { portalApi, formatDate, cn, parseUserAgent, useTranslation } from '@mxid/shared'
 import { Button, ConfirmDialog } from '@mxid/shared/ui'
 import { toast } from '@mxid/shared/ui/toast'
-import type { MFAInfo, SessionInfo } from '@mxid/shared'
+import type { MFAInfo, SessionInfo, FormFillExtToken } from '@mxid/shared'
 import {
   KeyRound,
   Shield,
@@ -18,6 +18,7 @@ import {
   Smartphone,
   Copy,
   X,
+  Puzzle,
 } from 'lucide-react'
 
 export default function SecurityPage() {
@@ -37,6 +38,7 @@ export default function SecurityPage() {
         <ChangePasswordSection />
         <MFASection />
         <SessionsSection />
+        <ConnectedExtensionsSection />
       </div>
     </motion.div>
   )
@@ -555,6 +557,87 @@ function SessionsSection() {
                   <Trash2 className="h-3.5 w-3.5" />
                 )}
                 {t('account.sessions.kick')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+function ConnectedExtensionsSection() {
+  const { t } = useTranslation()
+  const [tokens, setTokens] = useState<FormFillExtToken[]>([])
+  const [loading, setLoading] = useState(true)
+  const [revoking, setRevoking] = useState<string | null>(null)
+
+  const fetchTokens = () => {
+    setLoading(true)
+    portalApi
+      .listExtTokens()
+      .then(setTokens)
+      .catch(() => setTokens([]))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchTokens()
+  }, [])
+
+  const handleRevoke = async (id: string) => {
+    if (revoking) return
+    setRevoking(id)
+    try {
+      await portalApi.revokeExtToken(id)
+      setTokens((prev) => prev.filter((x) => x.id !== id))
+      toast.success(t('account.extensions.revoked'))
+    } catch (err: unknown) {
+      toast.error(t('account.extensions.revokeFailed'), err instanceof Error ? err.message : '')
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  return (
+    <SectionCard icon={Puzzle} title={t('account.extensions.title')}>
+      <p className="mb-3 text-xs text-muted">{t('account.extensions.hint')}</p>
+      {loading ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : tokens.length === 0 ? (
+        <p className="py-4 text-sm text-muted">{t('account.extensions.empty')}</p>
+      ) : (
+        <div className="space-y-3">
+          {tokens.map((tk) => (
+            <div
+              key={tk.id}
+              className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <Puzzle className="h-5 w-5 text-faint" />
+                <div>
+                  <p className="text-sm font-medium text-ink">
+                    {parseUserAgent(tk.device_label).short || tk.device_label || t('account.extensions.unknownDevice')}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {t('account.extensions.lastUsedLabel')}: {tk.last_used_at ? formatDate(tk.last_used_at) : '—'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleRevoke(tk.id)}
+                disabled={revoking === tk.id}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+              >
+                {revoking === tk.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                {t('account.extensions.revoke')}
               </button>
             </div>
           ))}

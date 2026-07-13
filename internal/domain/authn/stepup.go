@@ -123,7 +123,7 @@ func StepUpMiddleware(d StepUpDeps) gin.HandlerFunc {
 			return
 		}
 
-		sess, _ := d.SessionMgr.Get(ctx, session.NamespaceConsole, sessionID)
+		sess, _ := d.SessionMgr.Get(ctx, sessionNamespace(c), sessionID)
 		if sess != nil && sess.StepUpFresh(time.Now(), window) {
 			audit(d, c, userID, tenantID, true, "step_up_fresh")
 			c.Next()
@@ -172,8 +172,19 @@ func (s *StepUpChecker) Fresh(c *gin.Context, tenantID int64) bool {
 	ctx := c.Request.Context()
 	sessionID := c.GetString(CtxSessionID)
 	_, window := s.deps.Policy(ctx, tenantID)
-	sess, _ := s.deps.SessionMgr.Get(ctx, session.NamespaceConsole, sessionID)
+	sess, _ := s.deps.SessionMgr.Get(ctx, sessionNamespace(c), sessionID)
 	return sess != nil && sess.StepUpFresh(time.Now(), window)
+}
+
+// sessionNamespace returns the namespace the request authenticated in (set by
+// AuthMiddleware), falling back to console for callers mounted before the
+// namespace was stamped. Step-up freshness MUST be read in the same namespace
+// the session lives in — a portal request's session is not in the console store.
+func sessionNamespace(c *gin.Context) string {
+	if ns := c.GetString(CtxNamespace); ns != "" {
+		return ns
+	}
+	return session.NamespaceConsole
 }
 
 // HasMFA reports whether userID has any MFA factor enrolled.

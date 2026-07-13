@@ -56,6 +56,7 @@ func Register(
 		app.Config.Tenant.DefaultID,
 		app.Config.Session.CookieSecure,
 		app.Config.Session.CookieDomain,
+		app.Config.Session.CrossSiteCookies,
 	)
 
 	// Register routes

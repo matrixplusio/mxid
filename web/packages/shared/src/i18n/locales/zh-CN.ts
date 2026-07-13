@@ -777,6 +777,9 @@ export default {
       codeLabel: '应用编码 *',
       codeHint: 'SAML / CAS 协议 URL 包含此编码（如 {{example}}），建议可读；OIDC 仅内部使用，可随机',
       protocolLabel: '协议',
+      protocols: {
+        form: '表单填充 (SWA, 托管账密自动登录)',
+      },
       clientTypeLabel: '客户端类型 *',
       clientTypes: {
         webApp: 'Web 应用 (机密客户端, 有 secret)',
@@ -1343,6 +1346,16 @@ export default {
       unknown: '未知',
       loadError: '加载会话失败',
     },
+    extensions: {
+      title: '已连接扩展',
+      hint: '授权自动填表的浏览器扩展。撤销后该浏览器需重新连接（并验证身份）。',
+      empty: '暂无已连接扩展',
+      revoke: '撤销',
+      revoked: '已撤销',
+      revokeFailed: '撤销失败',
+      lastUsedLabel: '最近使用',
+      unknownDevice: '未知设备',
+    },
     history: {
       time: '时间',
       event: '事件',
@@ -1387,6 +1400,30 @@ export default {
     favoriteFailed: '收藏操作失败',
     favoriteSaveFailed: '收藏排序失败',
     favoriteSaveOrderFailed: '保存排序失败',
+    extBanner: {
+      text: '安装 MXID Login 浏览器扩展,即可自动登录这些系统。',
+      action: '安装指引',
+    },
+    extSetup: {
+      title: '安装 MXID Login 扩展',
+      intro: '该扩展在你打开内部系统登录页时自动填入你在 MXID 保存的账密。浏览器不允许网页直接安装扩展,请按下列方式安装:',
+      step1: '托管设备(公司电脑):由 IT 通过策略自动安装,通常无需手动操作。',
+      step2: '手动安装:向管理员获取 mxid-login.crx,打开 chrome://extensions,开启右上角"开发者模式"。',
+      step3: '将 .crx 拖入该页面(或"加载已解压"选扩展文件夹)完成安装,然后回到门户刷新。',
+      note: '纯内网环境无需访问 Chrome 商店;扩展与更新均由公司内网提供。装好后本页横幅会消失。',
+    },
+    formCred: {
+      manage: '管理登录凭证',
+      title: '“{{name}}” 的登录凭证',
+      hint: '保存你在该系统的账号密码；浏览器扩展会在打开时自动填表登录。密码加密保存，不会回显。',
+      account: '账号',
+      password: '密码',
+      clear: '清除',
+      saved: '凭证已保存',
+      saveFailed: '保存凭证失败',
+      cleared: '凭证已清除',
+      clearFailed: '清除凭证失败',
+    },
     noDesc: '暂无描述',
     appsEmpty: '暂无应用',
     profile: {

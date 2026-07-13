@@ -12,6 +12,7 @@ import (
 	"github.com/imkerbos/mxid/internal/protocol/saml"
 	"github.com/imkerbos/mxid/pkg/crypto"
 	"github.com/imkerbos/mxid/pkg/dberr"
+	"github.com/imkerbos/mxid/pkg/ee/license"
 	"github.com/imkerbos/mxid/pkg/event"
 	"github.com/imkerbos/mxid/pkg/snowflake"
 )
@@ -26,6 +27,9 @@ var (
 	ErrCertNotFound      = errors.New("certificate not found")
 	ErrAccountNotFound   = errors.New("app account not found")
 	ErrInvalidClientType = errors.New("invalid client_type for protocol")
+	// ErrFormFillNotLicensed is returned when a form-fill (SWA) app is created
+	// without the EE form_fill license feature.
+	ErrFormFillNotLicensed = errors.New("form-fill requires an EE license")
 	// ErrSubjectNotInTenant is returned when AddAccess is asked to authorize a
 	// subject (user/group/org/role) that does not exist in the caller's tenant
 	// — including a cross-tenant id, which the injected validator (tenant-scoped
@@ -180,6 +184,14 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req *CreateAppRequ
 		default:
 			return nil, ErrInvalidClientType
 		}
+	}
+
+	// Form-fill apps carry a downstream credential vault — an EE (form_fill)
+	// capability. The generic app-create route serves every protocol, so the
+	// license gate lives here rather than as route middleware. CE (no license)
+	// rejects; the descriptor + credential logic lives in mxid-ee.
+	if req.Protocol == ProtocolForm && !license.Current().Has(license.FeatureFormFill) {
+		return nil, ErrFormFillNotLicensed
 	}
 
 	clientID, err := crypto.GenerateClientID()

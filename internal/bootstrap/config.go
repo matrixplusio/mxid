@@ -145,6 +145,12 @@ type SessionConfig struct {
 	AbsoluteTimeout time.Duration `mapstructure:"absolute_timeout"`
 	CookieSecure    bool          `mapstructure:"cookie_secure"`
 	CookieDomain    string        `mapstructure:"cookie_domain"`
+	// CrossSiteCookies flips the PORTAL session cookie to SameSite=None so the
+	// form-fill browser extension can send it on its cross-site fetch to the
+	// reveal endpoint. Opt-in (default Lax) — it widens CSRF surface, so enable
+	// it ONLY for deployments running the extension, and requires cookie_secure
+	// (SameSite=None mandates Secure, hence HTTPS). The console cookie stays Lax.
+	CrossSiteCookies bool `mapstructure:"cross_site_cookies"`
 }
 
 type SecurityConfig struct {

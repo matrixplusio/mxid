@@ -13,6 +13,11 @@ const (
 	ProtocolOIDC = "oidc"
 	ProtocolSAML = "saml"
 	ProtocolCAS  = "cas"
+	// ProtocolForm is a form-fill (SWA) app: MXID stores a downstream credential
+	// and a browser extension auto-submits the target site's login form. It mints
+	// no signing key and no client_secret; the credential logic is an EE feature
+	// (form_fill), so creating a form app requires that license.
+	ProtocolForm = "form"
 )
 
 // Access policy constants.

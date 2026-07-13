@@ -85,6 +85,7 @@ export function protocolLabel(protocol: string): string {
     oidc: 'OIDC',
     saml: 'SAML 2.0',
     cas: 'CAS 3.0',
+    form: 'Form-fill',
   }
   return map[protocol] || protocol.toUpperCase()
 }

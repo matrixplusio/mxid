@@ -129,6 +129,15 @@ func (s *Service) SubscribeEvents() {
 	s.eventBus.Subscribe(event.AppAccessPolicyCreated, s.handleAppOwnedEvent(event.AppAccessPolicyCreated))
 	s.eventBus.Subscribe(event.AppAccessPolicyDeleted, s.handleAppOwnedEvent(event.AppAccessPolicyDeleted))
 
+	// Form-fill credential-vault events (EE form_fill feature emits these; the
+	// CE binary has no emitter so these subscriptions simply never fire there).
+	// Reveal / reveal_denied are the security-monitoring anchors for the vault.
+	s.eventBus.Subscribe(event.AppCredentialStored, s.handleResourceEvent(event.AppCredentialStored, "app"))
+	s.eventBus.Subscribe(event.AppCredentialDeleted, s.handleResourceEvent(event.AppCredentialDeleted, "app"))
+	s.eventBus.Subscribe(event.AppSharedCredentialSet, s.handleResourceEvent(event.AppSharedCredentialSet, "app"))
+	s.eventBus.Subscribe(event.AppCredentialRevealed, s.handleResourceEvent(event.AppCredentialRevealed, "app"))
+	s.eventBus.Subscribe(event.AppCredentialRevealDenied, s.handleResourceEvent(event.AppCredentialRevealDenied, "app"))
+
 	// Org events
 	s.eventBus.Subscribe(event.OrgCreated, s.handleResourceEvent(event.OrgCreated, "org"))
 	s.eventBus.Subscribe(event.OrgUpdated, s.handleResourceEvent(event.OrgUpdated, "org"))
