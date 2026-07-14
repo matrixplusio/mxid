@@ -87,7 +87,7 @@ function loginErrorMessage(err: unknown, t: (k: string) => string): string {
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   // Multi-tenant: URL ?tenant=<code> routes the login to that tenant. Used
   // by enterprises that share a single portal host (e.g. mxid.io/?tenant=matrixplus).
   const tenantCode = useMemo(() => searchParams.get('tenant') ?? '', [searchParams])
@@ -118,6 +118,12 @@ export default function LoginPage() {
   // Clearing the challenge returns the UI to the password step.
   const [mfaChallenge, setMfaChallenge] = useState('')
   const [mfaCode, setMfaCode] = useState('')
+  // External-IdP MFA: when a federated login (Lark, ...) is gated by a "force
+  // MFA" policy, the callback bounces back here with ?ext_mfa=<token>. Present ⇒
+  // show the SAME TOTP step, but finish via the external verify endpoint instead
+  // of the local password-login challenge.
+  const [extMfaToken, setExtMfaToken] = useState(() => searchParams.get('ext_mfa') || '')
+  const showMfa = !!mfaChallenge || !!extMfaToken
 
   // External IdPs (social login). Empty array = no buttons rendered.
   // Filtered to the current tenant when ?tenant= is set.
@@ -190,6 +196,14 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
+      // External-IdP challenge: finish the parked federated login. The verify
+      // response sets the session cookies and returns where to send the browser
+      // (may be an SSO resume URL captured when the login started).
+      if (extMfaToken) {
+        const res = await externalIdpApi.verifyMFA({ token: extMfaToken, code: mfaCode })
+        window.location.assign(res?.redirect || '/apps')
+        return
+      }
       await authApi.portalVerifyMFA({
         challenge: mfaChallenge,
         code: mfaCode,
@@ -201,13 +215,19 @@ export default function LoginPage() {
       const from = (location.state as { from?: string })?.from || '/apps'
       navigate(from, { replace: true })
     } catch (err: unknown) {
-      // Backend consumes the challenge on any verify attempt — wrong code
-      // means the user must restart from password step.
       setError(loginErrorMessage(err, t))
-      setMfaChallenge('')
-      setMfaCode('')
-      setPassword('')
-      loadCaptcha()
+      if (extMfaToken) {
+        // External verify keeps the pending token on a wrong code (retryable
+        // within the TTL, rate-limited) — just clear the code to re-enter.
+        setMfaCode('')
+      } else {
+        // Local verify consumes the challenge on any attempt — a wrong code
+        // means restarting from the password step.
+        setMfaChallenge('')
+        setMfaCode('')
+        setPassword('')
+        loadCaptcha()
+      }
     } finally {
       setLoading(false)
     }
@@ -216,7 +236,7 @@ export default function LoginPage() {
   // Auto-submit once 6 digits are entered — a TOTP code has no other length, so
   // there's nothing to review; save the user the extra click.
   useEffect(() => {
-    if (mfaChallenge && mfaCode.length === 6 && !loading) handleVerifyMfa()
+    if (showMfa && mfaCode.length === 6 && !loading) handleVerifyMfa()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mfaCode])
 
@@ -224,7 +244,15 @@ export default function LoginPage() {
     setMfaChallenge('')
     setMfaCode('')
     setError('')
-    loadCaptcha()
+    if (extMfaToken) {
+      // Drop the parked federated login and strip the token from the URL so a
+      // refresh doesn't drop straight back into the MFA step.
+      setExtMfaToken('')
+      searchParams.delete('ext_mfa')
+      setSearchParams(searchParams, { replace: true })
+    } else {
+      loadCaptcha()
+    }
   }
 
   return (
@@ -256,16 +284,16 @@ export default function LoginPage() {
 
           <div className="mb-8">
             <h2 className="text-3xl font-semibold tracking-tight text-white">
-              {mfaChallenge ? t('login.mfa') : (bootstrap.branding.login_page_title || t('login.welcomePortal'))}
+              {showMfa ? t('login.mfa') : (bootstrap.branding.login_page_title || t('login.welcomePortal'))}
             </h2>
             <p className="mt-2 text-sm text-white/55">
-              {mfaChallenge
+              {showMfa
                 ? t('login.mfaHint')
                 : t('login.subtitlePortal')}
             </p>
           </div>
 
-          {!mfaChallenge && idpFirst && (
+          {!showMfa && idpFirst && (
             <ExternalIdpButtons
               idps={idps}
               hrefFor={(idp) => externalIdpApi.startURL(idp.code, undefined, tenantCode || undefined)}
@@ -273,7 +301,7 @@ export default function LoginPage() {
             />
           )}
 
-          {mfaChallenge ? (
+          {showMfa ? (
             <form onSubmit={handleVerifyMfa} className="flex flex-col gap-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-white/90">
@@ -457,7 +485,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          {!mfaChallenge && !idpFirst && (
+          {!showMfa && !idpFirst && (
             <ExternalIdpButtons
               idps={idps}
               hrefFor={(idp) => externalIdpApi.startURL(idp.code, undefined, tenantCode || undefined)}

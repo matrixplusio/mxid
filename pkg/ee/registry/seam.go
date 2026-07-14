@@ -86,6 +86,20 @@ type OutboxRegisterFunc func(kind string, h OutboxHandler)
 // in CE over authn.StepUpChecker.Fresh.
 type StepUpFreshFunc func(c *gin.Context, tenantID int64) bool
 
+// MFAChallengeRequiredFunc reports whether an already-first-factor-authenticated
+// user must clear an interactive MFA (TOTP) challenge before a session is issued:
+// the MFA policy applies to them (all → everyone, admin_only → admins) AND they
+// hold a verified factor. Used by external-IdP login to enforce MFA on federated
+// sign-ins (a Lark login otherwise bypasses the second factor). A user with NO
+// factor is handled separately by the mandatory-enrollment gate at session
+// creation, not here.
+type MFAChallengeRequiredFunc func(ctx context.Context, tenantID, userID int64) bool
+
+// VerifyStepUpTOTPFunc validates a TOTP (or backup) code for a user mid-login,
+// rate-limited per user+IP. Returns nil on success. Reused by external-IdP MFA
+// so the federated challenge shares the same verifier + limiter as local login.
+type VerifyStepUpTOTPFunc func(ctx context.Context, userID int64, clientIP, code string) error
+
 // AppAccessFunc reports whether a user is authorized to launch an app (passes the
 // app's access policy). EE form-fill gates credential access on it so a user can
 // only reach a credential for an app they may actually use — and, for shared
@@ -122,6 +136,12 @@ type InitContext struct {
 	// CanLaunchApp reports whether a user passes an app's access policy — EE
 	// form-fill only reveals a credential for an app the user may launch.
 	CanLaunchApp AppAccessFunc
+	// MFAChallengeRequired gates external-IdP login on an interactive MFA
+	// challenge when policy applies and the user holds a factor.
+	MFAChallengeRequired MFAChallengeRequiredFunc
+	// VerifyStepUpTOTP validates the TOTP code the external-IdP MFA challenge
+	// collects, sharing the local-login verifier + rate limiter.
+	VerifyStepUpTOTP VerifyStepUpTOTPFunc
 }
 
 // Initializer wires one EE feature. Returning an error aborts startup.

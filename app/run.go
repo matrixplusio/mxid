@@ -1002,6 +1002,18 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 			}
 			return dec.Allowed, nil
 		},
+		// Enforce MFA on external-IdP (Lark, ...) login: challenge required when the
+		// policy applies to the user (reusing mfaPolicyRequires) AND they hold a
+		// factor. No-factor users are caught by the enroll gate at Create instead.
+		MFAChallengeRequired: func(ctx context.Context, tenantID, userID int64) bool {
+			if !mfaPolicyRequires(ctx, tenantID, userID) {
+				return false
+			}
+			has, err := authnModule.Engine.HasMFA(ctx, userID)
+			return err == nil && has
+		},
+		// Shared TOTP verifier + rate limiter for the external-IdP MFA challenge.
+		VerifyStepUpTOTP: authnModule.Engine.VerifyStepUp,
 	}); err != nil {
 		a.Logger.Fatal("init EE features", zap.Error(err))
 	}

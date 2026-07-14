@@ -66,6 +66,15 @@ export const externalIdpApi = {
     return `/api/v1/portal-public/auth/external/${encodeURIComponent(code)}/start${qs ? `?${qs}` : ''}`
   },
 
+  // Portal (public) — complete a federated login that MFA policy parked pending
+  // a TOTP challenge. The callback redirected the browser to the login page with
+  // ?ext_mfa=<token>; the user enters their code and this finishes the login,
+  // setting the session cookies. Returns where to send the browser next.
+  verifyMFA: (data: { token: string; code: string }) =>
+    portalPublicRoot
+      .post<ApiResponse<{ redirect: string }>>('/auth/external/mfa/verify', data)
+      .then(r => r.data.data),
+
   // Console (public) — same shape as the portal variants but the OAuth dance
   // lands a console session (admin-gated server-side). Used by the console
   // login page to offer "sign in with Lark" to admins.
