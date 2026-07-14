@@ -1451,6 +1451,8 @@ export default {
     },
     noDesc: 'No description',
     appsEmpty: 'No apps',
+    protoForm: 'Form-fill',
+    protoLink: 'Link',
     profile: {
       title: 'Profile',
       basic: 'Basic info',

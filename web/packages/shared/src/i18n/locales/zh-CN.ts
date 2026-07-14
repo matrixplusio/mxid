@@ -1454,6 +1454,8 @@ export default {
     },
     noDesc: '暂无描述',
     appsEmpty: '暂无应用',
+    protoForm: '表单填充',
+    protoLink: '链接',
     profile: {
       title: '个人中心',
       basic: '基本信息',

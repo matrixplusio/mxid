@@ -744,12 +744,12 @@ function AppCard({
         )}
         <AppIcon value={iconValue} fallbackName={app.name} size={48} className="rounded-xl" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-ink">{app.name}</h3>
+          <div className="flex items-start gap-2">
+            <h3 className="line-clamp-2 text-sm font-semibold text-ink" title={app.name}>{app.name}</h3>
             <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${protocolBadgeClass}`}
+              className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${protocolBadgeClass}`}
             >
-              {protocolLabel(app.protocol)}
+              {protoLabelLocalized(t, app.protocol)}
             </span>
           </div>
           <p className="mt-1 line-clamp-2 text-xs text-muted">
@@ -786,6 +786,14 @@ function AppCard({
   )
 }
 
+// protoLabelLocalized localizes the descriptive protocol badges (form / link);
+// OIDC / SAML / CAS keep their universal names via protocolLabel.
+function protoLabelLocalized(t: (k: string) => string, protocol: string): string {
+  if (protocol === 'form') return t('portal.protoForm')
+  if (protocol === 'link') return t('portal.protoLink')
+  return protocolLabel(protocol)
+}
+
 function CompactAppCard({
   app,
   launching,
@@ -795,6 +803,7 @@ function CompactAppCard({
   launching: boolean
   onLaunch: () => void
 }) {
+  const { t } = useTranslation()
   const iconValue = app.logo_url || app.icon || ''
   return (
     <button
@@ -804,9 +813,9 @@ function CompactAppCard({
     >
       <AppIcon value={iconValue} fallbackName={app.name} size={32} className="rounded-lg" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-ink">{app.name}</div>
+        <div className="truncate text-sm font-medium text-ink" title={app.name}>{app.name}</div>
         <div className="truncate text-[10px] uppercase tracking-wide text-faint">
-          {protocolLabel(app.protocol)}
+          {protoLabelLocalized(t, app.protocol)}
         </div>
       </div>
       {launching ? (
