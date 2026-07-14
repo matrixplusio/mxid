@@ -57,7 +57,6 @@ export default {
     deleteSuccess: 'Deleted',
     deleteFailed: 'Delete failed',
     operationFailed: 'Operation failed',
-    close: 'Close',
     dismiss: 'Dismiss',
     theme: { toLight: 'Switch to light', toDark: 'Switch to dark' },
     codeField: {

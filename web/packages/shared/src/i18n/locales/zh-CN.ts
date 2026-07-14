@@ -60,7 +60,6 @@ export default {
     deleteSuccess: '删除成功',
     deleteFailed: '删除失败',
     operationFailed: '操作失败',
-    close: '关闭',
     dismiss: '关闭',
     theme: { toLight: '切换到浅色', toDark: '切换到深色' },
     codeField: {
