@@ -732,19 +732,19 @@ function AppCard({
       onDragEnter={onDragEnter}
       onDragOver={e => e.preventDefault()}
       onDragEnd={onDragEnd}
-      className={`group relative ${dragging ? 'opacity-40' : ''}`}
+      className={`group relative h-full ${dragging ? 'opacity-40' : ''}`}
     >
       <button
         onClick={onLaunch}
         disabled={launching}
-        className={`flex w-full items-start gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-all hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 disabled:opacity-60 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        className={`flex h-full w-full items-start gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-all hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 disabled:opacity-60 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       >
         {draggable && (
           <GripVertical className="mt-1 h-4 w-4 shrink-0 text-faint group-hover:text-faint" />
         )}
         <AppIcon value={iconValue} fallbackName={app.name} size={48} className="rounded-xl" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
+          <div className="flex min-h-[2.5rem] items-start gap-2">
             <h3 className="line-clamp-2 text-sm font-semibold text-ink" title={app.name}>{app.name}</h3>
             <span
               className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${protocolBadgeClass}`}
