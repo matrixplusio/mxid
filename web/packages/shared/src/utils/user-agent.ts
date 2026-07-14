@@ -1,4 +1,5 @@
 import { UAParser } from 'ua-parser-js'
+import i18next from 'i18next'
 
 // Cache parsed results — UA strings rarely vary within one session list,
 // and ua-parser-js is non-trivial CPU-wise on cold parse.
@@ -27,7 +28,7 @@ export function parseUserAgent(ua: string): ParsedUserAgent {
 
   if (!ua) {
     const empty: ParsedUserAgent = {
-      short: '未知设备',
+      short: i18next.t('common.userAgent.unknownDevice'),
       browser: '',
       browserVersion: '',
       os: '',
@@ -49,9 +50,9 @@ export function parseUserAgent(ua: string): ParsedUserAgent {
   else if (/bot|crawler|spider/i.test(ua)) kind = 'bot'
   else if (!browser.name && !os.name) kind = 'unknown'
 
-  const browserName = browser.name ?? '未知浏览器'
+  const browserName = browser.name ?? i18next.t('common.userAgent.unknownBrowser')
   const browserVersion = (browser.version ?? '').split('.')[0] || ''
-  const osName = os.name ?? '未知系统'
+  const osName = os.name ?? i18next.t('common.userAgent.unknownOS')
   const osVersion = os.version ?? ''
 
   const short = [

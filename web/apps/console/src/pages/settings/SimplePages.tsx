@@ -421,10 +421,10 @@ export function LocalizationPage() {
         {
           kind: 'select', key: 'default_timezone', label: t('settings.localizationPage.defaultTimezone'),
           options: [
-            { value: 'Asia/Shanghai', label: 'Asia/Shanghai (UTC+8)' },
-            { value: 'UTC', label: 'UTC' },
-            { value: 'America/Los_Angeles', label: 'America/Los_Angeles (UTC-8)' },
-            { value: 'Europe/London', label: 'Europe/London' },
+            { value: 'Asia/Shanghai', label: t('settings.timezones.shanghai') },
+            { value: 'UTC', label: t('settings.timezones.utc') },
+            { value: 'America/Los_Angeles', label: t('settings.timezones.losAngeles') },
+            { value: 'Europe/London', label: t('settings.timezones.london') },
           ],
         },
         { kind: 'text', key: 'date_format', label: t('settings.localizationPage.dateFormat'), placeholder: 'YYYY-MM-DD HH:mm:ss' },

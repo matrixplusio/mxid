@@ -19,18 +19,18 @@ function useProviderFields(): Record<string, Field[]> {
   const { t } = useTranslation()
   return {
     lark: [
-      { key: 'app_id', label: 'App ID', placeholder: 'cli_xxxxxxxxxxxxxxxx', required: true, hint: t('idps.providerHints.larkAppId') },
-      { key: 'app_secret', label: 'App Secret', secret: true, required: true, hint: t('idps.providerHints.larkAppSecret') },
+      { key: 'app_id', label: t('idps.providerFields.appId'), placeholder: 'cli_xxxxxxxxxxxxxxxx', required: true, hint: t('idps.providerHints.larkAppId') },
+      { key: 'app_secret', label: t('idps.providerFields.appSecret'), secret: true, required: true, hint: t('idps.providerHints.larkAppSecret') },
     ],
     feishu: [
-      { key: 'app_id', label: 'App ID', placeholder: 'cli_xxxxxxxxxxxxxxxx', required: true, hint: t('idps.providerHints.feishuAppId') },
-      { key: 'app_secret', label: 'App Secret', secret: true, required: true },
+      { key: 'app_id', label: t('idps.providerFields.appId'), placeholder: 'cli_xxxxxxxxxxxxxxxx', required: true, hint: t('idps.providerHints.feishuAppId') },
+      { key: 'app_secret', label: t('idps.providerFields.appSecret'), secret: true, required: true },
     ],
     teams: [
-      { key: 'client_id', label: 'Application (client) ID', required: true, hint: t('idps.providerHints.teamsClientId') },
-      { key: 'client_secret', label: 'Client Secret', secret: true, required: true, hint: t('idps.providerHints.teamsClientSecret') },
-      { key: 'tenant', label: 'Tenant', placeholder: 'common', hint: t('idps.providerHints.teamsTenant') },
-      { key: 'scopes', label: 'Scopes', placeholder: 'openid profile email User.Read', hint: t('idps.providerHints.teamsScopes') },
+      { key: 'client_id', label: t('idps.providerFields.clientIdApp'), required: true, hint: t('idps.providerHints.teamsClientId') },
+      { key: 'client_secret', label: t('idps.providerFields.clientSecret'), secret: true, required: true, hint: t('idps.providerHints.teamsClientSecret') },
+      { key: 'tenant', label: t('idps.providerFields.tenant'), placeholder: 'common', hint: t('idps.providerHints.teamsTenant') },
+      { key: 'scopes', label: t('idps.providerFields.scopes'), placeholder: 'openid profile email User.Read', hint: t('idps.providerHints.teamsScopes') },
     ],
   }
 }

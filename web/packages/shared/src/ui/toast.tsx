@@ -71,7 +71,8 @@ const LOCALIZED_CODES: Record<number, string> = {
 
 // extractMessage pulls a human-readable error message from an axios / ApiError
 // failure. Known codes are localized; otherwise the backend message is used.
-export function extractMessage(err: unknown, fallback = '操作失败'): string {
+export function extractMessage(err: unknown, fallback?: string): string {
+  const fb = fallback ?? i18next.t('common.operationFailed')
   const e = err as { code?: number | string; response?: { data?: { code?: number; message?: string } }; message?: string }
   // ApiError carries a numeric `.code`; a raw axios error's `.code` is a string
   // (e.g. "ERR_BAD_REQUEST") and the backend code lives in response.data.code.
@@ -79,7 +80,7 @@ export function extractMessage(err: unknown, fallback = '操作失败'): string 
   if (code && LOCALIZED_CODES[code]) {
     return i18next.t(LOCALIZED_CODES[code])
   }
-  return e?.response?.data?.message ?? e?.message ?? fallback
+  return e?.response?.data?.message ?? e?.message ?? fb
 }
 
 /* ──────────────── Toaster (mounts at app root) ──────────────── */
@@ -126,7 +127,7 @@ export function Toaster() {
             </div>
             <button
               type="button"
-              aria-label="Dismiss"
+              aria-label={i18next.t('common.dismiss')}
               onClick={() => dismiss(t.id)}
               className="shrink-0 rounded p-0.5 text-faint hover:bg-surface-muted hover:text-muted"
             >

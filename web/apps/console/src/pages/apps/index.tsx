@@ -92,143 +92,113 @@ function decodeFieldValue(v: unknown, coerce: Coerce | undefined): string {
   }
 }
 
-const protocolConfigFields: Record<string, ConfigField[]> = {
-  oidc: [
-    // Fields below populate the protocol_config JSONB blob that the OIDC IdP
-    // reads when handling /authorize and /token for THIS app. They do NOT
-    // describe a remote OIDC provider — MXID is the provider.
-    { key: 'scopes', label: 'Scopes', type: 'text', placeholder: 'openid profile email phone groups' },
-    { key: 'grant_types', label: 'Grant Types', type: 'text', placeholder: 'authorization_code refresh_token' },
-    { key: 'response_types', label: 'Response Types', type: 'text', placeholder: 'code' },
-    { key: 'token_endpoint_auth_method', label: 'Token Endpoint Auth Method', type: 'text', placeholder: 'client_secret_basic | client_secret_post | none' },
-    { key: 'pkce_required', label: 'PKCE Required (true/false)', type: 'text', placeholder: 'false (true for SPA / native)' },
-    { key: 'access_token_lifetime', label: 'Access Token Lifetime (sec)', type: 'text', placeholder: '3600' },
-    { key: 'id_token_lifetime', label: 'ID Token Lifetime (sec)', type: 'text', placeholder: '3600' },
-    { key: 'refresh_token_lifetime', label: 'Refresh Token Lifetime (sec)', type: 'text', placeholder: '2592000' },
-    { key: 'id_token_signing_alg', label: 'ID Token Signing Alg', type: 'text', placeholder: 'RS256' },
-    { key: 'subject_type', label: 'Subject Type', type: 'text', placeholder: 'public' },
-  ],
-  saml: [
-    // Field keys match internal/protocol/saml/config.go SAMLConfig json tags
-    // one-to-one. Don't rename without updating the backend struct.
-    {
-      key: 'sp_entity_id',
-      label: 'SP Entity ID',
-      type: 'text',
-      placeholder: 'https://app.example.com/saml/metadata',
-      hint: 'EntityID declared in the SP metadata. Required.',
-    },
-    {
-      key: 'acs_url',
-      label: 'ACS URL (Assertion Consumer Service)',
-      type: 'text',
-      placeholder: 'https://app.example.com/saml/acs',
-      hint: 'Where the IdP POSTs the signed SAML Response. Required.',
-    },
-    {
-      key: 'slo_url',
-      label: 'SLO URL (Single Logout)',
-      type: 'text',
-      placeholder: 'https://app.example.com/saml/sls',
-      hint: 'Optional. SP endpoint that receives LogoutRequest / LogoutResponse.',
-    },
-    {
-      key: 'name_id_format',
-      label: 'NameID Format',
-      type: 'select',
-      options: [
-        { value: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress', label: 'emailAddress (use user email)' },
-        { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent', label: 'persistent (stable opaque ID)' },
-        { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified', label: 'unspecified (use username)' },
-        { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient', label: 'transient (one-shot session ID)' },
-      ],
-      hint: 'How the IdP identifies the subject in the assertion. Match the SP’s expectation.',
-    },
-    {
-      key: 'sp_cert',
-      label: 'SP Certificate (PEM)',
-      type: 'textarea',
-      placeholder: '-----BEGIN CERTIFICATE-----',
-      hint: 'Optional. Required if SP signs AuthnRequest, or if you enable assertion encryption.',
-    },
-    {
-      key: 'sign_assertions',
-      label: 'Sign Assertions',
-      type: 'select',
-      coerce: 'bool',
-      options: [
-        { value: 'true', label: 'Yes (recommended)' },
-        { value: 'false', label: 'No' },
-      ],
-      hint: 'Sign each <Assertion> element. Default: yes.',
-    },
-    {
-      key: 'sign_response',
-      label: 'Sign Response',
-      type: 'select',
-      coerce: 'bool',
-      options: [
-        { value: 'true', label: 'Yes (recommended)' },
-        { value: 'false', label: 'No' },
-      ],
-      hint: 'Sign the whole <Response> envelope. Default: yes.',
-    },
-    {
-      key: 'encrypt_assertion',
-      label: 'Encrypt Assertion',
-      type: 'select',
-      coerce: 'bool',
-      options: [
-        { value: 'false', label: 'No (default)' },
-        { value: 'true', label: 'Yes (requires SP cert)' },
-      ],
-      hint: 'XML-encrypt the <Assertion> with the SP certificate.',
-    },
-    {
-      key: 'attribute_mapping',
-      label: 'Attribute Mapping (JSON)',
-      type: 'textarea',
-      coerce: 'json',
-      placeholder: '{"username":"uid","email":"mail","display_name":"displayName","phone":"telephoneNumber"}',
-      hint: 'User profile field → SAML attribute name. Empty = built-in defaults.',
-    },
-    {
-      key: 'session_ttl',
-      label: 'Session TTL (seconds)',
-      type: 'text',
-      coerce: 'int',
-      placeholder: '28800',
-      hint: 'SessionNotOnOrAfter window in the SAML assertion. Default: 28800 (8h).',
-    },
-  ],
-  cas: [
-    { key: 'service_urls', label: 'Service URL Allow-list (CSV)', type: 'text', placeholder: 'http://app.example.com/cas/callback,https://other.example.com/', coerce: 'string_array_csv' },
-    { key: 'ticket_ttl', label: 'Ticket TTL (sec)', type: 'text', placeholder: '30', coerce: 'int' },
-    { key: 'attribute_mapping', label: 'Attribute Mapping (JSON)', type: 'textarea', placeholder: '{"username":"uid","email":"mail","display_name":"displayName","phone":"telephoneNumber"}', coerce: 'json' },
-    { key: 'renew_enabled', label: 'Force Re-authentication', type: 'text', placeholder: 'false', coerce: 'bool' },
-  ],
-  // Form-fill (SWA) descriptor. credential_mode picks per-user vs shared vault;
-  // the selectors + login_url tell the browser extension how to auto-submit the
-  // target login form (capture mode fills these automatically later).
-  form: [
-    {
-      key: 'credential_mode',
-      label: 'Credential Mode',
-      type: 'select',
-      options: [
-        { value: 'per_user', label: 'Per-user (each user stores their own password)' },
-        { value: 'shared', label: 'Shared (admin sets one service account for all)' },
-      ],
-      hint: 'per_user: each user vaults their own login. shared: one admin-set credential everyone launches with.',
-    },
-    { key: 'login_url', label: 'Login Page URL', type: 'text', placeholder: 'https://wiki.internal/login', hint: 'Where the login form lives; the extension fills it here.' },
-    { key: 'username_selector', label: 'Username Field Selector', type: 'text', placeholder: '#username' },
-    { key: 'password_selector', label: 'Password Field Selector', type: 'text', placeholder: '#password' },
-    { key: 'submit_selector', label: 'Submit Button Selector', type: 'text', placeholder: 'button[type=submit]' },
-    { key: 'next_selector', label: 'Next Button Selector (two-step login, optional)', type: 'text', placeholder: 'button.next', hint: 'For sites that ask username first, then password on a second view — the button that reveals the password step.' },
-    { key: 'extra_fields', label: 'Extra Static Fields (JSON, optional)', type: 'textarea', coerce: 'json', placeholder: '[{"selector":"#tenant","value":"acme"}]', hint: 'Static values to fill (tenant code, domain). Array of {selector, value}.' },
-    { key: 'success_url_glob', label: 'Success URL (glob, optional)', type: 'text', placeholder: 'https://wiki.internal/dashboard*' },
-  ],
+// buildProtocolConfigFields returns the per-protocol config descriptors with
+// localized label/hint/option text. A factory (not a module const) so labels
+// resolve through t() — call it inside a component with useMemo. Field keys,
+// types, coerce, and placeholders (example values) are NOT translated: keys map
+// to backend json tags, placeholders are illustrative samples.
+function buildProtocolConfigFields(t: (k: string) => string): Record<string, ConfigField[]> {
+  const p = (proto: string, key: string, leaf: string) => t(`apps.protocolFields.${proto}.${key}.${leaf}`)
+  return {
+    oidc: [
+      // Fields below populate the protocol_config JSONB blob that the OIDC IdP
+      // reads when handling /authorize and /token for THIS app. They do NOT
+      // describe a remote OIDC provider — MXID is the provider.
+      { key: 'scopes', label: p('oidc', 'scopes', 'label'), type: 'text', placeholder: 'openid profile email phone groups' },
+      { key: 'grant_types', label: p('oidc', 'grant_types', 'label'), type: 'text', placeholder: 'authorization_code refresh_token' },
+      { key: 'response_types', label: p('oidc', 'response_types', 'label'), type: 'text', placeholder: 'code' },
+      { key: 'token_endpoint_auth_method', label: p('oidc', 'token_endpoint_auth_method', 'label'), type: 'text', placeholder: 'client_secret_basic | client_secret_post | none' },
+      { key: 'pkce_required', label: p('oidc', 'pkce_required', 'label'), type: 'text', placeholder: 'false (true for SPA / native)' },
+      { key: 'access_token_lifetime', label: p('oidc', 'access_token_lifetime', 'label'), type: 'text', placeholder: '3600' },
+      { key: 'id_token_lifetime', label: p('oidc', 'id_token_lifetime', 'label'), type: 'text', placeholder: '3600' },
+      { key: 'refresh_token_lifetime', label: p('oidc', 'refresh_token_lifetime', 'label'), type: 'text', placeholder: '2592000' },
+      { key: 'id_token_signing_alg', label: p('oidc', 'id_token_signing_alg', 'label'), type: 'text', placeholder: 'RS256' },
+      { key: 'subject_type', label: p('oidc', 'subject_type', 'label'), type: 'text', placeholder: 'public' },
+    ],
+    saml: [
+      // Field keys match internal/protocol/saml/config.go SAMLConfig json tags
+      // one-to-one. Don't rename without updating the backend struct.
+      { key: 'sp_entity_id', label: p('saml', 'sp_entity_id', 'label'), type: 'text', placeholder: 'https://app.example.com/saml/metadata', hint: p('saml', 'sp_entity_id', 'hint') },
+      { key: 'acs_url', label: p('saml', 'acs_url', 'label'), type: 'text', placeholder: 'https://app.example.com/saml/acs', hint: p('saml', 'acs_url', 'hint') },
+      { key: 'slo_url', label: p('saml', 'slo_url', 'label'), type: 'text', placeholder: 'https://app.example.com/saml/sls', hint: p('saml', 'slo_url', 'hint') },
+      {
+        key: 'name_id_format',
+        label: p('saml', 'name_id_format', 'label'),
+        type: 'select',
+        options: [
+          { value: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress', label: p('saml', 'name_id_format', 'opt.email') },
+          { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent', label: p('saml', 'name_id_format', 'opt.persistent') },
+          { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified', label: p('saml', 'name_id_format', 'opt.unspecified') },
+          { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient', label: p('saml', 'name_id_format', 'opt.transient') },
+        ],
+        hint: p('saml', 'name_id_format', 'hint'),
+      },
+      { key: 'sp_cert', label: p('saml', 'sp_cert', 'label'), type: 'textarea', placeholder: '-----BEGIN CERTIFICATE-----', hint: p('saml', 'sp_cert', 'hint') },
+      {
+        key: 'sign_assertions',
+        label: p('saml', 'sign_assertions', 'label'),
+        type: 'select',
+        coerce: 'bool',
+        options: [
+          { value: 'true', label: p('saml', 'sign_assertions', 'opt.yes') },
+          { value: 'false', label: p('saml', 'sign_assertions', 'opt.no') },
+        ],
+        hint: p('saml', 'sign_assertions', 'hint'),
+      },
+      {
+        key: 'sign_response',
+        label: p('saml', 'sign_response', 'label'),
+        type: 'select',
+        coerce: 'bool',
+        options: [
+          { value: 'true', label: p('saml', 'sign_response', 'opt.yes') },
+          { value: 'false', label: p('saml', 'sign_response', 'opt.no') },
+        ],
+        hint: p('saml', 'sign_response', 'hint'),
+      },
+      {
+        key: 'encrypt_assertion',
+        label: p('saml', 'encrypt_assertion', 'label'),
+        type: 'select',
+        coerce: 'bool',
+        options: [
+          { value: 'false', label: p('saml', 'encrypt_assertion', 'opt.no') },
+          { value: 'true', label: p('saml', 'encrypt_assertion', 'opt.yes') },
+        ],
+        hint: p('saml', 'encrypt_assertion', 'hint'),
+      },
+      { key: 'attribute_mapping', label: p('saml', 'attribute_mapping', 'label'), type: 'textarea', coerce: 'json', placeholder: '{"username":"uid","email":"mail","display_name":"displayName","phone":"telephoneNumber"}', hint: p('saml', 'attribute_mapping', 'hint') },
+      { key: 'session_ttl', label: p('saml', 'session_ttl', 'label'), type: 'text', coerce: 'int', placeholder: '28800', hint: p('saml', 'session_ttl', 'hint') },
+    ],
+    cas: [
+      { key: 'service_urls', label: p('cas', 'service_urls', 'label'), type: 'text', placeholder: 'http://app.example.com/cas/callback,https://other.example.com/', coerce: 'string_array_csv' },
+      { key: 'ticket_ttl', label: p('cas', 'ticket_ttl', 'label'), type: 'text', placeholder: '30', coerce: 'int' },
+      { key: 'attribute_mapping', label: p('cas', 'attribute_mapping', 'label'), type: 'textarea', placeholder: '{"username":"uid","email":"mail","display_name":"displayName","phone":"telephoneNumber"}', coerce: 'json' },
+      { key: 'renew_enabled', label: p('cas', 'renew_enabled', 'label'), type: 'text', placeholder: 'false', coerce: 'bool' },
+    ],
+    // Form-fill (SWA) descriptor. credential_mode picks per-user vs shared vault;
+    // the selectors + login_url tell the browser extension how to auto-submit the
+    // target login form (capture mode fills these automatically later).
+    form: [
+      {
+        key: 'credential_mode',
+        label: p('form', 'credential_mode', 'label'),
+        type: 'select',
+        options: [
+          { value: 'per_user', label: p('form', 'credential_mode', 'opt.perUser') },
+          { value: 'shared', label: p('form', 'credential_mode', 'opt.shared') },
+        ],
+        hint: p('form', 'credential_mode', 'hint'),
+      },
+      { key: 'login_url', label: p('form', 'login_url', 'label'), type: 'text', placeholder: 'https://wiki.internal/login', hint: p('form', 'login_url', 'hint') },
+      { key: 'username_selector', label: p('form', 'username_selector', 'label'), type: 'text', placeholder: '#username' },
+      { key: 'password_selector', label: p('form', 'password_selector', 'label'), type: 'text', placeholder: '#password' },
+      { key: 'submit_selector', label: p('form', 'submit_selector', 'label'), type: 'text', placeholder: 'button[type=submit]' },
+      { key: 'next_selector', label: p('form', 'next_selector', 'label'), type: 'text', placeholder: 'button.next', hint: p('form', 'next_selector', 'hint') },
+      { key: 'extra_fields', label: p('form', 'extra_fields', 'label'), type: 'textarea', coerce: 'json', placeholder: '[{"selector":"#tenant","value":"acme"}]', hint: p('form', 'extra_fields', 'hint') },
+      { key: 'success_url_glob', label: p('form', 'success_url_glob', 'label'), type: 'text', placeholder: 'https://wiki.internal/dashboard*' },
+    ],
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +327,9 @@ type AppsView = 'apps' | 'groups'
 
 export default function AppsPage() {
   const { t } = useTranslation()
+  // Per-protocol config field descriptors, localized. Rebuilt when the language
+  // changes so labels/hints follow the active locale.
+  const protocolConfigFields = useMemo(() => buildProtocolConfigFields(t), [t])
   // tab + nested-detail tab persisted to URL so refresh / share preserves UI state.
   const [view, setView] = useTabParam<AppsView>('view', 'apps', APPS_VIEW_VALUES)
   const [data, setData] = useState<PaginatedData<App>>({ items: [], total: 0, page: 1, page_size: 50 })
@@ -1565,8 +1538,8 @@ export default function AppsPage() {
               </p>
 
               <div className="space-y-4">
-                <CopyField label="Client ID" value={revealedSecret.clientId} />
-                <SecretField label="Client Secret" value={revealedSecret.clientSecret} />
+                <CopyField label={t('apps.detail.credentials.clientId')} value={revealedSecret.clientId} />
+                <SecretField label={t('apps.detail.credentials.clientSecret')} value={revealedSecret.clientSecret} />
               </div>
 
               <div className="mt-6 flex justify-end">
@@ -1619,9 +1592,9 @@ function CredentialsTab({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm text-amber-700">{t('apps.detail.credentials.warning')}</p>
         </div>
-        <CopyField label="Client ID" value={app.client_id || '—'} />
+        <CopyField label={t('apps.detail.credentials.clientId')} value={app.client_id || '—'} />
         <div>
-          <label className="mb-1 block text-sm font-medium text-ink">Client Secret</label>
+          <label className="mb-1 block text-sm font-medium text-ink">{t('apps.detail.credentials.clientSecret')}</label>
           <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-muted">
             <span className="flex-1 font-mono">{t('apps.detail.credentials.masked')}</span>
             {(app.client_type === 'web_app' || app.client_type === 'm2m') && (

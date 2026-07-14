@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { Loader2, Moon, Sun, X } from 'lucide-react'
 import { cn, useTheme } from '@mxid/shared'
+import { useTranslation, i18n } from '../i18n'
 import { cloneElement, isValidElement, useEffect, useId, useRef } from 'react'
 import type { ReactNode, ReactElement, ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes } from 'react'
 
@@ -261,7 +262,7 @@ export function Modal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 id={titleId} className="text-lg font-semibold text-ink">{title}</h3>
-          <button type="button" aria-label="Close" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-muted">
+          <button type="button" aria-label={i18n.t('common.close')} onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-muted">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -327,15 +328,17 @@ export function ThemeToggle({
   variant?: 'default' | 'ghost'
   className?: string
 }) {
+  const { t } = useTranslation()
   const mode = useTheme((s) => s.mode)
   const toggle = useTheme((s) => s.toggle)
   const isDark = mode === 'dark'
+  const label = isDark ? t('common.theme.toLight') : t('common.theme.toDark')
   return (
     <button
       type="button"
       onClick={toggle}
-      title={isDark ? '切换到浅色' : '切换到深色'}
-      aria-label={isDark ? '切换到浅色' : '切换到深色'}
+      title={label}
+      aria-label={label}
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-control transition-colors',
         variant === 'ghost'
@@ -407,6 +410,7 @@ export function CodeField({
   placeholder?: string
   disabled?: boolean
 }) {
+  const { t } = useTranslation()
   const slugCandidate = nameForSlug ? slugify(nameForSlug) : ''
   const canSlug = !!slugCandidate
   return (
@@ -422,19 +426,19 @@ export function CodeField({
         type="button"
         onClick={() => canSlug && onChange(slugCandidate)}
         disabled={disabled || !canSlug}
-        title={canSlug ? `生成：${slugCandidate}` : '名称不含英文字符，无法生成 slug'}
+        title={canSlug ? t('common.codeField.slugTitle', { slug: slugCandidate }) : t('common.codeField.slugDisabled')}
         className="shrink-0 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
-        按名称
+        {t('common.codeField.bySlug')}
       </button>
       <button
         type="button"
         onClick={() => onChange(randomCode(prefix ?? 'g'))}
         disabled={disabled}
-        title="生成随机编码"
+        title={t('common.codeField.randomTitle')}
         className="shrink-0 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
-        随机
+        {t('common.codeField.random')}
       </button>
     </div>
   )
