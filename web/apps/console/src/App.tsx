@@ -17,6 +17,7 @@ import AccessApprovalsPage from './pages/access-approvals'
 import AuditPage from './pages/audit'
 import OffboardingPage from './pages/offboarding'
 import DocsPage from './pages/docs'
+import BrowserExtensionPage from './pages/browser-extension'
 import AccountPage from './pages/account'
 import SettingsLayout from './pages/settings/SettingsLayout'
 import MailSMTPPage from './pages/settings/MailSMTP'
@@ -117,6 +118,7 @@ export default function App() {
                 <Route path="/audit" element={<AuditPage />} />
                 <Route path="/offboarding" element={<OffboardingPage />} />
                 <Route path="/docs" element={<DocsPage />} />
+                <Route path="/browser-extension" element={<BrowserExtensionPage />} />
                 <Route path="/account" element={<AccountPage />} />
                 <Route path="/settings" element={<SettingsLayout />}>
                   <Route index element={<RRNavigate to="/settings/mail/smtp" replace />} />

@@ -16,6 +16,7 @@ import {
   Settings,
   ExternalLink,
   CheckSquare,
+  Puzzle,
 } from 'lucide-react'
 import logo from '../../assets/logo.png'
 import TenantSwitcher from './TenantSwitcher'
@@ -23,7 +24,7 @@ import TenantSwitcher from './TenantSwitcher'
 // navItemsBuild resolves to live translated labels each render — keeps
 // the sidebar in sync when the user picks a different language without
 // a full reload.
-const navItemsBuild = (t: (k: string) => string, hasConditionalAccess: boolean, hasExternalIdp: boolean) => [
+const navItemsBuild = (t: (k: string) => string, hasConditionalAccess: boolean, hasExternalIdp: boolean, hasFormFill: boolean) => [
   { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
   { to: '/tenants', icon: Building, label: t('nav.tenants') },
   { to: '/users', icon: Users, label: t('nav.users') },
@@ -43,6 +44,11 @@ const navItemsBuild = (t: (k: string) => string, hasConditionalAccess: boolean, 
   { to: '/offboarding', icon: UserX, label: t('nav.offboarding') },
   { to: '/settings', icon: Settings, label: t('nav.settings') },
   { to: '/docs', icon: BookOpen, label: t('nav.docs') },
+  // Form-fill SSO is an EE feature; only surface the extension rollout page
+  // when it's licensed.
+  ...(hasFormFill
+    ? [{ to: '/browser-extension', icon: Puzzle, label: t('nav.browserExtension') }]
+    : []),
 ]
 
 export default function Sidebar() {
@@ -51,7 +57,7 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const edition = useEdition()
-  const navItems = navItemsBuild(t, edition.has('conditional_access'), edition.has('external_idp'))
+  const navItems = navItemsBuild(t, edition.has('conditional_access'), edition.has('external_idp'), edition.has('form_fill'))
 
   const handleLogout = async () => {
     try {
