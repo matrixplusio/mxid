@@ -33,6 +33,14 @@ type CSRFConfig struct {
 	// pass the check unconditionally. Used for API-token requests that
 	// share a router but do not rely on cookies.
 	AllowBearerAuth bool
+	// SkipWithHeader names a custom request header whose mere presence bypasses
+	// the Origin check. A custom header cannot be set on a cross-site request
+	// without a CORS preflight the server controls (the classic "custom request
+	// header" CSRF defense, OWASP-recommended). The browser extension carries the
+	// form-fill binding token in such a header; its host_permissions let it reach
+	// the API without a trusted SPA Origin, so the header — not Origin — is what
+	// proves the request came from a cooperating client. Empty = disabled.
+	SkipWithHeader string
 }
 
 // CSRF returns a middleware enforcing Origin / Referer matching for unsafe
@@ -66,6 +74,11 @@ func CSRF(cfg CSRFConfig) gin.HandlerFunc {
 				c.Next()
 				return
 			}
+		}
+
+		if cfg.SkipWithHeader != "" && c.GetHeader(cfg.SkipWithHeader) != "" {
+			c.Next()
+			return
 		}
 
 		if cfg.AllowBearerAuth {

@@ -13,6 +13,7 @@ export default {
   errors: {
     eeFeatureRequired: '该功能为企业版功能,需有效的企业版授权。请在「设置 → 许可信息」激活授权。',
     totpCodeReused: '该验证码刚使用过,请等待认证器刷新出新的 6 位验证码再试。',
+    appNoLoginURL: '该应用还没有配置登录地址,无法启动。请先用浏览器扩展在其登录页录制一次登录来完成配置。',
     passwordReused: '该密码最近使用过,请换一个未用过的新密码。',
     selfApproval: '不能审批自己提交的提权申请,需由他人审批(职责分离)。',
     approverNotEligible: '你不是该访问资格指定的审批人,无权审批此申请。',

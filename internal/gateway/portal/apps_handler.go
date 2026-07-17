@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,12 @@ import (
 	"github.com/imkerbos/mxid/pkg/response"
 	"github.com/imkerbos/mxid/pkg/urlswap"
 )
+
+// ErrNoLaunchURL means the app has no resolvable launch target (no home/login
+// URL). For a form-fill app that just means it hasn't been configured yet — a
+// user/config condition, not a server fault — so the handler maps it to a 4xx,
+// not a 500. The AppQuerier adapter returns it.
+var ErrNoLaunchURL = errors.New("app has no launch URL configured")
 
 // appsHandler serves portal app-related endpoints.
 //
@@ -213,6 +220,13 @@ func (h *appsHandler) launchApp(c *gin.Context) {
 	if err != nil {
 		if dberr.IsNotFound(err) {
 			response.NotFound(c, 40401, "app not found")
+			return
+		}
+		if errors.Is(err, ErrNoLaunchURL) {
+			// Not a server fault: the app (typically a form-fill app) has no login
+			// URL configured yet. A 500 here made it look broken; surface it as a
+			// clear 4xx the SPA can show.
+			response.BadRequest(c, 40010, "app has no login URL configured yet")
 			return
 		}
 		response.InternalError(c, "failed to get launch url", err)

@@ -958,6 +958,14 @@ func registerModules(a *bootstrap.App, workerCtx context.Context) {
 			}
 			return nil
 		},
+		IsAdmin: func(ctx context.Context, tenantID, userID int64) bool {
+			// "Is this user an admin" for authorizing admin actions — the same
+			// permission check ConsoleGate makes, WITHOUT the built-in-account
+			// rejection (the seeded super-admin is built-in and must still be able
+			// to administer, e.g. push a form-fill descriptor from the extension).
+			perms, err := authzSvc.PermissionsForUser(ctx, tenantID, userID)
+			return err == nil && len(perms) > 0
+		},
 		// External-IdP start/callback run pre-login (public group, no tenant
 		// scope), so inject the scope before the scoped settings read — same
 		// tenant-scope fix as the login providers. Empty returns let the EE side

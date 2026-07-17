@@ -216,8 +216,10 @@ export default function AppsPage() {
         .catch(() => {})
     } catch (err: unknown) {
       if (win) win.close()
-      const msg = err instanceof Error ? err.message : t('portal.launchFailed')
-      toast.error(t('portal.launchFailed'), msg)
+      // extractMessage localizes the backend code (e.g. 40010 → "no login URL
+      // configured") instead of surfacing the raw "Request failed with status
+      // code 400" axios string.
+      toast.error(t('portal.launchFailed'), extractMessage(err))
     } finally {
       setLaunching(null)
     }

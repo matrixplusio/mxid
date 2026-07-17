@@ -600,6 +600,14 @@ func (h *Handler) ssoHandler(targetNS, targetCookie string, requireAdmin bool, s
 			return
 		}
 
+		// Inherit the source session's step-up (sudo) freshness. Without this a
+		// portal session bridged from an MFA-authenticated console session was born
+		// step-up-stale, so portal actions that require a fresh step-up (the
+		// form-fill extension's pair / credential reveal) could never be satisfied
+		// — the user had no way to step-up on the derived session. Carry the exact
+		// timestamp so the window is preserved, not extended.
+		_ = h.engine.SessionManager().CarryMFAVerifiedAt(c.Request.Context(), targetNS, spaSess.ID, src.MFAVerifiedAt)
+
 		h.setSessionCookieWithRemember(c, targetCookie, spaSess.ID, false)
 		response.OK(c, nil)
 	}

@@ -175,10 +175,17 @@ func NewApp(configPath string) (*App, error) {
 			SkipPaths: []string{
 				"/protocol/", // OIDC/SAML/CAS receive RP POSTs cross-site by design
 				"/openapi/",  // bearer-auth API tokens
+				// Browser-extension form-fill: pairing has no binding token yet and
+				// the extension reaches these without a trusted SPA Origin. pair is
+				// step-up gated; the app-list is a read. The credential/descriptor
+				// writes (under /apps/:id/) carry the binding token and pass via
+				// SkipWithHeader below.
+				"/api/v1/portal/formfill/",
 				"/healthz",
 				"/metrics",
 			},
 			AllowBearerAuth: true,
+			SkipWithHeader:  "X-MXID-FormFill-Token",
 		}),
 		// Global per-IP cap (mode-aware, see ipRateLimit above). The SSE event
 		// stream is exempt: a long-lived, self-reconnecting connection that

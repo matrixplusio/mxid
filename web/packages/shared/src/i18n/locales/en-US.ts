@@ -10,6 +10,7 @@ export default {
   errors: {
     eeFeatureRequired: 'This is an Enterprise Edition feature and requires a valid enterprise license. Activate one under Settings → License.',
     totpCodeReused: 'That code was just used. Wait for your authenticator to show the next 6-digit code and try again.',
+    appNoLoginURL: 'This app has no login URL configured yet, so it cannot be launched. Record a login on its sign-in page with the browser extension to set it up first.',
     passwordReused: 'This password was used recently. Please choose a new one you haven\'t used before.',
     selfApproval: 'You can\'t approve your own access request — it must be approved by someone else (separation of duties).',
     approverNotEligible: 'You are not a designated approver for this eligibility, so you can\'t approve this request.',

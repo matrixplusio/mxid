@@ -125,6 +125,10 @@ const (
 	AppSharedCredentialSet    = "app.credential.shared_set"
 	AppCredentialRevealed     = "app.credential.revealed"
 	AppCredentialRevealDenied = "app.credential.reveal_denied"
+	// AppFormDescriptorUpdated records an admin writing a form app's capture-time
+	// descriptor (login_url + selectors) from the browser extension — config, not
+	// a secret, but app-level and a tamper surface, so it is audited.
+	AppFormDescriptorUpdated = "app.form.descriptor_updated"
 
 	OrgCreated     = "org.created"
 	OrgUpdated     = "org.updated"

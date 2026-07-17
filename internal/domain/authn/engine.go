@@ -265,6 +265,16 @@ func (e *Engine) completeLogin(ctx context.Context, namespace string, req *AuthR
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 
+	// A login that cleared an MFA challenge is a fresh proof of possession — start
+	// the step-up (sudo) window at login. Without this, MFA-at-login never counted
+	// as a step-up, so portal actions that require a fresh step-up (the form-fill
+	// extension's pair / credential reveal) were effectively unsatisfiable: the
+	// only other portal path that sets it is TOTP re-enrollment, and /auth/step-up
+	// refreshes the console session, not the portal one.
+	if stage == "mfa" {
+		_ = e.sessionMgr.MarkMFAVerified(ctx, namespace, sess.ID)
+	}
+
 	e.publishLoginEvent(ctx, result, req, true, stage)
 
 	return &LoginResponse{

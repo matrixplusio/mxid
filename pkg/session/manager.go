@@ -248,6 +248,32 @@ func (m *Manager) MarkMFAVerified(ctx context.Context, namespace, sessionID stri
 	return m.save(ctx, &sess)
 }
 
+// CarryMFAVerifiedAt copies a step-up timestamp onto an existing session,
+// preserving the original moment (unlike MarkMFAVerified which stamps now). Used
+// when deriving one session from another via seamless SSO so the derived session
+// inherits — without extending — the source's step-up (sudo) freshness. A nil or
+// zero `at` is a no-op, so a source that never passed MFA carries nothing.
+func (m *Manager) CarryMFAVerifiedAt(ctx context.Context, namespace, sessionID string, at *time.Time) error {
+	if at == nil || at.IsZero() {
+		return nil
+	}
+	key := fmt.Sprintf("%s:%s", namespace, sessionID)
+	data, err := m.redis.Get(ctx, key).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil
+		}
+		return fmt.Errorf("carry mfa get: %w", err)
+	}
+	var sess Session
+	if err := json.Unmarshal(data, &sess); err != nil {
+		return fmt.Errorf("carry mfa unmarshal: %w", err)
+	}
+	t := *at
+	sess.MFAVerifiedAt = &t
+	return m.save(ctx, &sess)
+}
+
 // SetEnrollPending sets the MFA-enrollment-pending flag on a session and
 // persists it. Used to force a user with no factor through enrollment before
 // they can use the app, and to clear the flag once they bind one. No-op if the

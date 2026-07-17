@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -472,6 +473,20 @@ LIMIT ?`, tenantID, userID, event.AppLaunched, limit)
 	return ids, nil
 }
 
+// formLoginURL pulls login_url out of a form app's protocol_config blob. The
+// console form-config writes the URL there (not the mxid_app.login_url column),
+// so launch must read it from the same place. Returns "" when absent/malformed.
+func formLoginURL(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var pc struct {
+		LoginURL string `json:"login_url"`
+	}
+	_ = json.Unmarshal(raw, &pc)
+	return pc.LoginURL
+}
+
 func (a *portalAppQuerierAdapter) GetAppLaunchURL(ctx context.Context, appID, userID int64) (string, error) {
 	ap, err := a.appModule.Repo.GetByID(ctx, appID)
 	if err != nil {
@@ -497,16 +512,24 @@ func (a *portalAppQuerierAdapter) GetAppLaunchURL(ctx context.Context, appID, us
 		}
 	case app.ProtocolForm:
 		// Form-fill app: open the target login page; the browser extension
-		// detects the origin and auto-submits the stored credential. The page URL
-		// resolves via the shared LoginURL/HomeURL fallback below.
+		// detects the origin and auto-submits the stored credential. The login URL
+		// lives in protocol_config (that's where the console form config writes
+		// it) — NOT the mxid_app.login_url column, which stays empty for form
+		// apps. Reading only the column made a configured form app fail with "no
+		// login URL". Fall through to the column/home fallbacks if absent.
+		if u := formLoginURL(ap.ProtocolConfig); u != "" {
+			return u, nil
+		}
 	}
 	if ap.HomeURL != nil && *ap.HomeURL != "" {
 		return *ap.HomeURL, nil
 	}
-	if ap.LoginURL != nil {
+	if ap.LoginURL != nil && *ap.LoginURL != "" {
 		return *ap.LoginURL, nil
 	}
-	return "", fmt.Errorf("no launch URL configured for app %d", appID)
+	// No resolvable target — for a form-fill app this just means it isn't
+	// configured yet. Sentinel so the handler answers 4xx, not 500.
+	return "", portal.ErrNoLaunchURL
 }
 
 func (a *portalAppQuerierAdapter) AppName(ctx context.Context, appID int64) (string, error) {

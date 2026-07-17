@@ -58,6 +58,13 @@ type UpdateLastLoginFunc func(ctx context.Context, userID int64, ip string) erro
 // permission. Implemented in CE (authz + user repo).
 type ConsoleGateFunc func(ctx context.Context, tenantID, userID int64) error
 
+// AdminCheckFunc reports whether a user is an administrator (holds at least one
+// console permission). Unlike ConsoleGateFunc it does NOT reject built-in
+// accounts — it answers "may this user perform admin-level actions", not "may
+// this external identity federate into console". Use it to gate admin writes
+// reached over the portal (e.g. the form-fill extension pushing app descriptors).
+type AdminCheckFunc func(ctx context.Context, tenantID, userID int64) bool
+
 // ExternalURLsFunc returns the externally-reachable issuer (the OAuth callback
 // target), portal, and console URLs for a tenant — read at REQUEST time from the
 // CE settings store so external-IdP callbacks use the admin-configured URLs
@@ -122,6 +129,10 @@ type InitContext struct {
 	ExternalLogin ExternalLoginFunc
 	TenantByCode TenantByCodeFunc
 	ConsoleGate  ConsoleGateFunc
+	// IsAdmin reports whether a user holds admin (console) permissions, without
+	// the built-in-account rejection ConsoleGate applies. Gates admin writes made
+	// over the portal (form-fill descriptor push).
+	IsAdmin AdminCheckFunc
 	ExternalURLs ExternalURLsFunc
 	// UpdateLastLogin stamps last-login after a federated sign-in (external IdP
 	// runs outside the CE password engine that normally owns the stamp).
