@@ -15,6 +15,7 @@ export default {
     totpCodeReused: '该验证码刚使用过,请等待认证器刷新出新的 6 位验证码再试。',
     appNoLoginURL: '该应用还没有配置登录地址,无法启动。请先用浏览器扩展在其登录页录制一次登录来完成配置。',
     passwordReused: '该密码最近使用过,请换一个未用过的新密码。',
+    totpRequired: '请输入 6 位动态验证码以修改密码。',
     selfApproval: '不能审批自己提交的提权申请,需由他人审批(职责分离)。',
     approverNotEligible: '你不是该访问资格指定的审批人,无权审批此申请。',
   },
@@ -899,6 +900,11 @@ export default {
       homeUrlLabel: '应用主页 (Home URL)',
       redirectUrisLabel: '回调地址 (每行一个)',
       submit: '创建',
+    },
+    filter: {
+      searchPlaceholder: '搜索名称 / 编码 / 描述',
+      allProtocols: '全部协议',
+      allStatus: '全部状态',
     },
     list: {
       appList: '应用列表',

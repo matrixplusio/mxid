@@ -78,8 +78,12 @@ export const portalApi = {
       .then(r => r.data.data),
 
   // Security
-  changePassword: (old_password: string, new_password: string) =>
-    portalClient.put<ApiResponse<null>>('/security/password', { old_password, new_password }).then(r => r.data),
+  // totp_code is required by the backend when the user has a verified TOTP
+  // factor (step-up on credential rotation); omitted otherwise.
+  changePassword: (old_password: string, new_password: string, totp_code?: string) =>
+    portalClient
+      .put<ApiResponse<null>>('/security/password', { old_password, new_password, totp_code })
+      .then(r => r.data),
   listMFA: () =>
     portalClient.get<ApiResponse<MFAInfo[]>>('/security/mfa').then(r => r.data.data),
   setupTOTP: () =>

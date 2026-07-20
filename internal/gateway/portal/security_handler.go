@@ -341,7 +341,10 @@ func (h *SecurityHandler) changePassword(c *gin.Context) {
 				return
 			}
 			if req.TOTPCode == "" {
-				response.BadRequest(c, 40005, "totp code required")
+				// 40007 (NOT 40005): 40005 is the user domain's password-reused
+				// code, which the frontend localizes as such — reusing it here
+				// made a missing-TOTP error render "password already used".
+				response.BadRequest(c, 40007, "totp code required")
 				return
 			}
 			if err := h.mfaQuerier.VerifyTOTP(c.Request.Context(), userID, req.TOTPCode); err != nil {

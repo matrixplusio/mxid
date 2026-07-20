@@ -134,6 +134,16 @@ export function createApiClient(baseURL: string): AxiosInstance {
         window.dispatchEvent(new CustomEvent('mxid:mfa-enroll-required'))
       }
 
+      // Surface the backend's structured error. On any non-2xx HTTP status the
+      // server returns {code, message, detail}; without this the SPA only sees
+      // axios' generic "Request failed with status code N" and callers reading
+      // err.message localize nothing. Fall back to the raw AxiosError when the
+      // body is absent (network error, non-JSON gateway page).
+      const data = error.response?.data
+      if (data && typeof data.code === 'number' && data.code !== 0) {
+        return Promise.reject(new ApiError(data.code, data.message, data.detail))
+      }
+
       return Promise.reject(error)
     },
   )

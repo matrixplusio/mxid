@@ -83,7 +83,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -103,42 +103,38 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Language switcher */}
-      <div className="border-t border-white/10 px-3 py-2">
-        <div className="flex items-center justify-between text-xs text-faint">
-          <span>{t('nav.language')}</span>
-          <div className="flex gap-1">
+      {/* Footer — language + back-to-portal + account merged into a single
+          block. Three separate bordered rows overflowed the nav on short
+          (1080p) viewports; folding them into one two-row block reclaims the
+          vertical space so the nav fits without a scrollbar. */}
+      <div className="border-t border-white/10 px-3 py-3 space-y-2.5">
+        {/* Utility row: language toggle (left) + back-to-portal (right) */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 text-xs">
             {SUPPORTED_LANGS.map((l) => (
               <button
                 key={l}
                 onClick={() => setLanguage(l)}
                 className={cn(
                   'rounded px-2 py-0.5 transition-colors',
-                  i18n.language === l ? 'bg-primary/30 text-white' : 'hover:bg-sidebar-hover hover:text-white',
+                  i18n.language === l ? 'bg-primary/30 text-white' : 'text-faint hover:bg-sidebar-hover hover:text-white',
                 )}
               >
                 {l === 'zh-CN' ? '中' : 'EN'}
               </button>
             ))}
           </div>
+          <a
+            href="/"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-sidebar-hover hover:text-white"
+            title={t('nav.switchToPortal')}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            {t('nav.switchToPortal')}
+          </a>
         </div>
-      </div>
 
-      {/* Switch to portal — admin always sees this; portal is the end-user
-          surface, same MXID session works there. */}
-      <div className="border-t border-white/10 px-4 py-3">
-        <a
-          href="/"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs font-medium text-gray-200 transition-colors hover:bg-sidebar-hover hover:text-white"
-          title={t('nav.switchToPortal')}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          {t('nav.switchToPortal')}
-        </a>
-      </div>
-
-      {/* User info + logout */}
-      <div className="border-t border-white/10 px-4 py-4">
+        {/* Identity row: account (avatar + name) + logout */}
         <div className="flex items-center justify-between">
           <button
             type="button"

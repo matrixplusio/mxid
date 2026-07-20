@@ -1,0 +1,30 @@
+{{- if and (eq .Values.routing.type "gatewayapi") .Values.routing.gatewayapi.httpsRedirect.enabled }}
+# http -> https redirect route. Attaches to the Gateway's plaintext (:80)
+# listener and 301s every request to https so the SPA is never served over
+# http (an http Origin fails the CSRF allow-list — see values.yaml). Loop-safe:
+# RequestRedirect fires only on the http listener; the https listener carries
+# the real routes (httproute.yaml) with no redirect, so the flow terminates.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "mxid.fullname" . }}-https-redirect
+  labels:
+    {{- include "mxid.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.routing.gatewayapi.name | quote }}
+      {{- if .Values.routing.gatewayapi.namespace }}
+      namespace: {{ .Values.routing.gatewayapi.namespace | quote }}
+      {{- end }}
+      {{- with .Values.routing.gatewayapi.httpsRedirect.sectionName }}
+      sectionName: {{ . | quote }}
+      {{- end }}
+  hostnames:
+    - {{ .Values.host | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}

@@ -337,6 +337,21 @@ routing:
     # Optional sectionName if the Gateway has multiple listeners.
     sectionName: ""
 
+    # http -> https redirect. TLS terminates at the Gateway and the SPA is
+    # served over the plaintext :80 listener as-is, so a browser that lands on
+    # http:// sends `Origin: http://…`, which fails the https-only CSRF
+    # allow-list → every write (login included) is rejected with 403. This
+    # emits a second HTTPRoute attached to the Gateway's http listener that
+    # 301s everything to https. No redirect loop: the filter fires only on the
+    # http listener; the https listener has no such route, so it terminates.
+    # Complements the SPA's own client-side upgrade (belt-and-suspenders).
+    httpsRedirect:
+      enabled: true
+      # sectionName of the Gateway's plaintext (:80) listener. MUST match a
+      # listener your Gateway actually defines, or the route stays unattached
+      # (harmless, but the redirect won't fire).
+      sectionName: "http"
+
   # --- GKE-specific: backend health check (used on GKE Gateway API) ---
   # GKE provisions a Google Cloud LB behind the Gateway; its backend health
   # check defaults to probing "/", which the backend does not serve → 404 →

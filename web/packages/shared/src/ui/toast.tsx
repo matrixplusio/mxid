@@ -65,6 +65,7 @@ const LOCALIZED_CODES: Record<number, string> = {
   40003: 'errors.totpCodeReused', // TOTP code already consumed this window — wait for the next
   40010: 'errors.appNoLoginURL', // form-fill app has no login URL yet — configure via the extension
   40005: 'errors.passwordReused', // new-password matches a recent one (user.codePasswordReused)
+  40007: 'errors.totpRequired', // change-password step-up: TOTP enrolled but code missing
   40012: 'errors.selfApproval', // JIT approve: separation of duties — can't approve own request
   40013: 'errors.approverNotEligible', // JIT approve: not in the eligibility's approver_subject
   40332: 'errors.eeFeatureRequired', // CODE_EE_FEATURE_REQUIRED

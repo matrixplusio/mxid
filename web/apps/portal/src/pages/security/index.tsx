@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import QRCode from 'qrcode'
 import { portalApi, formatDate, cn, parseUserAgent, useTranslation } from '@mxid/shared'
 import { Button, ConfirmDialog } from '@mxid/shared/ui'
-import { toast } from '@mxid/shared/ui/toast'
+import { toast, extractMessage } from '@mxid/shared/ui/toast'
 import type { MFAInfo, SessionInfo, FormFillExtToken } from '@mxid/shared'
 import {
   KeyRound,
@@ -52,10 +52,31 @@ function ChangePasswordSection() {
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
+  const [totpCode, setTotpCode] = useState('')
   const [showOld, setShowOld] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  // The backend requires a fresh TOTP code to rotate the password when the user
+  // has a verified TOTP factor (step-up: a stolen session cookie alone must not
+  // change the credential). Detect it so we can collect the code up front instead
+  // of failing the submit with an opaque 400.
+  const [totpActive, setTotpActive] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    portalApi
+      .listMFA()
+      .then((list) => {
+        if (alive) setTotpActive(list.some((m) => m.type === 'totp' && m.verified))
+      })
+      .catch(() => {
+        /* non-fatal: fall back to no-TOTP form; backend still enforces */
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -68,17 +89,21 @@ function ChangePasswordSection() {
       setMsg({ type: 'err', text: t('account.pwd.tooShort') })
       return
     }
+    if (totpActive && !totpCode) {
+      setMsg({ type: 'err', text: t('account.pwd.needMfa') })
+      return
+    }
     setSaving(true)
     setMsg(null)
     try {
-      await portalApi.changePassword(oldPwd, newPwd)
+      await portalApi.changePassword(oldPwd, newPwd, totpActive ? totpCode : undefined)
       setMsg({ type: 'ok', text: t('common.success') })
       setOldPwd('')
       setNewPwd('')
       setConfirmPwd('')
+      setTotpCode('')
     } catch (err: unknown) {
-      const text = err instanceof Error ? err.message : t('account.pwd.changeFailed')
-      setMsg({ type: 'err', text })
+      setMsg({ type: 'err', text: extractMessage(err, t('account.pwd.changeFailed')) })
     } finally {
       setSaving(false)
     }
@@ -150,6 +175,25 @@ function ChangePasswordSection() {
           />
         </div>
 
+        {/* TOTP step-up: only when the user has a verified authenticator. */}
+        {totpActive && (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">
+              {t('account.pwd.mfaCode')}
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="123456"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm tracking-widest text-ink outline-none transition-colors placeholder:text-faint placeholder:tracking-normal focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+            <p className="mt-1 text-xs text-muted">{t('account.pwd.mfaCodeHint')}</p>
+          </div>
+        )}
+
         {msg && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -163,7 +207,11 @@ function ChangePasswordSection() {
           </motion.div>
         )}
 
-        <Button type="submit" loading={saving} disabled={saving || !oldPwd || !newPwd || !confirmPwd}>
+        <Button
+          type="submit"
+          loading={saving}
+          disabled={saving || !oldPwd || !newPwd || !confirmPwd || (totpActive && totpCode.length < 6)}
+        >
           {saving ? t('account.pwd.submitting') : t('account.pwd.submit')}
         </Button>
       </form>

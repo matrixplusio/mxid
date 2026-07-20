@@ -64,6 +64,13 @@ func Logger(logger *zap.Logger) gin.HandlerFunc {
 			zap.String("path", path),
 			zap.String("query", redactQuery(query)),
 			zap.String("clientIp", c.ClientIP()),
+			// Proxy-chain diagnostics: when clientIp collapses onto the edge/
+			// proxy IP (mis-set trusted_proxies, or the edge not forwarding the
+			// real client), these show why. xff/xRealIp are what the edge sent;
+			// remoteAddr is the immediate TCP peer gin resolves against.
+			zap.String("xff", c.GetHeader("X-Forwarded-For")),
+			zap.String("xRealIp", c.GetHeader("X-Real-IP")),
+			zap.String("remoteAddr", c.Request.RemoteAddr),
 			zap.Int64("costMs", latency.Milliseconds()),
 			zap.Int("size", c.Writer.Size()),
 		}

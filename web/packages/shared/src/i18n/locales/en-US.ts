@@ -12,6 +12,7 @@ export default {
     totpCodeReused: 'That code was just used. Wait for your authenticator to show the next 6-digit code and try again.',
     appNoLoginURL: 'This app has no login URL configured yet, so it cannot be launched. Record a login on its sign-in page with the browser extension to set it up first.',
     passwordReused: 'This password was used recently. Please choose a new one you haven\'t used before.',
+    totpRequired: 'Enter your 6-digit authenticator code to change the password.',
     selfApproval: 'You can\'t approve your own access request — it must be approved by someone else (separation of duties).',
     approverNotEligible: 'You are not a designated approver for this eligibility, so you can\'t approve this request.',
   },
@@ -896,6 +897,11 @@ export default {
       homeUrlLabel: 'Home URL',
       redirectUrisLabel: 'Redirect URIs (one per line)',
       submit: 'Create',
+    },
+    filter: {
+      searchPlaceholder: 'Search name / code / description',
+      allProtocols: 'All protocols',
+      allStatus: 'All status',
     },
     list: {
       appList: 'Apps',

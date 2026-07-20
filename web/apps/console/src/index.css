@@ -193,3 +193,22 @@ body {
 .dark main [class~="border-red-100"],
 .dark main [class~="border-red-200"],
 .dark main [class~="border-rose-200"] { border-color: rgb(var(--danger) / 0.3) !important; }
+
+/* ── Sidebar nav scroll — replace the default (dark-ugly) scrollbar with a
+   thin, hover-revealed one, and fade the top/bottom edges so an overflowing
+   nav list clips gracefully instead of hard-cutting under a chunky bar. The
+   footer merge already fits the nav at 1080p; this keeps shorter viewports
+   (and future EE nav items) looking intentional. ── */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.14) transparent;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
+}
+.sidebar-scroll::-webkit-scrollbar { width: 6px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.10);
+  border-radius: 3px;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.28); }

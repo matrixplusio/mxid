@@ -11,6 +11,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// upgradeToHTTPS redirects an http:// page load to https:// before the app
+// mounts. Reaching MXID over http makes the browser send `Origin: http://…`,
+// which never matches the https-only CSRF allow-list → state-changing POSTs
+// (login included) get a 403. Skipped for local dev (localhost) and bare-IP
+// hosts, which typically have no TLS cert and would otherwise dead-loop.
+export function upgradeToHTTPS(): void {
+  if (typeof window === 'undefined') return
+  const { protocol, hostname, href } = window.location
+  if (protocol !== 'http:') return
+  const isLocal =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    hostname.endsWith('.localhost')
+  const isBareIPv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)
+  if (isLocal || isBareIPv4) return
+  window.location.replace(href.replace(/^http:/, 'https:'))
+}
+
 // Module-scoped runtime overrides applied by useBootstrap once the
 // admin's Localization setting loads. No setting → fall back to the
 // browser locale + Asia/Shanghai. Never default-import: bootstrap may

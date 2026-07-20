@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, AppWindow, Loader2, Copy, X, Settings, Eye, EyeOff, LayoutGrid } from 'lucide-react'
+import { Plus, AppWindow, Loader2, Copy, X, Settings, Eye, EyeOff, LayoutGrid, Search } from 'lucide-react'
 import { appApi, protocolLabel, statusLabel, statusColor, cn, AppIcon, useTranslation, AppStatus } from '@mxid/shared'
 import type { App, PaginatedData, AppTemplate, AppTemplateListItem } from '@mxid/shared'
 import PageHeader from '../../components/layout/PageHeader'
@@ -337,6 +337,22 @@ export default function AppsPage() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
 
+  // List filters (backend supports search over name/code/description + protocol
+  // + status via the /apps query params). searchInput is the raw field value;
+  // it debounces into `search` so we don't fire a request per keystroke.
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [protocol, setProtocol] = useState('')
+  const [status, setStatus] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(id)
+  }, [searchInput])
+  // Any filter change resets to page 1 so results aren't hidden past the end.
+  useEffect(() => {
+    setPage(1)
+  }, [search, protocol, status])
+
   // Create modal state
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({
@@ -399,14 +415,18 @@ export default function AppsPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await appApi.list({ page, page_size: 50 })
+      const params: Record<string, unknown> = { page, page_size: 50 }
+      if (search) params.search = search
+      if (protocol) params.protocol = protocol
+      if (status) params.status = Number(status)
+      const result = await appApi.list(params)
       setData(result)
     } catch {
       // ignore
     } finally {
       setLoading(false)
     }
-  }, [page])
+  }, [page, search, protocol, status])
 
   useEffect(() => {
     loadData()
@@ -822,6 +842,48 @@ export default function AppsPage() {
         <AppGroupsTab />
       ) : (
       <>
+      {/* Filters: search (name/code/description) + protocol + status */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder={t('apps.filter.searchPlaceholder')}
+            className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-8 text-sm text-ink outline-none transition-colors placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/20"
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => setSearchInput('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-faint hover:text-muted"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <select
+          value={protocol}
+          onChange={(e) => setProtocol(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+        >
+          <option value="">{t('apps.filter.allProtocols')}</option>
+          <option value="oidc">{protocolLabel('oidc')}</option>
+          <option value="saml">{protocolLabel('saml')}</option>
+          <option value="cas">{protocolLabel('cas')}</option>
+          <option value="form">{protocolLabel('form')}</option>
+        </select>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+        >
+          <option value="">{t('apps.filter.allStatus')}</option>
+          <option value={String(AppStatus.Enabled)}>{statusLabel(AppStatus.Enabled)}</option>
+          <option value={String(AppStatus.Disabled)}>{statusLabel(AppStatus.Disabled)}</option>
+        </select>
+      </div>
+
       {/* Card grid */}
       {loading ? (
         <div className="py-20 text-center text-sm text-faint">{t('common.loading')}</div>
