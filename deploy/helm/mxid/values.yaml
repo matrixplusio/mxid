@@ -28,7 +28,7 @@ image:
   # Default tag for BOTH backend and web images — keep them in lockstep unless
   # you have a reason not to (the backend migrates the DB on boot and the web
   # SPA is built against the backend's API, so mismatched versions can drift).
-  tag: "v1.2.3"
+  tag: "v1.7.2"
   # Optional per-component overrides — pin one image independently of `tag`, e.g.
   # bump only the backend for a fix while leaving an unchanged web/SPA on its
   # existing tag (avoids a needless re-tag + re-push into your mirror). Empty =

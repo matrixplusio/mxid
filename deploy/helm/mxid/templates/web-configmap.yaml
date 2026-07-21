@@ -44,6 +44,29 @@ data:
         add_header X-XSS-Protection "1; mode=block" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
+        # SPA entrypoints must NEVER be cached. The hashed /assets/*.js|css are
+        # immutable (cached 1y below), but index.html references them by their
+        # content-hashed names — a cached index.html points at a stale bundle,
+        # so a new deploy is invisible until a hard refresh. `no-cache` = always
+        # revalidate (ETag → 304 when unchanged). try_files' internal redirect to
+        # /index.html re-enters location matching, so these exact-match blocks
+        # catch both the SPA fallback and direct hits. A location-level add_header
+        # drops the server-level ones, so the security headers are re-declared.
+        location = /index.html {
+            add_header Cache-Control "no-cache" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        }
+        location = /admin/index.html {
+            add_header Cache-Control "no-cache" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        }
+
         # Admin console SPA — served under /admin/
         location /admin/ {
             try_files $uri $uri/ /admin/index.html;
